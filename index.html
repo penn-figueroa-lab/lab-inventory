@@ -147,26 +147,35 @@ const Ico = ({n,s=16,col="currentColor"}) => (
 );
 
 // ─── BACKEND API ──────────────────────────────────────────────────────────────
+// Apps Script web apps redirect (302) and don't support CORS preflight.
+// Fix: use text/plain to avoid preflight, and redirect:'follow' for GET.
 const API = {
   async fetchAll(token) {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
-      const r = await fetch(APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token));
-      if (!r.ok) throw new Error("Failed to fetch");
-      return await r.json();
-    } catch(e) { console.error("API fetchAll:", e); return null; }
+      const url = APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token);
+      console.log("[API] GET", url.slice(0, 80) + "...");
+      const r = await fetch(url, { redirect: "follow" });
+      const text = await r.text();
+      console.log("[API] GET response:", text.slice(0, 200));
+      try { return JSON.parse(text); } catch { console.error("[API] Not JSON:", text.slice(0, 500)); return null; }
+    } catch(e) { console.error("[API] fetchAll error:", e); return null; }
   },
   async post(token, action, payload) {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
+      const body = JSON.stringify({ token, action, ...payload });
+      console.log("[API] POST", action, body.slice(0, 200));
+      // Use text/plain to avoid CORS preflight (Apps Script can't handle OPTIONS)
       const r = await fetch(APP_CONFIG.apps_script_url, {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ token, action, ...payload })
+        body: body,
+        redirect: "follow",
       });
-      if (!r.ok) throw new Error("POST failed");
-      return await r.json();
-    } catch(e) { console.error("API post:", e); return null; }
+      const text = await r.text();
+      console.log("[API] POST response:", text.slice(0, 200));
+      try { return JSON.parse(text); } catch { return { ok: true }; }
+    } catch(e) { console.error("[API] post error:", e); return null; }
   }
 };
 
@@ -780,7 +789,19 @@ function LabInventory(){
     // Fetch from Apps Script
     (async ()=>{
       const data = await API.fetchAll(user.token);
-      if (data && data.items) {
+      if (data && data.error) {
+        console.error("[LabTrack] Backend error:", data.error, data.detail);
+        // Fall back to localStorage
+        try {
+          const saved = localStorage.getItem("labtrack_data");
+          if (saved) {
+            const d = JSON.parse(saved);
+            if (d.items) setItems(d.items);
+            if (d.deliveries) setDeliv(d.deliveries);
+            if (d.checkouts) setCheckouts(d.checkouts);
+          }
+        } catch {}
+      } else if (data && data.items) {
         setItems(data.items);
         setDeliv(data.deliveries || []);
         setCheckouts(data.checkouts || []);
@@ -833,7 +854,11 @@ function LabInventory(){
   // handlers
   const postAction = async (action, payload) => {
     if (APP_CONFIG.apps_script_url && user?.token !== "local") {
-      await API.post(user.token, action, payload);
+      const result = await API.post(user.token, action, payload);
+      if (result && result.error === "Unauthorized") {
+        addToast("error", "Session expired — please sign out and sign in again.");
+      }
+      return result;
     }
   };
 

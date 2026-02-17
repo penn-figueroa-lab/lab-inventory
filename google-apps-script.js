@@ -15,7 +15,7 @@
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const ALLOWED_DOMAIN = "seas.upenn.edu";
-const SLACK_WEBHOOK_URL = ""; // Paste your Slack Incoming Webhook URL here
+const SLACK_WEBHOOK_URL = ""; // Set this in your Apps Script editor (not in GitHub — it's a secret)
 
 // ─── TOKEN VERIFICATION ──────────────────────────────────────────────────────
 function verifyToken(token) {
@@ -91,25 +91,30 @@ function sendSlack(text) {
 
 // ─── GET (fetch all data) ────────────────────────────────────────────────────
 function doGet(e) {
-  const token = e.parameter.token;
-  const user = verifyToken(token);
-  if (!user) {
-    return jsonResponse({ error: "Unauthorized" });
-  }
+  try {
+    const token = (e && e.parameter && e.parameter.token) || "";
+    const user = verifyToken(token);
+    if (!user) {
+      return jsonResponse({ error: "Unauthorized", detail: "Token verification failed" });
+    }
 
-  return jsonResponse({
-    items: sheetToJson(getSheet("Items")),
-    deliveries: sheetToJson(getSheet("Deliveries")),
-    checkouts: sheetToJson(getSheet("Checkouts")),
-  });
+    return jsonResponse({
+      items: sheetToJson(getSheet("Items")),
+      deliveries: sheetToJson(getSheet("Deliveries")),
+      checkouts: sheetToJson(getSheet("Checkouts")),
+    });
+  } catch (err) {
+    return jsonResponse({ error: "Server error", detail: err.message });
+  }
 }
 
 // ─── POST (mutations) ────────────────────────────────────────────────────────
 function doPost(e) {
+  try {
   const body = JSON.parse(e.postData.contents);
   const user = verifyToken(body.token);
   if (!user) {
-    return jsonResponse({ error: "Unauthorized" });
+    return jsonResponse({ error: "Unauthorized", detail: "Token verification failed for POST" });
   }
 
   const action = body.action;
@@ -169,6 +174,9 @@ function doPost(e) {
   }
 
   return jsonResponse({ error: "Unknown action: " + action });
+  } catch (err) {
+    return jsonResponse({ error: "Server error", detail: err.message });
+  }
 }
 
 // ─── Update item status & usedBy in Items sheet ──────────────────────────────
