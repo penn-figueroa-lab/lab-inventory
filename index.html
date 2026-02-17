@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LabTrack — Lab Inventory</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg0:#07090f; --bg1:#0d1117; --bg2:#141b24; --bg3:#1c2535; --bg4:#222e42;
+  --border:#1e2d42; --border-hi:#2d4060;
+  --text:#e8edf5; --sub:#7a8fa6; --dim:#3d5068;
+  --cyan:#00d4c8; --cyan-d:#00332f; --cyan-m:#009e97;
+  --amber:#f5a623; --amber-d:#3d2900;
+  --red:#ff4d6a; --red-d:#2d0010;
+  --green:#00e676; --green-d:#003322;
+  --blue:#4da6ff; --blue-d:#0a1f3d;
+  --purple:#b47dff; --purple-d:#1a0e2e;
+  --orange:#ff8c42; --orange-d:#2d1800;
+}
+body{background:var(--bg0);color:var(--text);font-family:'Outfit',sans-serif;margin:0;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg1);}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px;}
+select option{background:var(--bg2);}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.5);}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes toastSlide{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+.card-item{transition:all .2s cubic-bezier(.4,0,.2,1);cursor:pointer;}
+.card-item:hover{transform:translateY(-3px);box-shadow:0 14px 36px rgba(0,0,0,.55),0 0 0 1px rgba(0,212,200,.1);border-color:var(--border-hi)!important;}
+.row-hover:hover{background:var(--bg3)!important;}
+.ibtn:hover{background:var(--bg3)!important;color:var(--text)!important;}
+.chip-sel{background:var(--cyan-d)!important;color:var(--cyan)!important;border-color:var(--cyan-m)!important;}
+.item-sel-row{background:var(--cyan-d)!important;border-color:var(--cyan-m)!important;}
+.item-sel-row:hover{background:var(--cyan-d)!important;}
+.overdue-pulse{animation:pulse 2s infinite;}
+.sticky-th{position:sticky;top:0;background:var(--bg2);z-index:1;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-type="module">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+// ─── DYNAMIC DATE ────────────────────────────────────────────────────────────
+const getToday = () => new Date().toISOString().slice(0,10);
+const getTodayParts = () => {
+  const d = new Date();
+  return { d: d.getDate(), m: d.getMonth(), y: d.getFullYear() };
+};
+
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const DEF_CFG = { slack_webhook:"", on_delivery:true, on_checkout:true, on_low_stock:true, apps_script_url:"", oauth_client_id:"" };
+const MEMBERS  = ["Dr. Chen","Maria L.","Jake M.","Dr. Patel","Sarah K.","Tom B.","Dr. Rivera","Lin W."];
+const CATEGORIES = ["Equipment","Instrument","Consumable","PPE","Glassware","Office Supply"];
+
+const SEED_ITEMS = [
+  {id:1,  name:"Centrifuge X200",        cat:"Equipment",     qty:2,  unit:"units",  loc:"Room 3A",      minQty:1, img:"", desc:"High-speed benchtop centrifuge, max 15,000 rpm.",           status:"In Use",      usedBy:["Dr. Chen"]},
+  {id:2,  name:"Vortex Mixer",           cat:"Equipment",     qty:3,  unit:"units",  loc:"Bench 2",      minQty:1, img:"", desc:"Variable speed lab vortex, 0-3200 rpm.",                    status:"Available",   usedBy:[]},
+  {id:3,  name:"Nitrile Gloves (M)",     cat:"PPE",           qty:2,  unit:"boxes",  loc:"Cabinet A1",   minQty:3, img:"", desc:"Powder-free nitrile gloves, 100 pcs/box.",                  status:"Low Stock",   usedBy:[]},
+  {id:4,  name:"PCR Thermocycler",       cat:"Equipment",     qty:1,  unit:"units",  loc:"Room 2B",      minQty:1, img:"", desc:"Gradient PCR thermocycler, 96-well, heated lid.",            status:"Maintenance", usedBy:[]},
+  {id:5,  name:"Micropipette Set",       cat:"Instrument",    qty:5,  unit:"sets",   loc:"Bench 1",      minQty:2, img:"", desc:"Precision micropipette 1-1000 uL, autoclavable.",            status:"Available",   usedBy:["Jake M."]},
+  {id:6,  name:"Lab Notebooks",          cat:"Office Supply", qty:12, unit:"pcs",    loc:"Supply Room",  minQty:5, img:"", desc:"Hardcover grid-ruled notebooks, 200 pages.",                status:"Available",   usedBy:[]},
+  {id:7,  name:"Eppendorf Tubes 1.5mL",  cat:"Consumable",    qty:4,  unit:"racks",  loc:"Cabinet B2",   minQty:2, img:"", desc:"1.5 mL snap-cap microcentrifuge tubes, 100/rack.",           status:"Available",   usedBy:[]},
+  {id:8,  name:"Analytical Balance",     cat:"Instrument",    qty:2,  unit:"units",  loc:"Room 1A",      minQty:1, img:"", desc:"0.1 mg precision balance with draft shield.",               status:"In Use",      usedBy:["Dr. Patel"]},
+  {id:9,  name:"UV-Vis Spectrophotometer",cat:"Instrument",   qty:1,  unit:"units",  loc:"Room 2A",      minQty:1, img:"", desc:"UV-Vis spectrophotometer, 190-1100 nm range.",               status:"Available",   usedBy:[]},
+  {id:10, name:"Magnetic Stir Plate",    cat:"Equipment",     qty:4,  unit:"units",  loc:"Bench 3",      minQty:2, img:"", desc:"Magnetic stir plate with heating, up to 380C.",             status:"Available",   usedBy:[]},
+  {id:11, name:"Safety Goggles",         cat:"PPE",           qty:8,  unit:"pcs",    loc:"Cabinet A1",   minQty:4, img:"", desc:"Chemical splash safety goggles, anti-fog.",                 status:"Available",   usedBy:[]},
+  {id:12, name:"Graduated Cylinders",    cat:"Glassware",     qty:6,  unit:"pcs",    loc:"Shelf C1",     minQty:2, img:"", desc:"Borosilicate glass cylinders, 10-1000 mL set.",              status:"Available",   usedBy:[]},
+  {id:13, name:"Disposable Syringes",    cat:"Consumable",    qty:1,  unit:"boxes",  loc:"Cabinet B3",   minQty:2, img:"", desc:"5 mL disposable syringes with 21G needles, 100/box.",       status:"Low Stock",   usedBy:[]},
+  {id:14, name:"pH Meter",               cat:"Instrument",    qty:2,  unit:"units",  loc:"Bench 1",      minQty:1, img:"", desc:"Digital pH meter with ATC, +/-0.01 accuracy.",              status:"Available",   usedBy:[]},
+  {id:15, name:"Lab Coat (L)",           cat:"PPE",           qty:3,  unit:"pcs",    loc:"Locker Room",  minQty:2, img:"", desc:"Cotton/poly blend lab coats, size Large.",                  status:"Available",   usedBy:["Sarah K."]},
+];
+
+const SEED_DELIVERIES = [
+  {id:1, item:"Nitrile Gloves (M)",    qty:10,  unit:"boxes", from:"FisherSci", receivedBy:"Dr. Chen", date:"2026-02-10", tracking:"FS2024001", status:"Logged"},
+  {id:2, item:"Eppendorf Tubes 1.5mL", qty:500, unit:"pcs",   from:"Eppendorf", receivedBy:"Maria L.", date:"2026-02-14", tracking:"EP0089234", status:"Logged"},
+  {id:3, item:"Safety Goggles",        qty:12,  unit:"pcs",   from:"VWR",       receivedBy:"Jake M.",  date:"2026-02-16", tracking:"VWR4421",   status:"Logged"},
+];
+
+const SEED_CHECKOUTS = [
+  {id:1, itemId:1,  item:"Centrifuge X200",      user:"Dr. Chen",  out:"2026-02-12", ret:"2026-02-19", status:"Active"},
+  {id:2, itemId:5,  item:"Micropipette Set",     user:"Jake M.",   out:"2026-02-15", ret:"2026-02-20", status:"Active"},
+  {id:3, itemId:8,  item:"Analytical Balance",   user:"Dr. Patel", out:"2026-02-10", ret:"2026-02-15", status:"Active"},
+  {id:4, itemId:15, item:"Lab Coat (L)",          user:"Sarah K.",  out:"2026-02-01", ret:"2026-02-28", status:"Active"},
+  {id:5, itemId:2,  item:"Vortex Mixer",          user:"Sarah K.",  out:"2026-01-28", ret:"2026-02-05", status:"Returned"},
+];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const isOverdue = (co) => co.status === "Active" && co.ret && co.ret < getToday();
+const CAT_ACCENT = {Equipment:"var(--cyan)",Instrument:"var(--purple)",Consumable:"var(--amber)",PPE:"var(--green)",Glassware:"var(--blue)","Office Supply":"var(--sub)"};
+const STATUS_C = {
+  "Available":  {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
+  "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
+  "Maintenance":{bg:"var(--amber-d)", t:"var(--amber)",  b:"#f5a62328"},
+  "Low Stock":  {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
+  "Logged":     {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
+  "Active":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
+  "Returned":   {bg:"var(--bg4)",     t:"var(--sub)",    b:"var(--border)"},
+  "Overdue":    {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
+};
+
+// ─── SVG ICONS ────────────────────────────────────────────────────────────────
+const P = {
+  box:      '<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  truck:    '<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  check:    '<polyline points="20 6 9 17 4 12"/>',
+  x:        '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  alert:    '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  grid:     '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  list:     '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  undo:     '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>',
+  layers:   '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+  clock:    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>',
+  slack:    '<path d="M5.042 15.165a2.528 2.528 0 01-2.52 2.523A2.528 2.528 0 010 15.165a2.527 2.527 0 012.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 012.521-2.52 2.527 2.527 0 012.521 2.52v6.313A2.528 2.528 0 018.834 24a2.528 2.528 0 01-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 01-2.521-2.52A2.528 2.528 0 018.834 0a2.528 2.528 0 012.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 012.521 2.521 2.528 2.528 0 01-2.521 2.521H2.522A2.528 2.528 0 010 8.834a2.528 2.528 0 012.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 012.522-2.521A2.528 2.528 0 0124 8.834a2.528 2.528 0 01-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 01-2.523 2.521 2.527 2.527 0 01-2.52-2.521V2.522A2.527 2.527 0 0115.165 0a2.528 2.528 0 012.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 012.523 2.522A2.528 2.528 0 0115.165 24a2.527 2.527 0 01-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 01-2.52-2.523 2.526 2.526 0 012.52-2.52h6.313A2.527 2.527 0 0124 15.165a2.528 2.528 0 01-2.522 2.523h-6.313z"/>',
+  logout:   '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+};
+const Ico = ({n,s=16,col="currentColor"}) => (
+  React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:n==="slack"?col:"none",stroke:n==="slack"?"none":col,
+    strokeWidth:"2",strokeLinecap:"round",strokeLinejoin:"round",style:{flexShrink:0},
+    dangerouslySetInnerHTML:{__html:P[n]||""}})
+);
+
+// ─── BACKEND API ──────────────────────────────────────────────────────────────
+const API = {
+  async fetchAll(cfg, token) {
+    if (!cfg.apps_script_url) return null;
+    try {
+      const r = await fetch(cfg.apps_script_url + "?token=" + encodeURIComponent(token));
+      if (!r.ok) throw new Error("Failed to fetch");
+      return await r.json();
+    } catch(e) { console.error("API fetchAll:", e); return null; }
+  },
+  async post(cfg, token, action, payload) {
+    if (!cfg.apps_script_url) return null;
+    try {
+      const r = await fetch(cfg.apps_script_url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ token, action, ...payload })
+      });
+      if (!r.ok) throw new Error("POST failed");
+      return await r.json();
+    } catch(e) { console.error("API post:", e); return null; }
+  }
+};
+
+// ─── ATOMS ────────────────────────────────────────────────────────────────────
+const Badge = ({status}) => {
+  const c = STATUS_C[status]||STATUS_C["Available"];
+  return <span style={{background:c.bg,color:c.t,border:`1px solid ${c.b}`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",whiteSpace:"nowrap"}}>{status}</span>;
+};
+const MemberAvatar = ({name,sz=32}) => {
+  const hue = name.split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360;
+  const initials = name.split(" ").map(w=>w[0]).join("").slice(0,2);
+  return <div style={{width:sz,height:sz,borderRadius:"50%",flexShrink:0,background:`hsl(${hue},50%,22%)`,border:`2px solid hsl(${hue},50%,38%)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:sz*.36,color:`hsl(${hue},65%,82%)`,fontFamily:"'Syne',sans-serif"}}>{initials}</div>;
+};
+const Inp = ({style,...p}) => (
+  <input style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",fontFamily:"'Outfit',sans-serif",transition:"border-color .15s",...style}}
+    onFocus={e=>e.target.style.borderColor="var(--cyan-m)"}
+    onBlur={e=>e.target.style.borderColor="var(--border)"}
+    {...p}/>
+);
+const Sel = ({children,style,...p}) => (
+  <select style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",fontFamily:"'Outfit',sans-serif",...style}} {...p}>{children}</select>
+);
+const Fld = ({label,hint,children}) => (
+  <div style={{marginBottom:14}}>
+    <label style={{display:"block",color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>{label}</label>
+    {children}
+    {hint&&<p style={{color:"var(--dim)",fontSize:11,marginTop:4}}>{hint}</p>}
+  </div>
+);
+const Btn = ({children,onClick,v="primary",style,disabled,sm}) => {
+  const VS={
+    primary:{background:"var(--cyan)",color:"#000",border:"none"},
+    ghost:  {background:"transparent",color:"var(--sub)",border:"1px solid var(--border)"},
+    danger: {background:"var(--red-d)",color:"var(--red)",border:"1px solid #ff4d6a30"},
+    success:{background:"var(--green-d)",color:"var(--green)",border:"1px solid #00e67630"},
+    amber:  {background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330"},
+  };
+  return <button disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
+};
+
+// ─── MODAL SHELL ──────────────────────────────────────────────────────────────
+const Modal = ({onClose,title,mw=560,children,noPad}) => (
+  <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
+      {title!==false&&(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+          <h2 style={{margin:0,color:"var(--text)",fontSize:17,fontFamily:"'Syne',sans-serif",fontWeight:700}}>{title}</h2>
+          <button onClick={onClose} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}><Ico n="x" s={14}/></button>
+        </div>
+      )}
+      <div style={{overflow:"auto",flex:1,padding:noPad?"0":"24px"}}>{children}</div>
+    </div>
+  </div>
+);
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+const ToastStack = ({toasts,rm}) => (
+  <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,minWidth:300,maxWidth:380}}>
+    {toasts.map(t=>{
+      const C={success:{bg:"var(--green-d)",col:"var(--green)",icon:"check"},error:{bg:"var(--red-d)",col:"var(--red)",icon:"alert"},slack:{bg:"var(--purple-d)",col:"var(--purple)",icon:"slack"},info:{bg:"var(--blue-d)",col:"var(--blue)",icon:"bell"}}[t.type]||{};
+      return(
+        <div key={t.id} style={{background:C.bg,border:`1px solid ${C.col}33`,borderRadius:12,padding:"11px 15px",display:"flex",alignItems:"flex-start",gap:10,animation:"toastSlide .28s cubic-bezier(.4,0,.2,1)",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
+          <span style={{color:C.col,marginTop:1,flexShrink:0}}><Ico n={C.icon} s={15} col={C.col}/></span>
+          <span style={{color:"var(--text)",fontSize:13,flex:1,lineHeight:1.45}}>{t.msg}</span>
+          <button onClick={()=>rm(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--dim)",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>
+        </div>
+      );
+    })}
+  </div>
+);
+
+// ─── SLACK SERVICE (client-side preview only; real Slack goes through Apps Script) ──
+function useSlack(cfg,addToast){
+  const fire=async text=>{
+    if(!cfg.apps_script_url){
+      addToast("slack","Slack preview: "+text.split("\n")[0]);
+      return;
+    }
+  };
+  return{
+    delivery:d=>cfg.on_delivery&&fire("New Delivery: "+d.item),
+    checkout:c=>cfg.on_checkout&&fire("Checked Out: "+c.item+" -> "+c.user),
+    returned:c=>cfg.on_checkout&&fire("Returned: "+c.item+" by "+c.user),
+    lowStock:i=>cfg.on_low_stock&&fire("Low Stock: "+i.name),
+  };
+}
+
+// ─── SEARCHABLE ITEM PICKER ───────────────────────────────────────────────────
+const ItemPicker = ({items, value, onChange}) => {
+  const [q, setQ]       = useState("");
+  const [cat, setCat]   = useState("All");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+
+  const selected = items.find(i=>i.name===value);
+  const avail = items.filter(i=>i.status!=="Maintenance");
+
+  const filtered = avail.filter(i=>{
+    const match = i.name.toLowerCase().includes(q.toLowerCase()) ||
+                  i.loc?.toLowerCase().includes(q.toLowerCase()) ||
+                  i.desc?.toLowerCase().includes(q.toLowerCase());
+    return match && (cat==="All" || i.cat===cat);
+  });
+
+  useEffect(()=>{
+    const handler=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",handler);
+    return()=>document.removeEventListener("mousedown",handler);
+  },[]);
+
+  useEffect(()=>{if(open&&inputRef.current)inputRef.current.focus();},[open]);
+
+  const pick=(item)=>{onChange(item.name);setOpen(false);setQ("");};
+  const ac = selected?CAT_ACCENT[selected.cat]||"var(--cyan)":"var(--dim)";
+
+  return(
+    <div ref={ref} style={{position:"relative"}}>
+      <button type="button" onClick={()=>setOpen(o=>!o)} style={{
+        width:"100%",background:"var(--bg3)",border:`1px solid ${open?"var(--cyan-m)":"var(--border)"}`,
+        color:selected?"var(--text)":"var(--sub)",borderRadius:8,padding:"9px 12px",fontSize:14,
+        fontFamily:"'Outfit',sans-serif",textAlign:"left",cursor:"pointer",display:"flex",
+        alignItems:"center",justifyContent:"space-between",gap:10,transition:"border-color .15s",
+      }}>
+        {selected?(
+          <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:ac,flexShrink:0}}/>
+            <span style={{fontWeight:600}}>{selected.name}</span>
+            <span style={{color:"var(--dim)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.loc}</span>
+            <Badge status={selected.qty<=selected.minQty?"Low Stock":selected.status}/>
+          </div>
+        ):<span>Search or select an item...</span>}
+        <span style={{color:"var(--dim)",fontSize:10,flexShrink:0}}>{open?"▲":"▼"}</span>
+      </button>
+
+      {open&&(
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"var(--bg2)",border:"1px solid var(--border-hi)",borderRadius:12,zIndex:50,boxShadow:"0 16px 48px rgba(0,0,0,.7)",animation:"fadeUp .18s ease",overflow:"hidden"}}>
+          <div style={{padding:"12px 12px 8px",borderBottom:"1px solid var(--border)"}}>
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}>
+                <Ico n="search" s={14} col="var(--dim)"/>
+              </span>
+              <input ref={inputRef} placeholder="Type item name, location..."
+                value={q} onChange={e=>setQ(e.target.value)}
+                style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"8px 10px 8px 32px",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif"}}
+              />
+              {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:6,padding:"8px 12px",flexWrap:"wrap",borderBottom:"1px solid var(--border)"}}>
+            {["All",...CATEGORIES].map(c=>{
+              const count = c==="All"?avail.length:avail.filter(i=>i.cat===c).length;
+              if(count===0&&c!=="All")return null;
+              const isSel = cat===c;
+              const ac2=CAT_ACCENT[c]||"var(--sub)";
+              return(
+                <button key={c} onClick={()=>setCat(c)} style={{
+                  background:isSel?(c==="All"?"var(--bg4)":`${ac2}18`):"var(--bg3)",
+                  color:isSel?(c==="All"?"var(--text)":ac2):"var(--sub)",
+                  border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac2):"var(--border)"}`,
+                  borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",
+                  fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",gap:5,transition:"all .15s",
+                }}>
+                  {c} <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{maxHeight:280,overflow:"auto"}}>
+            {filtered.length===0?(
+              <div style={{padding:"24px 16px",textAlign:"center",color:"var(--dim)",fontSize:13}}>
+                No items match "{q}"
+                {q&&<div style={{marginTop:8}}><button onClick={()=>setQ("")} style={{background:"none",border:"none",color:"var(--cyan)",cursor:"pointer",fontSize:12}}>Clear search</button></div>}
+              </div>
+            ):filtered.map(item=>{
+              const itemAc=CAT_ACCENT[item.cat]||"var(--sub)";
+              const low=item.qty<=item.minQty;
+              const isSel=item.name===value;
+              return(
+                <div key={item.id} onClick={()=>pick(item)}
+                  className={isSel?"item-sel-row":"row-hover"}
+                  style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid var(--border)",transition:"background .12s"}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:low?"var(--red)":itemAc,flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:13,color:"var(--text)",marginBottom:1}}>{item.name}</div>
+                    <div style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat} · {item.loc}</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:14,fontWeight:800,fontFamily:"'Syne',sans-serif",color:low?"var(--red)":itemAc}}>{item.qty}</div>
+                    <div style={{fontSize:10,color:"var(--dim)"}}>{item.unit}</div>
+                  </div>
+                  {(low||item.status==="In Use")&&<Badge status={low?"Low Stock":item.status}/>}
+                  {isSel&&<Ico n="check" s={14} col="var(--cyan)"/>}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{padding:"8px 14px",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{color:"var(--dim)",fontSize:11}}>{filtered.length} item{filtered.length!==1?"s":""} shown</span>
+            {value&&<button onClick={()=>{onChange("");setQ("");}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11}}>Clear selection</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── CHECKOUT MODAL ──────────────────────────────────────────────────────────
+const CheckoutModal = ({items,onClose,onAdd,preItem=""}) => {
+  const [f,setF]=useState({item:preItem,user:"",out:getToday(),ret:"",qty:1,notes:""});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const selected=items.find(i=>i.name===f.item);
+  const maxQty=selected?.qty||1;
+
+  return(
+    <Modal onClose={onClose} title="Check Out Item" mw={620}>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <Fld label="Select Item">
+          <ItemPicker items={items} value={f.item} onChange={v=>setF(p=>({...p,item:v,qty:1}))}/>
+        </Fld>
+
+        {selected&&(
+          <div style={{background:"var(--bg2)",border:`1px solid ${CAT_ACCENT[selected.cat]||"var(--border)"}30`,borderRadius:10,padding:"12px 14px",display:"flex",gap:14,alignItems:"flex-start",animation:"fadeIn .2s ease"}}>
+            <img src={selected.img||`https://placehold.co/64x48/141b24/3d5068?text=${encodeURIComponent(selected.cat)}`}
+              alt={selected.name} style={{width:64,height:48,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)",flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2}}>{selected.name}</div>
+              <div style={{color:"var(--dim)",fontSize:12,marginBottom:6,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.loc} · {selected.cat}</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                <span style={{color:"var(--sub)",fontSize:12}}>Available: <strong style={{color:selected.qty<=selected.minQty?"var(--red)":"var(--green)",fontFamily:"'IBM Plex Mono',monospace"}}>{selected.qty} {selected.unit}</strong></span>
+                {selected.usedBy?.length>0&&<span style={{color:"var(--sub)",fontSize:12}}>· Used by: {selected.usedBy.join(", ")}</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fld label="Person">
+            <Sel value={f.user} onChange={s("user")}>
+              <option value="">— Who's taking it? —</option>
+              {MEMBERS.map(m=><option key={m}>{m}</option>)}
+            </Sel>
+          </Fld>
+          <Fld label={`Quantity ${selected?`(max ${maxQty})`:""}`}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={()=>setF(p=>({...p,qty:Math.max(1,p.qty-1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>-</button>
+              <div style={{flex:1,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)"}}>{f.qty}</div>
+              <button onClick={()=>setF(p=>({...p,qty:Math.min(maxQty,p.qty+1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>+</button>
+            </div>
+          </Fld>
+          <Fld label="Checkout Date"><Inp type="date" value={f.out} onChange={s("out")}/></Fld>
+          <Fld label="Return By"><Inp type="date" value={f.ret} onChange={s("ret")}/></Fld>
+        </div>
+
+        <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose, any notes..." value={f.notes} onChange={s("notes")}/></Fld>
+
+        <div style={{display:"flex",alignItems:"center",gap:6,color:"var(--dim)",fontSize:11}}>
+          <Ico n="keyboard" s={12} col="var(--dim)"/>
+          <span>Tip: Press <kbd style={{background:"var(--bg4)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 5px",fontSize:10}}>Esc</kbd> to close</span>
+        </div>
+
+        <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={()=>{if(f.item&&f.user){onAdd({id:Date.now(),...f,status:"Active"});onClose();}}} disabled={!f.item||!f.user}>
+            <Ico n="check" s={14} col="#000"/>Confirm Checkout
+          </Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── DELIVERY MODAL ───────────────────────────────────────────────────────────
+const DeliveryModal = ({onClose,onAdd}) => {
+  const [f,setF]=useState({item:"",qty:"",unit:"boxes",from:"",receivedBy:"",date:getToday(),tracking:""});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  return(
+    <Modal onClose={onClose} title="Log Package Delivery">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Package Name"><Inp placeholder="e.g. Nitrile Gloves (M)" value={f.item} onChange={s("item")}/></Fld></div>
+        <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["boxes","pcs","units","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Supplier"><Inp placeholder="FisherSci, VWR, Sigma..." value={f.from} onChange={s("from")}/></Fld>
+        <Fld label="Received By"><Sel value={f.receivedBy} onChange={s("receivedBy")}><option value="">— Select person —</option>{MEMBERS.map(m=><option key={m}>{m}</option>)}</Sel></Fld>
+        <Fld label="Date"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
+        <Fld label="Tracking No."><Inp placeholder="Optional" value={f.tracking} onChange={s("tracking")}/></Fld>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}>
+          <Ico n="check" s={14} col="#000"/>Log Delivery
+        </Btn>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
+const AddItemModal = ({onClose,onAdd}) => {
+  const [f,setF]=useState({name:"",cat:"Equipment",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:""});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  return(
+    <Modal onClose={onClose} title="Add Item">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp placeholder="e.g. PCR Thermocycler Pro" value={f.name} onChange={s("name")}/></Fld></div>
+        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" placeholder="1" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Cabinet B2 / Bench 1" value={f.loc} onChange={s("loc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Image URL" hint="Direct image link - leave blank for auto-placeholder"><Inp placeholder="https://..." value={f.img} onChange={s("img")}/></Fld></div>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[]});onClose();}}} disabled={!f.name||!f.qty}>
+          <Ico n="plus" s={14} col="#000"/>Add Item
+        </Btn>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
+const ConfirmModal = ({msg,onConfirm,onClose}) => (
+  <Modal onClose={onClose} title="Confirm Action" mw={400}>
+    <p style={{color:"var(--sub)",fontSize:14,lineHeight:1.6,marginBottom:20}}>{msg}</p>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+      <Btn v="danger" onClick={()=>{onConfirm();onClose();}}>Confirm</Btn>
+    </div>
+  </Modal>
+);
+
+// ─── ITEM DETAIL MODAL ────────────────────────────────────────────────────────
+const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout}) => {
+  const [confirmId,setConfirmId]=useState(null);
+  const hist=checkouts.filter(c=>c.item===item.name);
+  const ac=CAT_ACCENT[item.cat]||"var(--cyan)";
+  const isLow=item.qty<=item.minQty;
+  return(
+    <>
+    <Modal onClose={onClose} title="" mw={640}>
+      <div style={{display:"flex",gap:20,marginBottom:22,flexWrap:"wrap"}}>
+        <div style={{position:"relative",flexShrink:0}}>
+          <img src={item.img||`https://placehold.co/200x148/141b24/3d5068?text=${encodeURIComponent(item.cat)}`}
+            alt={item.name} style={{width:200,height:148,objectFit:"cover",borderRadius:12,border:"1px solid var(--border)",display:"block"}}/>
+          <div style={{position:"absolute",inset:-1,borderRadius:12,border:`2px solid ${ac}44`,pointerEvents:"none"}}/>
+        </div>
+        <div style={{flex:1,minWidth:200}}>
+          <h3 style={{margin:"0 0 8px",fontSize:19,fontFamily:"'Syne',sans-serif",fontWeight:800}}>{item.name}</h3>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+            <Badge status={isLow?"Low Stock":item.status}/>
+            <span style={{background:"var(--bg3)",color:ac,border:`1px solid ${ac}30`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat}</span>
+          </div>
+          <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 14px"}}>{item.desc||"No description."}</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Status",item.status]].map(([k,v])=>(
+              <div key={k}>
+                <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace"}}>{k}</div>
+                <div style={{color:"var(--text)",fontSize:13}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {item.status!=="Maintenance"&&(
+            <Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}>
+              <Ico n="tag" s={14} col="#000"/>Quick Check Out
+            </Btn>
+          )}
+        </div>
+      </div>
+
+      {item.usedBy?.length>0&&(
+        <div style={{marginBottom:18}}>
+          <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Currently Using</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {item.usedBy.map(u=>(
+              <div key={u} style={{display:"flex",alignItems:"center",gap:8,background:"var(--blue-d)",border:"1px solid #4da6ff22",borderRadius:8,padding:"6px 12px"}}>
+                <MemberAvatar name={u} sz={24}/><span style={{fontSize:13,color:"var(--blue)"}}>{u}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {hist.length>0&&(
+        <div>
+          <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Checkout History</div>
+          {hist.map(c=>{
+            const od=isOverdue(c);
+            return(
+              <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,background:od?"var(--red-d)":"var(--bg2)",border:`1px solid ${od?"#ff4d6a30":"var(--border)"}`,borderRadius:8,padding:"8px 12px",marginBottom:6,flexWrap:"wrap",transition:"background .2s"}}>
+                <MemberAvatar name={c.user} sz={26}/>
+                <span style={{color:"var(--text)",fontSize:13,flex:1}}>{c.user}</span>
+                <span style={{color:od?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{c.out} {'→'} {c.ret||"—"}{od&&" OVERDUE"}</span>
+                <Badge status={od?"Overdue":c.status}/>
+                {c.status==="Active"&&(
+                  <Btn v="ghost" sm onClick={()=>setConfirmId(c.id)}>
+                    <Ico n="undo" s={12}/>Return
+                  </Btn>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+    {confirmId&&(
+      <ConfirmModal
+        msg="Mark this item as returned? This will update the inventory and notify Slack."
+        onConfirm={()=>{onReturn(confirmId);onClose();}}
+        onClose={()=>setConfirmId(null)}
+      />
+    )}
+    </>
+  );
+};
+
+// ─── SETTINGS MODAL ───────────────────────────────────────────────────────────
+const SettingsModal = ({cfg,onClose,onSave}) => {
+  const [c,setC]=useState({...cfg});
+  const s=k=>e=>setC(p=>({...p,[k]:e.target.value}));
+  const tog=k=>setC(p=>({...p,[k]:!p[k]}));
+  const Toggle=({k,label})=>(
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--border)"}}>
+      <span style={{color:"var(--sub)",fontSize:13}}>{label}</span>
+      <button onClick={()=>tog(k)} style={{width:42,height:24,borderRadius:12,border:"none",cursor:"pointer",background:c[k]?"var(--cyan)":"var(--bg4)",position:"relative",transition:"background .2s",flexShrink:0}}>
+        <span style={{position:"absolute",top:3,left:c[k]?21:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+      </button>
+    </div>
+  );
+  return(
+    <Modal onClose={onClose} title="Integration Settings" mw={520}>
+      <div style={{background:"var(--bg2)",borderRadius:12,padding:16,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <Ico n="slack" s={16} col="var(--purple)"/>
+          <span style={{color:"var(--text)",fontWeight:700,fontFamily:"'Syne',sans-serif"}}>Slack Notifications</span>
+        </div>
+        <p style={{color:"var(--dim)",fontSize:12,marginBottom:12}}>Slack webhooks are configured server-side in Apps Script for security. Toggle which events trigger notifications below.</p>
+        <Toggle k="on_delivery"  label="Notify on package delivery"/>
+        <Toggle k="on_checkout"  label="Notify on item check-out / return"/>
+        <Toggle k="on_low_stock" label="Alert when stock drops below minimum"/>
+      </div>
+      <div style={{background:"var(--bg2)",borderRadius:12,padding:16,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <span style={{fontSize:16}}>☁</span>
+          <span style={{color:"var(--text)",fontWeight:700,fontFamily:"'Syne',sans-serif"}}>Google Apps Script Backend</span>
+        </div>
+        <Fld label="Apps Script Web App URL" hint="Deploy your Apps Script as a web app and paste the URL here"><Inp placeholder="https://script.google.com/macros/s/.../exec" value={c.apps_script_url} onChange={s("apps_script_url")}/></Fld>
+        <Fld label="OAuth Client ID" hint="From Google Cloud Console - Credentials"><Inp placeholder="123456789.apps.googleusercontent.com" value={c.oauth_client_id} onChange={s("oauth_client_id")}/></Fld>
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{onSave(c);onClose();}}><Ico n="check" s={14} col="#000"/>Save</Btn>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── STAT CARD ────────────────────────────────────────────────────────────────
+const Stat=({label,val,icon,ac,sub,warn})=>(
+  <div style={{background:"var(--bg1)",border:`1px solid ${warn?"#ff4d6a30":"var(--border)"}`,borderLeft:`3px solid ${ac}`,borderRadius:14,padding:"17px 20px",flex:1,minWidth:130}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+      <div>
+        <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:5}}>{label}</div>
+        <div style={{color:ac,fontFamily:"'Syne',sans-serif",fontSize:30,fontWeight:800,lineHeight:1}}>{val}</div>
+        {sub&&<div style={{color:"var(--dim)",fontSize:11,marginTop:3}}>{sub}</div>}
+      </div>
+      <Ico n={icon} s={20} col={ac}/>
+    </div>
+  </div>
+);
+
+// ─── CALENDAR (FIXED) ────────────────────────────────────────────────────────
+const CalView=({checkouts,deliveries})=>{
+  const now = new Date();
+  const [yr,setYr]=useState(now.getFullYear());
+  const [mo,setMo]=useState(now.getMonth());
+  const MNS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const first=new Date(yr,mo,1).getDay(), total=new Date(yr,mo+1,0).getDate();
+  const prev=()=>mo===0?(setMo(11),setYr(y=>y-1)):setMo(m=>m-1);
+  const next=()=>mo===11?(setMo(0),setYr(y=>y+1)):setMo(m=>m+1);
+  const evts=d=>{
+    const ds=`${yr}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const r=[];
+    deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item}));
+    checkouts.forEach(x=>{if(x.out===ds)r.push({t:"out",l:x.item});if(x.ret===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item});});
+    return r;
+  };
+  const EC={pkg:{bg:"var(--green-d)",col:"var(--green)",ic:"pkg"},out:{bg:"var(--blue-d)",col:"var(--blue)",ic:"out"},ret:{bg:"var(--amber-d)",col:"var(--amber)",ic:"ret"},odd:{bg:"var(--red-d)",col:"var(--red)",ic:"odd"}};
+  const EC_LABELS={pkg:"Pkg",out:"Out",ret:"Ret",odd:"Due!"};
+  const td=getTodayParts();
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <button onClick={prev} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>←</button>
+        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:19}}>{MNS[mo]} {yr}</span>
+        <button onClick={next} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>→</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} style={{textAlign:"center",color:"var(--dim)",fontSize:10,fontWeight:700,padding:"4px 0",fontFamily:"'IBM Plex Mono',monospace"}}>{d}</div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {Array.from({length:first}).map((_,i)=><div key={`e${i}`}/>)}
+        {Array.from({length:total}).map((_,i)=>{
+          const d=i+1,isT=d===td.d&&mo===td.m&&yr===td.y,ev=evts(d);
+          return(
+            <div key={d} style={{background:isT?"var(--blue-d)":"var(--bg2)",borderRadius:8,minHeight:68,border:`1px solid ${isT?"var(--blue)":"var(--border)"}`,padding:"5px 6px"}}>
+              <div style={{color:isT?"var(--blue)":"var(--dim)",fontSize:10,fontWeight:isT?800:500,fontFamily:"'IBM Plex Mono',monospace",marginBottom:3}}>{d}</div>
+              {ev.slice(0,2).map((e,j)=>{const ec=EC[e.t];return<div key={j} style={{background:ec.bg,color:ec.col,fontSize:8,borderRadius:4,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{EC_LABELS[e.t]} {e.l}</div>;})}
+              {ev.length>2&&<div style={{color:"var(--dim)",fontSize:8}}>+{ev.length-2}</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display:"flex",gap:20,marginTop:14,flexWrap:"wrap"}}>
+        {[["var(--green)","Delivery"],["var(--blue)","Checkout"],["var(--amber)","Return Due"],["var(--red)","Overdue"]].map(([col,lbl])=>(
+          <div key={lbl} style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span style={{width:10,height:10,borderRadius:3,background:col,display:"inline-block"}}/>
+            <span style={{color:col}}>{lbl}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── KEYBOARD SHORTCUT HINT ───────────────────────────────────────────────────
+const KbdHint=()=>(
+  <div style={{display:"flex",alignItems:"center",gap:12,color:"var(--dim)",fontSize:11,padding:"8px 12px",background:"var(--bg2)",borderRadius:8,border:"1px solid var(--border)"}}>
+    <Ico n="keyboard" s={13} col="var(--dim)"/>
+    <span>Shortcuts:</span>
+    {[["N","New Delivery"],["C","Check Out"],["Esc","Close"]].map(([k,l])=>(
+      <span key={k} style={{display:"flex",alignItems:"center",gap:4}}>
+        <kbd style={{background:"var(--bg4)",border:"1px solid var(--border-hi)",borderRadius:4,padding:"1px 6px",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{k}</kbd>
+        <span>{l}</span>
+      </span>
+    ))}
+  </div>
+);
+
+// ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
+const LoginPage = ({onSignIn, cfg, onOpenSettings}) => {
+  const btnRef = useRef(null);
+  const [error, setError] = useState("");
+
+  useEffect(()=>{
+    if (!cfg.oauth_client_id || typeof google === 'undefined') return;
+    try {
+      google.accounts.id.initialize({
+        client_id: cfg.oauth_client_id,
+        callback: (response) => {
+          // Decode the JWT to check domain
+          try {
+            const payload = JSON.parse(atob(response.credential.split('.')[1]));
+            if (payload.hd !== "seas.upenn.edu") {
+              setError("Access restricted to @seas.upenn.edu accounts only.");
+              return;
+            }
+            onSignIn({
+              token: response.credential,
+              name: payload.name,
+              email: payload.email,
+              picture: payload.picture,
+            });
+          } catch(e) {
+            setError("Failed to verify account. Please try again.");
+          }
+        },
+        hd: "seas.upenn.edu",
+        auto_select: false,
+      });
+      google.accounts.id.renderButton(btnRef.current, {
+        type: "standard",
+        theme: "filled_black",
+        size: "large",
+        text: "signin_with",
+        shape: "pill",
+        width: 300,
+      });
+    } catch(e) { console.error("GSI init error:", e); }
+  }, [cfg.oauth_client_id]);
+
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)"}}>
+      <div style={{textAlign:"center",animation:"fadeUp .5s ease",maxWidth:420,padding:"0 24px"}}>
+        <div style={{width:72,height:72,borderRadius:18,background:"linear-gradient(135deg,#00d4c8,#004d4a)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px rgba(0,212,200,.25)",margin:"0 auto 24px"}}>
+          <Ico n="layers" s={32} col="var(--bg0)"/>
+        </div>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,margin:"0 0 6px",letterSpacing:"-0.03em"}}>LabTrack</h1>
+        <p style={{color:"var(--sub)",fontSize:15,margin:"0 0 32px",lineHeight:1.5}}>Lab Inventory Management System</p>
+
+        {cfg.oauth_client_id ? (
+          <div>
+            <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
+            <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @seas.upenn.edu account</p>
+            {error && <p style={{color:"var(--red)",fontSize:13,marginTop:12,background:"var(--red-d)",padding:"8px 14px",borderRadius:8,border:"1px solid #ff4d6a30"}}>{error}</p>}
+          </div>
+        ) : (
+          <div>
+            <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
+              <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 16px"}}>No OAuth Client ID configured. Set up Google Sign-In to enable shared access, or continue in local mode with seed data.</p>
+              <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                <Btn onClick={()=>onSignIn({token:"local",name:"Local User",email:"local@dev",picture:""})} v="ghost">Continue Locally</Btn>
+                <Btn onClick={onOpenSettings}>Configure</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{marginTop:40,color:"var(--dim)",fontSize:11}}>
+          <button onClick={onOpenSettings} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Settings</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function LabInventory(){
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // App state
+  const [tab,setTab]           = useState("inventory");
+  const [items,setItems]       = useState(SEED_ITEMS);
+  const [deliveries,setDeliv]  = useState(SEED_DELIVERIES);
+  const [checkouts,setCheckouts]=useState(SEED_CHECKOUTS);
+  const [modal,setModal]       = useState(null);
+  const [preItem,setPreItem]   = useState("");
+  const [detail,setDetail]     = useState(null);
+  const [search,setSearch]     = useState("");
+  const [catF,setCatF]         = useState("All");
+  const [view,setView]         = useState("grid");
+  const [selected,setSelected] = useState(new Set());
+  const [toasts,setToasts]     = useState([]);
+  const [cfg,setCfg]           = useState(()=>{
+    try { return {...DEF_CFG, ...JSON.parse(localStorage.getItem("labtrack_cfg"))}; }
+    catch { return DEF_CFG; }
+  });
+  const [confirm,setConfirm]   = useState(null);
+  const [dataLoaded,setDataLoaded] = useState(false);
+  const tid = useRef(0);
+
+  // Persist config
+  useEffect(()=>{
+    localStorage.setItem("labtrack_cfg", JSON.stringify(cfg));
+  },[cfg]);
+
+  // Restore session
+  useEffect(()=>{
+    try {
+      const saved = localStorage.getItem("labtrack_user");
+      if (saved) {
+        const u = JSON.parse(saved);
+        setUser(u);
+      }
+    } catch {}
+    setLoading(false);
+  },[]);
+
+  // Fetch data from backend when signed in
+  useEffect(()=>{
+    if (!user || dataLoaded) return;
+    if (!cfg.apps_script_url || user.token === "local") {
+      // Use seed data / localStorage fallback
+      try {
+        const saved = localStorage.getItem("labtrack_data");
+        if (saved) {
+          const d = JSON.parse(saved);
+          if (d.items) setItems(d.items);
+          if (d.deliveries) setDeliv(d.deliveries);
+          if (d.checkouts) setCheckouts(d.checkouts);
+        }
+      } catch {}
+      setDataLoaded(true);
+      return;
+    }
+    // Fetch from Apps Script
+    (async ()=>{
+      const data = await API.fetchAll(cfg, user.token);
+      if (data && data.items) {
+        setItems(data.items);
+        setDeliv(data.deliveries || []);
+        setCheckouts(data.checkouts || []);
+      }
+      setDataLoaded(true);
+    })();
+  },[user, cfg.apps_script_url]);
+
+  // Save data locally as fallback
+  useEffect(()=>{
+    if (!dataLoaded) return;
+    localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts}));
+  },[items, deliveries, checkouts, dataLoaded]);
+
+  const addToast=useCallback((type,msg)=>{
+    const id=++tid.current;
+    setToasts(t=>[...t,{id,type,msg}]);
+    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),5000);
+  },[]);
+
+  const slack=useSlack(cfg,addToast);
+
+  const handleSignIn = (u) => {
+    setUser(u);
+    localStorage.setItem("labtrack_user", JSON.stringify(u));
+  };
+  const handleSignOut = () => {
+    setUser(null);
+    setDataLoaded(false);
+    localStorage.removeItem("labtrack_user");
+    try { google.accounts.id.disableAutoSelect(); } catch {}
+  };
+
+  // keyboard shortcuts
+  useEffect(()=>{
+    if (!user) return;
+    const h=e=>{
+      if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.tagName==="SELECT")return;
+      if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);}
+      if(e.key==="n"||e.key==="N") setModal("delivery");
+      if(e.key==="c"||e.key==="C"){setPreItem("");setModal("checkout");}
+    };
+    document.addEventListener("keydown",h);
+    return()=>document.removeEventListener("keydown",h);
+  },[user]);
+
+  // computed
+  const lowStock   = items.filter(i=>i.qty<=i.minQty);
+  const activeOut  = checkouts.filter(c=>c.status==="Active");
+  const overdues   = checkouts.filter(c=>isOverdue(c));
+
+  // handlers
+  const postAction = async (action, payload) => {
+    if (cfg.apps_script_url && user?.token !== "local") {
+      await API.post(cfg, user.token, action, payload);
+    }
+  };
+
+  const handleDelivery=async(d)=>{
+    setDeliv(p=>[d,...p]);
+    addToast("success",`Delivery logged: ${d.item}`);
+    await postAction("addDelivery", {delivery: d});
+    slack.delivery(d);
+  };
+
+  const handleCheckout=async(c)=>{
+    const updated=items.map(i=>i.name===c.item?{...i,status:"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i);
+    setItems(updated);
+    setCheckouts(p=>[c,...p]);
+    addToast("success",`${c.item} → ${c.user}`);
+    await postAction("addCheckout", {checkout: c});
+    slack.checkout(c);
+    updated.filter(i=>i.qty<=i.minQty).forEach(i=>slack.lowStock(i));
+  };
+
+  const handleReturn=async(coId)=>{
+    const co=checkouts.find(c=>c.id===coId); if(!co)return;
+    setCheckouts(p=>p.map(c=>c.id===coId?{...c,status:"Returned"}:c));
+    setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i));
+    addToast("success",`${co.item} returned`);
+    await postAction("returnItem", {checkoutId: coId});
+    slack.returned(co);
+  };
+
+  const handleBulkReturn=async()=>{
+    const ids=[...selected];
+    for(const id of ids)await handleReturn(id);
+    setSelected(new Set());
+    addToast("success",`${ids.length} item${ids.length>1?"s":""} returned`);
+  };
+
+  const handleQuickCheckout=(itemName)=>{
+    setPreItem(itemName);
+    setModal("checkout");
+  };
+
+  const handleAddItem = async (item) => {
+    setItems(p=>[item,...p]);
+    addToast("success",`"${item.name}" added`);
+    await postAction("addItem", {item});
+  };
+
+  const handleSaveCfg = (newCfg) => {
+    setCfg(newCfg);
+    addToast("success","Settings saved");
+  };
+
+  // filtered inventory
+  const filtered=items.filter(i=>{
+    const q=search.toLowerCase();
+    return(i.name.toLowerCase().includes(q)||i.loc?.toLowerCase().includes(q)||i.cat?.toLowerCase().includes(q)||i.desc?.toLowerCase().includes(q))
+      &&(catF==="All"||i.cat===catF);
+  });
+
+  const TABS=[{id:"inventory",l:"Inventory",n:"grid"},{id:"deliveries",l:"Deliveries",n:"truck"},{id:"usage",l:"Usage",n:"users"},{id:"calendar",l:"Calendar",n:"calendar"}];
+
+  // Loading
+  if (loading) {
+    return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"var(--cyan)",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 16px"}}/>
+        <div style={{color:"var(--sub)",fontSize:14}}>Loading...</div>
+      </div>
+    </div>;
+  }
+
+  // Login page
+  if (!user) {
+    return <>
+      <LoginPage onSignIn={handleSignIn} cfg={cfg} onOpenSettings={()=>setModal("settings")}/>
+      {modal==="settings" && <SettingsModal cfg={cfg} onClose={()=>setModal(null)} onSave={handleSaveCfg}/>}
+    </>;
+  }
+
+  return(
+    <div style={{background:"var(--bg0)",minHeight:"100vh",color:"var(--text)"}}>
+      {/* HEADER */}
+      <header style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,position:"sticky",top:0,zIndex:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:13}}>
+          <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#00d4c8,#004d4a)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 18px rgba(0,212,200,.3)",flexShrink:0}}>
+            <Ico n="layers" s={18} col="var(--bg0)"/>
+          </div>
+          <div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,letterSpacing:"-0.02em"}}>LabTrack</div>
+            <div style={{color:"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>equipment · supplies · v3.0</div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {overdues.length>0&&(
+            <div className="overdue-pulse" style={{display:"flex",alignItems:"center",gap:6,background:"var(--red-d)",border:"1px solid #ff4d6a44",borderRadius:20,padding:"5px 12px",fontSize:12,color:"var(--red)"}}>
+              <Ico n="clock" s={13} col="var(--red)"/>{overdues.length} overdue
+            </div>
+          )}
+          {lowStock.length>0&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--amber-d)",border:"1px solid #f5a62344",borderRadius:20,padding:"5px 12px",fontSize:12,color:"var(--amber)"}}>
+              <Ico n="alert" s={13} col="var(--amber)"/>{lowStock.length} low stock
+            </div>
+          )}
+          <button onClick={()=>setModal("settings")} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:13,transition:"all .15s"}}>
+            <Ico n="settings" s={14}/>Settings
+          </button>
+          {/* User info */}
+          <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"5px 12px 5px 6px"}}>
+            {user.picture ? (
+              <img src={user.picture} alt="" style={{width:28,height:28,borderRadius:"50%",border:"2px solid var(--border-hi)"}}
+                onError={e=>{e.target.style.display='none';}}/>
+            ) : (
+              <MemberAvatar name={user.name} sz={28}/>
+            )}
+            <span style={{color:"var(--sub)",fontSize:12,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span>
+            <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}>
+              <Ico n="logout" s={14}/>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* NAV */}
+      <nav style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"0 24px",display:"flex",gap:2}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"transparent",border:"none",borderBottom:`2px solid ${tab===t.id?"var(--cyan)":"transparent"}`,color:tab===t.id?"var(--cyan)":"var(--dim)",padding:"13px 16px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:7,fontFamily:"'Outfit',sans-serif",transition:"color .15s,border-color .15s"}}>
+            <Ico n={t.n} s={14} col={tab===t.id?"var(--cyan)":"var(--dim)"}/>{t.l}
+            {t.id==="usage"&&overdues.length>0&&<span style={{background:"var(--red)",color:"#000",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{overdues.length}</span>}
+          </button>
+        ))}
+      </nav>
+
+      {/* MAIN */}
+      <main style={{padding:"24px",maxWidth:1360,margin:"0 auto"}}>
+
+        {/* Stats */}
+        <div style={{display:"flex",gap:12,marginBottom:overdues.length||lowStock.length?16:24,flexWrap:"wrap"}}>
+          <Stat label="Total Items"   val={items.length}    icon="box"      ac="var(--cyan)"   sub="in inventory"/>
+          <Stat label="Equipment"     val={items.filter(i=>i.cat==="Equipment"||i.cat==="Instrument").length} icon="layers" ac="var(--purple)" sub="& instruments"/>
+          <Stat label="Consumables"   val={items.filter(i=>["Consumable","PPE","Office Supply"].includes(i.cat)).length} icon="box" ac="var(--amber)" sub="supplies & PPE"/>
+          <Stat label="Checked Out"   val={activeOut.length} icon="users"   ac="var(--blue)"   sub="active"/>
+          <Stat label="Overdue"       val={overdues.length}  icon="clock"   ac={overdues.length?"var(--red)":"var(--green)"} sub="past return date" warn={overdues.length>0}/>
+        </div>
+
+        {/* Alert banners */}
+        {overdues.length>0&&(
+          <div style={{background:"var(--red-d)",border:"1px solid #ff4d6a30",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <Ico n="clock" s={15} col="var(--red)"/>
+            <span style={{color:"var(--red)",fontSize:13,fontWeight:600}}>Overdue returns:</span>
+            <span style={{color:"var(--sub)",fontSize:13}}>{overdues.map(c=>`${c.item} (${c.user})`).join(" · ")}</span>
+            <Btn v="ghost" sm style={{marginLeft:"auto"}} onClick={()=>setTab("usage")}>View in Usage →</Btn>
+          </div>
+        )}
+        {lowStock.length>0&&(
+          <div style={{background:"var(--amber-d)",border:"1px solid #f5a62330",borderRadius:10,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <Ico n="alert" s={15} col="var(--amber)"/>
+            <span style={{color:"var(--amber)",fontSize:13,fontWeight:600}}>Low stock:</span>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {lowStock.map(i=>(
+                <button key={i.id} onClick={()=>{setDetail(i);setTab("inventory");}} style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62340",borderRadius:12,padding:"2px 10px",fontSize:12,cursor:"pointer",fontWeight:600}}>
+                  {i.name} ({i.qty} {i.unit})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* INVENTORY */}
+        {tab==="inventory"&&(
+          <div style={{animation:"fadeUp .3s ease"}}>
+            <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
+                <Inp placeholder="Search name, location, description..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
+                {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
+              </div>
+
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["All",...CATEGORIES].map(c=>{
+                  const count=c==="All"?items.length:items.filter(i=>i.cat===c).length;
+                  if(count===0&&c!=="All")return null;
+                  const isSel=catF===c;
+                  const ac=CAT_ACCENT[c]||"var(--sub)";
+                  return(
+                    <button key={c} onClick={()=>setCatF(c)} style={{background:isSel?(c==="All"?"var(--bg4)":`${ac}18`):"var(--bg2)",color:isSel?(c==="All"?"var(--text)":ac):"var(--sub)",border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac):"var(--border)"}`,borderRadius:20,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif",transition:"all .15s",display:"flex",alignItems:"center",gap:4}}>
+                      {c}{c!=="All"&&<span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{display:"flex",gap:2,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:3,marginLeft:"auto"}}>
+                {["grid","list"].map(v=>(
+                  <button key={v} onClick={()=>setView(v)} style={{background:view===v?"var(--bg4)":"transparent",border:view===v?"1px solid var(--border-hi)":"1px solid transparent",borderRadius:6,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
+                    <Ico n={v} s={15} col={view===v?"var(--cyan)":"var(--dim)"}/>
+                  </button>
+                ))}
+              </div>
+
+              <Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}>
+                <Ico n="tag" s={14}/>Check Out
+              </Btn>
+              <Btn onClick={()=>setModal("addItem")}>
+                <Ico n="plus" s={14} col="#000"/>Add Item
+              </Btn>
+            </div>
+
+            {search&&<div style={{color:"var(--dim)",fontSize:12,marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} for "{search}"</div>}
+
+            {filtered.length===0?(
+              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
+                <Ico n="search" s={48} col="var(--bg4)"/>
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No items found</div>
+                <div style={{fontSize:13,marginTop:4}}>Try a different search or category</div>
+                <button onClick={()=>{setSearch("");setCatF("All");}} style={{marginTop:16,background:"none",border:"1px solid var(--border)",color:"var(--cyan)",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:13}}>Clear filters</button>
+              </div>
+            ):view==="grid"?(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
+                {filtered.map((item,idx)=>{
+                  const ac=CAT_ACCENT[item.cat]||"var(--cyan)";
+                  const isLow=item.qty<=item.minQty;
+                  return(
+                    <div key={item.id} className="card-item" onClick={()=>setDetail(item)} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`}}>
+                      <div style={{position:"relative"}}>
+                        <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
+                        <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
+                        <div style={{position:"absolute",top:10,right:10}}><Badge status={isLow?"Low Stock":item.status}/></div>
+                        <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
+                          <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{item.cat.toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div style={{padding:"11px 14px 13px"}}>
+                        <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,lineHeight:1}}>{item.qty}</span>
+                            <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
+                          </div>
+                          {item.usedBy?.length>0&&(
+                            <div style={{display:"flex"}}>
+                              {item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ):(
+              <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+                <div style={{overflow:"auto",maxHeight:"65vh"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                    <thead>
+                      <tr style={{borderBottom:"1px solid var(--border)"}}>
+                        {["Item","Category","Stock","Location","Status","In Use By"].map(h=>(
+                          <th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((item,i)=>(
+                        <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<filtered.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
+                          <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}</td>
+                          <td style={{padding:"10px 16px"}}><span style={{color:CAT_ACCENT[item.cat]||"var(--sub)",fontSize:12}}>{item.cat}</span></td>
+                          <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
+                          <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
+                          <td style={{padding:"10px 16px"}}><Badge status={item.qty<=item.minQty?"Low Stock":item.status}/></td>
+                          <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            <div style={{marginTop:18}}><KbdHint/></div>
+          </div>
+        )}
+
+        {/* DELIVERIES */}
+        {tab==="deliveries"&&(
+          <div style={{animation:"fadeUp .3s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+              <div>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Package Deliveries</h2>
+                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{deliveries.length} total · Slack notifies on each arrival</p>
+              </div>
+              <Btn onClick={()=>setModal("delivery")}><Ico n="truck" s={14} col="#000"/>Log Delivery</Btn>
+            </div>
+            {deliveries.length===0?(
+              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
+                <Ico n="truck" s={48} col="var(--bg4)"/>
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No deliveries logged yet</div>
+                <Btn style={{marginTop:16}} onClick={()=>setModal("delivery")}><Ico n="plus" s={14} col="#000"/>Log first delivery</Btn>
+              </div>
+            ):(
+              <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+                <div style={{overflow:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                    <thead><tr style={{borderBottom:"1px solid var(--border)"}}>{["Item","Qty","Supplier","Received By","Tracking","Date","Status"].map(h=><th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>)}</tr></thead>
+                    <tbody>{deliveries.map((d,i)=>(
+                      <tr key={d.id} className="row-hover" style={{borderBottom:i<deliveries.length-1?"1px solid var(--border)":"none",transition:"background .15s"}}>
+                        <td style={{padding:"11px 16px",color:"var(--text)",fontWeight:600}}>{d.item}</td>
+                        <td style={{padding:"11px 16px",color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace"}}>{d.qty} {d.unit}</td>
+                        <td style={{padding:"11px 16px",color:"var(--sub)"}}>{d.from||"—"}</td>
+                        <td style={{padding:"11px 16px"}}>{d.receivedBy?<div style={{display:"flex",alignItems:"center",gap:7}}><MemberAvatar name={d.receivedBy} sz={24}/><span style={{color:"var(--sub)"}}>{d.receivedBy}</span></div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                        <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.tracking||"—"}</td>
+                        <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.date}</td>
+                        <td style={{padding:"11px 16px"}}><Badge status={d.status}/></td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* USAGE */}
+        {tab==="usage"&&(
+          <div style={{animation:"fadeUp .3s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+              <div>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Item Usage</h2>
+                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOut.length} active · {overdues.length>0&&<span style={{color:"var(--red)",fontWeight:600}}>{overdues.length} overdue · </span>}Slack notifies on checkout & return</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {selected.size>0&&(
+                  <Btn v="success" onClick={()=>setConfirm({msg:`Return ${selected.size} selected item${selected.size>1?"s":""}?`,onConfirm:handleBulkReturn})}>
+                    <Ico n="undo" s={14} col="var(--green)"/>Return {selected.size} selected
+                  </Btn>
+                )}
+                <Btn onClick={()=>{setPreItem("");setModal("checkout");}}><Ico n="plus" s={14} col="#000"/>New Checkout</Btn>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(255px,1fr))",gap:14,marginBottom:28}}>
+              {MEMBERS.map((m,idx)=>{
+                const outs=checkouts.filter(c=>c.user===m&&c.status==="Active");
+                const od=outs.filter(c=>isOverdue(c)).length;
+                return(
+                  <div key={m} style={{background:"var(--bg1)",border:`1px solid ${od?"#ff4d6a30":"var(--border)"}`,borderRadius:14,padding:"16px 18px",animation:`fadeUp .3s ease ${idx*.05}s both`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12}}>
+                      <MemberAvatar name={m} sz={40}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:14,fontFamily:"'Syne',sans-serif"}}>{m}</div>
+                        <div style={{color:od?"var(--red)":outs.length?"var(--blue)":"var(--dim)",fontSize:12}}>
+                          {od?`${od} overdue!`:outs.length?`${outs.length} item${outs.length>1?"s":""} out`:"Nothing checked out"}
+                        </div>
+                      </div>
+                    </div>
+                    {outs.map(c=>{
+                      const od2=isOverdue(c);
+                      return(
+                        <div key={c.id} style={{background:od2?"var(--red-d)":"var(--bg2)",border:`1px solid ${od2?"#ff4d6a30":"var(--border)"}`,borderRadius:8,padding:"8px 11px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                          <div style={{minWidth:0}}>
+                            <div style={{color:"var(--text)",fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.item}</div>
+                            <div style={{color:od2?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace",marginTop:2}}>{od2?"OVERDUE":"Return"} {c.ret||"—"}</div>
+                          </div>
+                          <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}>
+                            <Ico n="undo" s={11}/>
+                          </Btn>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+              <div style={{padding:"13px 18px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontWeight:700,fontFamily:"'Syne',sans-serif",fontSize:15}}>All Records</span>
+                {selected.size>0&&<span style={{color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.size} selected</span>}
+              </div>
+              <div style={{overflow:"auto",maxHeight:"65vh"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
+                    <th className="sticky-th" style={{padding:"10px 16px",width:36}}/>
+                    {["Item","Person","Checked Out","Return By","Status",""].map((h,i)=>(
+                      <th key={i} className="sticky-th" style={{padding:"10px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>{checkouts.map((c,i)=>{
+                    const od=isOverdue(c);
+                    const isSel=selected.has(c.id);
+                    return(
+                      <tr key={c.id} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined}}>
+                        <td style={{padding:"10px 16px"}}>
+                          {c.status==="Active"&&(
+                            <input type="checkbox" checked={isSel} onChange={e=>{const ns=new Set(selected);e.target.checked?ns.add(c.id):ns.delete(c.id);setSelected(ns);}} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>
+                          )}
+                        </td>
+                        <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{c.item}</td>
+                        <td style={{padding:"10px 16px"}}><div style={{display:"flex",alignItems:"center",gap:8}}><MemberAvatar name={c.user} sz={26}/><span style={{color:"var(--sub)"}}>{c.user}</span></div></td>
+                        <td style={{padding:"10px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{c.out}</td>
+                        <td style={{padding:"10px 16px",color:od?"var(--red)":"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:od?700:400}}>{c.ret||"—"}{od&&" !"}</td>
+                        <td style={{padding:"10px 16px"}}><Badge status={od?"Overdue":c.status}/></td>
+                        <td style={{padding:"10px 16px"}}>
+                          {c.status==="Active"&&(
+                            <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}>
+                              <Ico n="undo" s={12}/>Return
+                            </Btn>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CALENDAR */}
+        {tab==="calendar"&&(
+          <div style={{animation:"fadeUp .3s ease"}}>
+            <h2 style={{margin:"0 0 20px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Activity Calendar</h2>
+            <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,padding:24}}>
+              <CalView checkouts={checkouts} deliveries={deliveries}/>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* MODALS */}
+      {modal==="delivery"  && <DeliveryModal  onClose={()=>setModal(null)} onAdd={handleDelivery}/>}
+      {modal==="checkout"  && <CheckoutModal  items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem}/>}
+      {modal==="addItem"   && <AddItemModal   onClose={()=>setModal(null)} onAdd={handleAddItem}/>}
+      {modal==="settings"  && <SettingsModal  cfg={cfg} onClose={()=>setModal(null)} onSave={handleSaveCfg}/>}
+      {detail  && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout}/>}
+      {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
+
+      {/* TOASTS */}
+      <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
+    </div>
+  );
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(LabInventory));
+</script>
+</body>
+</html>
