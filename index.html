@@ -61,9 +61,14 @@ const getTodayParts = () => {
   return { d: d.getDate(), m: d.getMonth(), y: d.getFullYear() };
 };
 
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
-const DEF_CFG = { slack_webhook:"", on_delivery:true, on_checkout:true, on_low_stock:true, apps_script_url:"", oauth_client_id:"" };
-const MEMBERS  = ["Dr. Chen","Maria L.","Jake M.","Dr. Patel","Sarah K.","Tom B.","Dr. Rivera","Lin W."];
+// ─── CONFIG (hardcoded — no setup needed for users) ─────────────────────────
+const APP_CONFIG = {
+  oauth_client_id: "253618186533-8b7mt0hgcgdb4qlh8tg2admilfifuhgq.apps.googleusercontent.com",
+  apps_script_url: "https://script.google.com/macros/s/AKfycbzLLvwOatqT3j5XRvUD3_DPoFzip1GVp9o17XY31bXrxi5wCyUkm8OXcS5IC3AysXsVBw/exec",
+  on_delivery: true,
+  on_checkout: true,
+  on_low_stock: true,
+};
 const CATEGORIES = ["Equipment","Instrument","Consumable","PPE","Glassware","Office Supply"];
 
 const SEED_ITEMS = [
@@ -143,18 +148,18 @@ const Ico = ({n,s=16,col="currentColor"}) => (
 
 // ─── BACKEND API ──────────────────────────────────────────────────────────────
 const API = {
-  async fetchAll(cfg, token) {
-    if (!cfg.apps_script_url) return null;
+  async fetchAll(token) {
+    if (!APP_CONFIG.apps_script_url) return null;
     try {
-      const r = await fetch(cfg.apps_script_url + "?token=" + encodeURIComponent(token));
+      const r = await fetch(APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token));
       if (!r.ok) throw new Error("Failed to fetch");
       return await r.json();
     } catch(e) { console.error("API fetchAll:", e); return null; }
   },
-  async post(cfg, token, action, payload) {
-    if (!cfg.apps_script_url) return null;
+  async post(token, action, payload) {
+    if (!APP_CONFIG.apps_script_url) return null;
     try {
-      const r = await fetch(cfg.apps_script_url, {
+      const r = await fetch(APP_CONFIG.apps_script_url, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ token, action, ...payload })
@@ -233,21 +238,9 @@ const ToastStack = ({toasts,rm}) => (
   </div>
 );
 
-// ─── SLACK SERVICE (client-side preview only; real Slack goes through Apps Script) ──
-function useSlack(cfg,addToast){
-  const fire=async text=>{
-    if(!cfg.apps_script_url){
-      addToast("slack","Slack preview: "+text.split("\n")[0]);
-      return;
-    }
-  };
-  return{
-    delivery:d=>cfg.on_delivery&&fire("New Delivery: "+d.item),
-    checkout:c=>cfg.on_checkout&&fire("Checked Out: "+c.item+" -> "+c.user),
-    returned:c=>cfg.on_checkout&&fire("Returned: "+c.item+" by "+c.user),
-    lowStock:i=>cfg.on_low_stock&&fire("Low Stock: "+i.name),
-  };
-}
+// ─── SLACK (handled entirely server-side in Apps Script) ─────────────────────
+// No client-side Slack code needed — Apps Script sends Slack messages
+// automatically on addDelivery, addCheckout, and returnItem actions.
 
 // ─── SEARCHABLE ITEM PICKER ───────────────────────────────────────────────────
 const ItemPicker = ({items, value, onChange}) => {
@@ -373,8 +366,8 @@ const ItemPicker = ({items, value, onChange}) => {
 };
 
 // ─── CHECKOUT MODAL ──────────────────────────────────────────────────────────
-const CheckoutModal = ({items,onClose,onAdd,preItem=""}) => {
-  const [f,setF]=useState({item:preItem,user:"",out:getToday(),ret:"",qty:1,notes:""});
+const CheckoutModal = ({items,onClose,onAdd,preItem="",userName=""}) => {
+  const [f,setF]=useState({item:preItem,user:userName,out:getToday(),ret:"",qty:1,notes:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const selected=items.find(i=>i.name===f.item);
   const maxQty=selected?.qty||1;
@@ -403,10 +396,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem=""}) => {
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fld label="Person">
-            <Sel value={f.user} onChange={s("user")}>
-              <option value="">— Who's taking it? —</option>
-              {MEMBERS.map(m=><option key={m}>{m}</option>)}
-            </Sel>
+            <Inp placeholder="Your name" value={f.user} onChange={s("user")}/>
           </Fld>
           <Fld label={`Quantity ${selected?`(max ${maxQty})`:""}`}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -438,8 +428,8 @@ const CheckoutModal = ({items,onClose,onAdd,preItem=""}) => {
 };
 
 // ─── DELIVERY MODAL ───────────────────────────────────────────────────────────
-const DeliveryModal = ({onClose,onAdd}) => {
-  const [f,setF]=useState({item:"",qty:"",unit:"boxes",from:"",receivedBy:"",date:getToday(),tracking:""});
+const DeliveryModal = ({onClose,onAdd,userName=""}) => {
+  const [f,setF]=useState({item:"",qty:"",unit:"boxes",from:"",receivedBy:userName,date:getToday(),tracking:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
     <Modal onClose={onClose} title="Log Package Delivery">
@@ -448,7 +438,7 @@ const DeliveryModal = ({onClose,onAdd}) => {
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["boxes","pcs","units","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Supplier"><Inp placeholder="FisherSci, VWR, Sigma..." value={f.from} onChange={s("from")}/></Fld>
-        <Fld label="Received By"><Sel value={f.receivedBy} onChange={s("receivedBy")}><option value="">— Select person —</option>{MEMBERS.map(m=><option key={m}>{m}</option>)}</Sel></Fld>
+        <Fld label="Received By"><Inp placeholder="Your name" value={f.receivedBy} onChange={s("receivedBy")}/></Fld>
         <Fld label="Date"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
         <Fld label="Tracking No."><Inp placeholder="Optional" value={f.tracking} onChange={s("tracking")}/></Fld>
       </div>
@@ -583,47 +573,6 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout}) => {
   );
 };
 
-// ─── SETTINGS MODAL ───────────────────────────────────────────────────────────
-const SettingsModal = ({cfg,onClose,onSave}) => {
-  const [c,setC]=useState({...cfg});
-  const s=k=>e=>setC(p=>({...p,[k]:e.target.value}));
-  const tog=k=>setC(p=>({...p,[k]:!p[k]}));
-  const Toggle=({k,label})=>(
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--border)"}}>
-      <span style={{color:"var(--sub)",fontSize:13}}>{label}</span>
-      <button onClick={()=>tog(k)} style={{width:42,height:24,borderRadius:12,border:"none",cursor:"pointer",background:c[k]?"var(--cyan)":"var(--bg4)",position:"relative",transition:"background .2s",flexShrink:0}}>
-        <span style={{position:"absolute",top:3,left:c[k]?21:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-      </button>
-    </div>
-  );
-  return(
-    <Modal onClose={onClose} title="Integration Settings" mw={520}>
-      <div style={{background:"var(--bg2)",borderRadius:12,padding:16,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-          <Ico n="slack" s={16} col="var(--purple)"/>
-          <span style={{color:"var(--text)",fontWeight:700,fontFamily:"'Syne',sans-serif"}}>Slack Notifications</span>
-        </div>
-        <p style={{color:"var(--dim)",fontSize:12,marginBottom:12}}>Slack webhooks are configured server-side in Apps Script for security. Toggle which events trigger notifications below.</p>
-        <Toggle k="on_delivery"  label="Notify on package delivery"/>
-        <Toggle k="on_checkout"  label="Notify on item check-out / return"/>
-        <Toggle k="on_low_stock" label="Alert when stock drops below minimum"/>
-      </div>
-      <div style={{background:"var(--bg2)",borderRadius:12,padding:16,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-          <span style={{fontSize:16}}>☁</span>
-          <span style={{color:"var(--text)",fontWeight:700,fontFamily:"'Syne',sans-serif"}}>Google Apps Script Backend</span>
-        </div>
-        <Fld label="Apps Script Web App URL" hint="Deploy your Apps Script as a web app and paste the URL here"><Inp placeholder="https://script.google.com/macros/s/.../exec" value={c.apps_script_url} onChange={s("apps_script_url")}/></Fld>
-        <Fld label="OAuth Client ID" hint="From Google Cloud Console - Credentials"><Inp placeholder="123456789.apps.googleusercontent.com" value={c.oauth_client_id} onChange={s("oauth_client_id")}/></Fld>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{onSave(c);onClose();}}><Ico n="check" s={14} col="#000"/>Save</Btn>
-      </div>
-    </Modal>
-  );
-};
-
 // ─── STAT CARD ────────────────────────────────────────────────────────────────
 const Stat=({label,val,icon,ac,sub,warn})=>(
   <div style={{background:"var(--bg1)",border:`1px solid ${warn?"#ff4d6a30":"var(--border)"}`,borderLeft:`3px solid ${ac}`,borderRadius:14,padding:"17px 20px",flex:1,minWidth:130}}>
@@ -707,46 +656,53 @@ const KbdHint=()=>(
 );
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
-const LoginPage = ({onSignIn, cfg, onOpenSettings}) => {
+const LoginPage = ({onSignIn}) => {
   const btnRef = useRef(null);
   const [error, setError] = useState("");
+  const [gsiReady, setGsiReady] = useState(false);
 
   useEffect(()=>{
-    if (!cfg.oauth_client_id || typeof google === 'undefined') return;
-    try {
-      google.accounts.id.initialize({
-        client_id: cfg.oauth_client_id,
-        callback: (response) => {
-          // Decode the JWT to check domain
-          try {
-            const payload = JSON.parse(atob(response.credential.split('.')[1]));
-            if (payload.hd !== "seas.upenn.edu") {
-              setError("Access restricted to @seas.upenn.edu accounts only.");
-              return;
+    const init = () => {
+      if (typeof google === 'undefined' || !google.accounts) {
+        setTimeout(init, 200);
+        return;
+      }
+      try {
+        google.accounts.id.initialize({
+          client_id: APP_CONFIG.oauth_client_id,
+          callback: (response) => {
+            try {
+              const payload = JSON.parse(atob(response.credential.split('.')[1]));
+              if (payload.hd !== "seas.upenn.edu") {
+                setError("Access restricted to @seas.upenn.edu accounts only.");
+                return;
+              }
+              onSignIn({
+                token: response.credential,
+                name: payload.name,
+                email: payload.email,
+                picture: payload.picture,
+              });
+            } catch(e) {
+              setError("Failed to verify account. Please try again.");
             }
-            onSignIn({
-              token: response.credential,
-              name: payload.name,
-              email: payload.email,
-              picture: payload.picture,
-            });
-          } catch(e) {
-            setError("Failed to verify account. Please try again.");
-          }
-        },
-        hd: "seas.upenn.edu",
-        auto_select: false,
-      });
-      google.accounts.id.renderButton(btnRef.current, {
-        type: "standard",
-        theme: "filled_black",
-        size: "large",
-        text: "signin_with",
-        shape: "pill",
-        width: 300,
-      });
-    } catch(e) { console.error("GSI init error:", e); }
-  }, [cfg.oauth_client_id]);
+          },
+          hd: "seas.upenn.edu",
+          auto_select: false,
+        });
+        google.accounts.id.renderButton(btnRef.current, {
+          type: "standard",
+          theme: "filled_black",
+          size: "large",
+          text: "signin_with",
+          shape: "pill",
+          width: 300,
+        });
+        setGsiReady(true);
+      } catch(e) { console.error("GSI init error:", e); }
+    };
+    init();
+  }, []);
 
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)"}}>
@@ -755,28 +711,14 @@ const LoginPage = ({onSignIn, cfg, onOpenSettings}) => {
           <Ico n="layers" s={32} col="var(--bg0)"/>
         </div>
         <h1 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,margin:"0 0 6px",letterSpacing:"-0.03em"}}>LabTrack</h1>
-        <p style={{color:"var(--sub)",fontSize:15,margin:"0 0 32px",lineHeight:1.5}}>Lab Inventory Management System</p>
+        <p style={{color:"var(--sub)",fontSize:15,margin:"0 0 8px",lineHeight:1.5}}>Figueroa Lab Inventory</p>
+        <p style={{color:"var(--dim)",fontSize:13,margin:"0 0 32px"}}>Penn Engineering</p>
 
-        {cfg.oauth_client_id ? (
-          <div>
-            <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
-            <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @seas.upenn.edu account</p>
-            {error && <p style={{color:"var(--red)",fontSize:13,marginTop:12,background:"var(--red-d)",padding:"8px 14px",borderRadius:8,border:"1px solid #ff4d6a30"}}>{error}</p>}
-          </div>
-        ) : (
-          <div>
-            <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
-              <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 16px"}}>No OAuth Client ID configured. Set up Google Sign-In to enable shared access, or continue in local mode with seed data.</p>
-              <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-                <Btn onClick={()=>onSignIn({token:"local",name:"Local User",email:"local@dev",picture:""})} v="ghost">Continue Locally</Btn>
-                <Btn onClick={onOpenSettings}>Configure</Btn>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div style={{marginTop:40,color:"var(--dim)",fontSize:11}}>
-          <button onClick={onOpenSettings} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Settings</button>
+        <div>
+          <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
+          {!gsiReady && <p style={{color:"var(--dim)",fontSize:12}}>Loading sign-in...</p>}
+          <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @seas.upenn.edu account</p>
+          {error && <p style={{color:"var(--red)",fontSize:13,marginTop:12,background:"var(--red-d)",padding:"8px 14px",borderRadius:8,border:"1px solid #ff4d6a30"}}>{error}</p>}
         </div>
       </div>
     </div>
@@ -802,18 +744,9 @@ function LabInventory(){
   const [view,setView]         = useState("grid");
   const [selected,setSelected] = useState(new Set());
   const [toasts,setToasts]     = useState([]);
-  const [cfg,setCfg]           = useState(()=>{
-    try { return {...DEF_CFG, ...JSON.parse(localStorage.getItem("labtrack_cfg"))}; }
-    catch { return DEF_CFG; }
-  });
   const [confirm,setConfirm]   = useState(null);
   const [dataLoaded,setDataLoaded] = useState(false);
   const tid = useRef(0);
-
-  // Persist config
-  useEffect(()=>{
-    localStorage.setItem("labtrack_cfg", JSON.stringify(cfg));
-  },[cfg]);
 
   // Restore session
   useEffect(()=>{
@@ -830,7 +763,7 @@ function LabInventory(){
   // Fetch data from backend when signed in
   useEffect(()=>{
     if (!user || dataLoaded) return;
-    if (!cfg.apps_script_url || user.token === "local") {
+    if (!APP_CONFIG.apps_script_url || user.token === "local") {
       // Use seed data / localStorage fallback
       try {
         const saved = localStorage.getItem("labtrack_data");
@@ -846,7 +779,7 @@ function LabInventory(){
     }
     // Fetch from Apps Script
     (async ()=>{
-      const data = await API.fetchAll(cfg, user.token);
+      const data = await API.fetchAll(user.token);
       if (data && data.items) {
         setItems(data.items);
         setDeliv(data.deliveries || []);
@@ -854,7 +787,7 @@ function LabInventory(){
       }
       setDataLoaded(true);
     })();
-  },[user, cfg.apps_script_url]);
+  },[user]);
 
   // Save data locally as fallback
   useEffect(()=>{
@@ -867,8 +800,6 @@ function LabInventory(){
     setToasts(t=>[...t,{id,type,msg}]);
     setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),5000);
   },[]);
-
-  const slack=useSlack(cfg,addToast);
 
   const handleSignIn = (u) => {
     setUser(u);
@@ -901,8 +832,8 @@ function LabInventory(){
 
   // handlers
   const postAction = async (action, payload) => {
-    if (cfg.apps_script_url && user?.token !== "local") {
-      await API.post(cfg, user.token, action, payload);
+    if (APP_CONFIG.apps_script_url && user?.token !== "local") {
+      await API.post(user.token, action, payload);
     }
   };
 
@@ -910,7 +841,6 @@ function LabInventory(){
     setDeliv(p=>[d,...p]);
     addToast("success",`Delivery logged: ${d.item}`);
     await postAction("addDelivery", {delivery: d});
-    slack.delivery(d);
   };
 
   const handleCheckout=async(c)=>{
@@ -919,8 +849,6 @@ function LabInventory(){
     setCheckouts(p=>[c,...p]);
     addToast("success",`${c.item} → ${c.user}`);
     await postAction("addCheckout", {checkout: c});
-    slack.checkout(c);
-    updated.filter(i=>i.qty<=i.minQty).forEach(i=>slack.lowStock(i));
   };
 
   const handleReturn=async(coId)=>{
@@ -929,7 +857,6 @@ function LabInventory(){
     setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i));
     addToast("success",`${co.item} returned`);
     await postAction("returnItem", {checkoutId: coId});
-    slack.returned(co);
   };
 
   const handleBulkReturn=async()=>{
@@ -948,11 +875,6 @@ function LabInventory(){
     setItems(p=>[item,...p]);
     addToast("success",`"${item.name}" added`);
     await postAction("addItem", {item});
-  };
-
-  const handleSaveCfg = (newCfg) => {
-    setCfg(newCfg);
-    addToast("success","Settings saved");
   };
 
   // filtered inventory
@@ -977,8 +899,7 @@ function LabInventory(){
   // Login page
   if (!user) {
     return <>
-      <LoginPage onSignIn={handleSignIn} cfg={cfg} onOpenSettings={()=>setModal("settings")}/>
-      {modal==="settings" && <SettingsModal cfg={cfg} onClose={()=>setModal(null)} onSave={handleSaveCfg}/>}
+      <LoginPage onSignIn={handleSignIn}/>
     </>;
   }
 
@@ -1007,9 +928,6 @@ function LabInventory(){
               <Ico n="alert" s={13} col="var(--amber)"/>{lowStock.length} low stock
             </div>
           )}
-          <button onClick={()=>setModal("settings")} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:13,transition:"all .15s"}}>
-            <Ico n="settings" s={14}/>Settings
-          </button>
           {/* User info */}
           <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"5px 12px 5px 6px"}}>
             {user.picture ? (
@@ -1243,7 +1161,8 @@ function LabInventory(){
             </div>
 
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(255px,1fr))",gap:14,marginBottom:28}}>
-              {MEMBERS.map((m,idx)=>{
+              {/* Derive members from checkout data — anyone who has active checkouts */}
+              {[...new Set(checkouts.filter(c=>c.status==="Active").map(c=>c.user))].map((m,idx)=>{
                 const outs=checkouts.filter(c=>c.user===m&&c.status==="Active");
                 const od=outs.filter(c=>isOverdue(c)).length;
                 return(
@@ -1332,10 +1251,9 @@ function LabInventory(){
       </main>
 
       {/* MODALS */}
-      {modal==="delivery"  && <DeliveryModal  onClose={()=>setModal(null)} onAdd={handleDelivery}/>}
-      {modal==="checkout"  && <CheckoutModal  items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem}/>}
+      {modal==="delivery"  && <DeliveryModal  onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
+      {modal==="checkout"  && <CheckoutModal  items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""}/>}
       {modal==="addItem"   && <AddItemModal   onClose={()=>setModal(null)} onAdd={handleAddItem}/>}
-      {modal==="settings"  && <SettingsModal  cfg={cfg} onClose={()=>setModal(null)} onSave={handleSaveCfg}/>}
       {detail  && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
