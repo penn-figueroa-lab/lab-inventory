@@ -65,9 +65,6 @@ const getTodayParts = () => {
 const APP_CONFIG = {
   oauth_client_id: "253618186533-8b7mt0hgcgdb4qlh8tg2admilfifuhgq.apps.googleusercontent.com",
   apps_script_url: "https://script.google.com/macros/s/AKfycbzLLvwOatqT3j5XRvUD3_DPoFzip1GVp9o17XY31bXrxi5wCyUkm8OXcS5IC3AysXsVBw/exec",
-  on_delivery: true,
-  on_checkout: true,
-  on_low_stock: true,
 };
 const CATEGORIES = ["Equipment","Instrument","Consumable","PPE","Glassware","Office Supply"];
 
@@ -137,11 +134,13 @@ const P = {
   clock:    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>',
-  slack:    '<path d="M5.042 15.165a2.528 2.528 0 01-2.52 2.523A2.528 2.528 0 010 15.165a2.527 2.527 0 012.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 012.521-2.52 2.527 2.527 0 012.521 2.52v6.313A2.528 2.528 0 018.834 24a2.528 2.528 0 01-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 01-2.521-2.52A2.528 2.528 0 018.834 0a2.528 2.528 0 012.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 012.521 2.521 2.528 2.528 0 01-2.521 2.521H2.522A2.528 2.528 0 010 8.834a2.528 2.528 0 012.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 012.522-2.521A2.528 2.528 0 0124 8.834a2.528 2.528 0 01-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 01-2.523 2.521 2.527 2.527 0 01-2.52-2.521V2.522A2.527 2.527 0 0115.165 0a2.528 2.528 0 012.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 012.523 2.522A2.528 2.528 0 0115.165 24a2.527 2.527 0 01-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 01-2.52-2.523 2.526 2.526 0 012.52-2.52h6.313A2.527 2.527 0 0124 15.165a2.528 2.528 0 01-2.522 2.523h-6.313z"/>',
   logout:   '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  edit:     '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  cart:     '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>',
+  trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>',
 };
 const Ico = ({n,s=16,col="currentColor"}) => (
-  React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:n==="slack"?col:"none",stroke:n==="slack"?"none":col,
+  React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:col,
     strokeWidth:"2",strokeLinecap:"round",strokeLinejoin:"round",style:{flexShrink:0},
     dangerouslySetInnerHTML:{__html:P[n]||""}})
 );
@@ -235,7 +234,7 @@ const Modal = ({onClose,title,mw=560,children,noPad}) => (
 const ToastStack = ({toasts,rm}) => (
   <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,minWidth:300,maxWidth:380}}>
     {toasts.map(t=>{
-      const C={success:{bg:"var(--green-d)",col:"var(--green)",icon:"check"},error:{bg:"var(--red-d)",col:"var(--red)",icon:"alert"},slack:{bg:"var(--purple-d)",col:"var(--purple)",icon:"slack"},info:{bg:"var(--blue-d)",col:"var(--blue)",icon:"bell"}}[t.type]||{};
+      const C={success:{bg:"var(--green-d)",col:"var(--green)",icon:"check"},error:{bg:"var(--red-d)",col:"var(--red)",icon:"alert"},info:{bg:"var(--blue-d)",col:"var(--blue)",icon:"bell"}}[t.type]||{};
       return(
         <div key={t.id} style={{background:C.bg,border:`1px solid ${C.col}33`,borderRadius:12,padding:"11px 15px",display:"flex",alignItems:"flex-start",gap:10,animation:"toastSlide .28s cubic-bezier(.4,0,.2,1)",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
           <span style={{color:C.col,marginTop:1,flexShrink:0}}><Ico n={C.icon} s={15} col={C.col}/></span>
@@ -246,10 +245,6 @@ const ToastStack = ({toasts,rm}) => (
     })}
   </div>
 );
-
-// ─── SLACK (handled entirely server-side in Apps Script) ─────────────────────
-// No client-side Slack code needed — Apps Script sends Slack messages
-// automatically on addDelivery, addCheckout, and returnItem actions.
 
 // ─── SEARCHABLE ITEM PICKER ───────────────────────────────────────────────────
 const ItemPicker = ({items, value, onChange}) => {
@@ -487,6 +482,75 @@ const AddItemModal = ({onClose,onAdd}) => {
   );
 };
 
+// ─── EDIT ITEM MODAL ──────────────────────────────────────────────────────────
+const EditItemModal = ({item,onClose,onSave,onDelete}) => {
+  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const [confirmDel,setConfirmDel]=useState(false);
+  return(
+    <Modal onClose={onClose} title="Edit Item" mw={560}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
+        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
+        <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Image URL"><Inp placeholder="https://..." value={f.img} onChange={s("img")}/></Fld></div>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
+        <div>
+          {!confirmDel ? (
+            <Btn v="danger" onClick={()=>setConfirmDel(true)}><Ico n="trash" s={14} col="var(--red)"/>Delete Item</Btn>
+          ) : (
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{color:"var(--red)",fontSize:12}}>Are you sure?</span>
+              <Btn v="danger" sm onClick={()=>{onDelete(item.id);onClose();}}>Yes, delete</Btn>
+              <Btn v="ghost" sm onClick={()=>setConfirmDel(false)}>Cancel</Btn>
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1});onClose();}}} disabled={!f.name||!f.qty}>
+            <Ico n="check" s={14} col="#000"/>Save Changes
+          </Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── ORDER REQUEST MODAL ──────────────────────────────────────────────────────
+const OrderModal = ({onClose,onAdd,userName=""}) => {
+  const [f,setF]=useState({item:"",qty:"",unit:"units",reason:"",urgency:"Normal",date:getToday()});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  return(
+    <Modal onClose={onClose} title="Request Order">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Supply Name"><Inp placeholder="e.g. Nitrile Gloves (M), Eppendorf tubes..." value={f.item} onChange={s("item")}/></Fld></div>
+        <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Urgency">
+          <Sel value={f.urgency} onChange={s("urgency")}>
+            <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
+          </Sel>
+        </Fld>
+        <Fld label="Date Needed By"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp placeholder="Why do we need this? For which experiment?" value={f.reason} onChange={s("reason")}/></Fld></div>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,requestedBy:userName,status:"Pending"});onClose();}}} disabled={!f.item||!f.qty}>
+          <Ico n="cart" s={14} col="#000"/>Submit Request
+        </Btn>
+      </div>
+    </Modal>
+  );
+};
+
 // ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
 const ConfirmModal = ({msg,onConfirm,onClose}) => (
   <Modal onClose={onClose} title="Confirm Action" mw={400}>
@@ -499,7 +563,7 @@ const ConfirmModal = ({msg,onConfirm,onClose}) => (
 );
 
 // ─── ITEM DETAIL MODAL ────────────────────────────────────────────────────────
-const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout}) => {
+const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit}) => {
   const [confirmId,setConfirmId]=useState(null);
   const hist=checkouts.filter(c=>c.item===item.name);
   const ac=CAT_ACCENT[item.cat]||"var(--cyan)";
@@ -528,11 +592,16 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout}) => {
               </div>
             ))}
           </div>
-          {item.status!=="Maintenance"&&(
-            <Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}>
-              <Ico n="tag" s={14} col="#000"/>Quick Check Out
+          <div style={{display:"flex",gap:8}}>
+            {item.status!=="Maintenance"&&(
+              <Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}>
+                <Ico n="tag" s={14} col="#000"/>Quick Check Out
+              </Btn>
+            )}
+            <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}}>
+              <Ico n="edit" s={14}/>Edit
             </Btn>
-          )}
+          </div>
         </div>
       </div>
 
@@ -588,7 +657,7 @@ const Stat=({label,val,icon,ac,sub,warn})=>(
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
       <div>
         <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:5}}>{label}</div>
-        <div style={{color:ac,fontFamily:"'Syne',sans-serif",fontSize:30,fontWeight:800,lineHeight:1}}>{val}</div>
+        <div style={{color:ac,fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800,lineHeight:1,letterSpacing:"-0.02em",textShadow:`0 0 20px ${ac}22`}}>{val}</div>
         {sub&&<div style={{color:"var(--dim)",fontSize:11,marginTop:3}}>{sub}</div>}
       </div>
       <Ico n={icon} s={20} col={ac}/>
@@ -745,9 +814,11 @@ function LabInventory(){
   const [items,setItems]       = useState(SEED_ITEMS);
   const [deliveries,setDeliv]  = useState(SEED_DELIVERIES);
   const [checkouts,setCheckouts]=useState(SEED_CHECKOUTS);
+  const [orders,setOrders]     = useState([]);
   const [modal,setModal]       = useState(null);
   const [preItem,setPreItem]   = useState("");
   const [detail,setDetail]     = useState(null);
+  const [editItem,setEditItem] = useState(null);
   const [search,setSearch]     = useState("");
   const [catF,setCatF]         = useState("All");
   const [view,setView]         = useState("grid");
@@ -781,6 +852,7 @@ function LabInventory(){
           if (d.items) setItems(d.items);
           if (d.deliveries) setDeliv(d.deliveries);
           if (d.checkouts) setCheckouts(d.checkouts);
+          if (d.orders) setOrders(d.orders);
         }
       } catch {}
       setDataLoaded(true);
@@ -799,12 +871,14 @@ function LabInventory(){
             if (d.items) setItems(d.items);
             if (d.deliveries) setDeliv(d.deliveries);
             if (d.checkouts) setCheckouts(d.checkouts);
+            if (d.orders) setOrders(d.orders);
           }
         } catch {}
       } else if (data && data.items) {
         setItems(data.items);
         setDeliv(data.deliveries || []);
         setCheckouts(data.checkouts || []);
+        setOrders(data.orders || []);
       }
       setDataLoaded(true);
     })();
@@ -813,7 +887,7 @@ function LabInventory(){
   // Save data locally as fallback
   useEffect(()=>{
     if (!dataLoaded) return;
-    localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts}));
+    localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts, orders}));
   },[items, deliveries, checkouts, dataLoaded]);
 
   const addToast=useCallback((type,msg)=>{
@@ -902,6 +976,40 @@ function LabInventory(){
     await postAction("addItem", {item});
   };
 
+  const handleUpdateItem = async (updatedItem) => {
+    setItems(p=>p.map(i=>i.id===updatedItem.id?{...i,...updatedItem}:i));
+    addToast("success",`"${updatedItem.name}" updated`);
+    await postAction("updateItem", {item: updatedItem});
+  };
+
+  const handleDeleteItem = async (itemId) => {
+    setItems(p=>p.filter(i=>i.id!==itemId));
+    addToast("success","Item deleted");
+    await postAction("deleteItem", {itemId});
+  };
+
+  const handleEditItem = (item) => {
+    setEditItem(item);
+  };
+
+  const handleAddOrder = async (order) => {
+    setOrders(p=>[order,...p]);
+    addToast("success",`Order request submitted: ${order.item}`);
+    await postAction("addOrder", {order});
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    setOrders(p=>p.map(o=>o.id===orderId?{...o,status:newStatus}:o));
+    addToast("success",`Order marked as ${newStatus}`);
+    await postAction("updateOrderStatus", {orderId, status: newStatus});
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    setOrders(p=>p.filter(o=>o.id!==orderId));
+    addToast("success","Order request removed");
+    await postAction("deleteOrder", {orderId});
+  };
+
   // filtered inventory
   const filtered=items.filter(i=>{
     const q=search.toLowerCase();
@@ -909,7 +1017,8 @@ function LabInventory(){
       &&(catF==="All"||i.cat===catF);
   });
 
-  const TABS=[{id:"inventory",l:"Inventory",n:"grid"},{id:"deliveries",l:"Deliveries",n:"truck"},{id:"usage",l:"Usage",n:"users"},{id:"calendar",l:"Calendar",n:"calendar"}];
+  const TABS=[{id:"inventory",l:"Inventory",n:"grid"},{id:"deliveries",l:"Deliveries",n:"truck"},{id:"usage",l:"Usage",n:"users"},{id:"orders",l:"Orders",n:"cart"},{id:"calendar",l:"Calendar",n:"calendar"}];
+  const pendingOrders = orders.filter(o=>o.status==="Pending").length;
 
   // Loading
   if (loading) {
@@ -975,6 +1084,7 @@ function LabInventory(){
           <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"transparent",border:"none",borderBottom:`2px solid ${tab===t.id?"var(--cyan)":"transparent"}`,color:tab===t.id?"var(--cyan)":"var(--dim)",padding:"13px 16px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:7,fontFamily:"'Outfit',sans-serif",transition:"color .15s,border-color .15s"}}>
             <Ico n={t.n} s={14} col={tab===t.id?"var(--cyan)":"var(--dim)"}/>{t.l}
             {t.id==="usage"&&overdues.length>0&&<span style={{background:"var(--red)",color:"#000",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{overdues.length}</span>}
+            {t.id==="orders"&&pendingOrders>0&&<span style={{background:"var(--amber)",color:"#000",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{pendingOrders}</span>}
           </button>
         ))}
       </nav>
@@ -1083,7 +1193,7 @@ function LabInventory(){
                         <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,lineHeight:1}}>{item.qty}</span>
+                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
                             <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
                           </div>
                           {item.usedBy?.length>0&&(
@@ -1264,6 +1374,79 @@ function LabInventory(){
           </div>
         )}
 
+        {/* ORDERS */}
+        {tab==="orders"&&(
+          <div style={{animation:"fadeUp .3s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+              <div>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Order Requests</h2>
+                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{orders.length} total · {pendingOrders} pending</p>
+              </div>
+              <Btn onClick={()=>setModal("order")}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
+            </div>
+            {orders.length===0?(
+              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
+                <Ico n="cart" s={48} col="var(--bg4)"/>
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No order requests yet</div>
+                <div style={{fontSize:13,marginTop:4,color:"var(--dim)"}}>Request supplies or equipment your lab needs</div>
+                <Btn style={{marginTop:16}} onClick={()=>setModal("order")}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {orders.map((o,idx)=>{
+                  const urgColors={Urgent:{bg:"var(--red-d)",col:"var(--red)"},High:{bg:"var(--amber-d)",col:"var(--amber)"},Normal:{bg:"var(--blue-d)",col:"var(--blue)"},Low:{bg:"var(--bg3)",col:"var(--dim)"}};
+                  const uc=urgColors[o.urgency]||urgColors.Normal;
+                  const statusColors={Pending:{bg:"var(--amber-d)",col:"var(--amber)"},Approved:{bg:"var(--blue-d)",col:"var(--blue)"},Ordered:{bg:"var(--purple-d)",col:"var(--purple)"},Received:{bg:"var(--green-d)",col:"var(--green)"},Rejected:{bg:"var(--red-d)",col:"var(--red)"}};
+                  const sc=statusColors[o.status]||statusColors.Pending;
+                  const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
+                  const ns=nextStatus[o.status];
+                  return(
+                    <div key={o.id} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`}}>
+                      <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:200}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                            <span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Syne',sans-serif"}}>{o.item}</span>
+                            <span style={{background:sc.bg,color:sc.col,border:`1px solid ${sc.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
+                            <span style={{background:uc.bg,color:uc.col,border:`1px solid ${uc.col}30`,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace"}}>{o.urgency}</span>
+                          </div>
+                          <div style={{color:"var(--sub)",fontSize:12,marginBottom:4}}>
+                            <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{o.qty} {o.unit}</span>
+                            {o.requestedBy&&<span> · Requested by <strong>{o.requestedBy}</strong></span>}
+                            {o.date&&<span> · Need by {o.date}</span>}
+                          </div>
+                          {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic"}}>{o.reason}</div>}
+                        </div>
+                        <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
+                          {ns&&(
+                            <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
+                              if(ns==="Received"){
+                                // Auto-create delivery when order is received
+                                const delivery={id:Date.now(),item:o.item,qty:o.qty,unit:o.unit,from:"(Order #"+o.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
+                                handleDelivery(delivery);
+                              }
+                              handleUpdateOrderStatus(o.id,ns);
+                            }}>
+                              {ns==="Received"?<><Ico n="check" s={12} col="var(--green)"/>Mark Received</>:<>{ns} →</>}
+                            </Btn>
+                          )}
+                          {o.status==="Pending"&&(
+                            <Btn sm v="danger" onClick={()=>handleUpdateOrderStatus(o.id,"Rejected")}>Reject</Btn>
+                          )}
+                          {(o.status==="Received"||o.status==="Rejected")&&(
+                            <Btn sm v="ghost" onClick={()=>handleDeleteOrder(o.id)}>
+                              <Ico n="trash" s={12}/>
+                            </Btn>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* CALENDAR */}
         {tab==="calendar"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
@@ -1279,7 +1462,9 @@ function LabInventory(){
       {modal==="delivery"  && <DeliveryModal  onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout"  && <CheckoutModal  items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""}/>}
       {modal==="addItem"   && <AddItemModal   onClose={()=>setModal(null)} onAdd={handleAddItem}/>}
-      {detail  && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout}/>}
+      {modal==="order"     && <OrderModal    onClose={()=>setModal(null)} onAdd={handleAddOrder} userName={user?.name||""}/>}
+      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem}/>}
+      {detail  && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       {/* TOASTS */}

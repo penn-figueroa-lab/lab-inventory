@@ -42,15 +42,18 @@
 | id | itemId | item | user | out | ret | status |
 |----|--------|------|------|-----|-----|--------|
 
-3. Type the headers in row 1 of each tab exactly as shown above
+**Tab: Orders**
+| id | item | qty | unit | requestedBy | reason | urgency | date | status |
+|----|------|-----|------|-------------|--------|---------|------|--------|
+
+3. Type the headers in row 1 of each tab exactly as shown above (4 tabs total)
 
 ### Step 3: Deploy the Apps Script Backend
 
 1. In your Google Sheet, go to **Extensions → Apps Script**
 2. Delete any existing code in the editor
 3. Paste the entire contents of `google-apps-script.js`
-4. **(Optional)** Set your Slack webhook URL in the `SLACK_WEBHOOK_URL` constant at the top
-5. Click **Deploy → New deployment**
+4. Click **Deploy → New deployment**
    - Type: **Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**

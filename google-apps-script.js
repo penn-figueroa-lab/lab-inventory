@@ -7,15 +7,15 @@
  *
  * The script verifies Google ID tokens server-side and checks for @seas.upenn.edu domain.
  *
- * Google Sheet must have 3 tabs:
+ * Google Sheet must have 4 tabs:
  *   Items      — id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy
  *   Deliveries — id | item | qty | unit | from | receivedBy | date | tracking | status
  *   Checkouts  — id | itemId | item | user | out | ret | status
+ *   Orders     — id | item | qty | unit | requestedBy | reason | urgency | date | status
  */
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const ALLOWED_DOMAIN = "seas.upenn.edu";
-const SLACK_WEBHOOK_URL = ""; // Set this in your Apps Script editor (not in GitHub — it's a secret)
 
 // ─── TOKEN VERIFICATION ──────────────────────────────────────────────────────
 function verifyToken(token) {
@@ -38,6 +38,7 @@ function getSheet(name) {
 }
 
 function sheetToJson(sheet) {
+  if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   const headers = data[0];
@@ -75,20 +76,6 @@ function jsonResponse(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ─── SLACK ────────────────────────────────────────────────────────────────────
-function sendSlack(text) {
-  if (!SLACK_WEBHOOK_URL) return;
-  try {
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify({ text: text }),
-    });
-  } catch (e) {
-    console.error("Slack error:", e);
-  }
-}
-
 // ─── GET (fetch all data) ────────────────────────────────────────────────────
 function doGet(e) {
   try {
@@ -102,6 +89,7 @@ function doGet(e) {
       items: sheetToJson(getSheet("Items")),
       deliveries: sheetToJson(getSheet("Deliveries")),
       checkouts: sheetToJson(getSheet("Checkouts")),
+      orders: sheetToJson(getSheet("Orders")),
     });
   } catch (err) {
     return jsonResponse({ error: "Server error", detail: err.message });
@@ -119,6 +107,7 @@ function doPost(e) {
 
   const action = body.action;
 
+  // ── Add Item ──────────────────────────────────────────────────────────────
   if (action === "addItem") {
     const it = body.item;
     appendRow("Items", it, [
@@ -127,17 +116,56 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   }
 
+  // ── Update Item ───────────────────────────────────────────────────────────
+  if (action === "updateItem") {
+    const it = body.item;
+    const sheet = getSheet("Items");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status"];
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) === String(it.id)) {
+        fields.forEach(f => {
+          const col = headers.indexOf(f);
+          if (col >= 0 && it[f] !== undefined) {
+            sheet.getRange(i + 1, col + 1).setValue(it[f]);
+          }
+        });
+        return jsonResponse({ ok: true });
+      }
+    }
+    return jsonResponse({ error: "Item not found", detail: "No item with id " + it.id });
+  }
+
+  // ── Delete Item ───────────────────────────────────────────────────────────
+  if (action === "deleteItem") {
+    const itemId = body.itemId;
+    const sheet = getSheet("Items");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) === String(itemId)) {
+        sheet.deleteRow(i + 1);
+        return jsonResponse({ ok: true });
+      }
+    }
+    return jsonResponse({ error: "Item not found", detail: "No item with id " + itemId });
+  }
+
+  // ── Add Delivery ──────────────────────────────────────────────────────────
   if (action === "addDelivery") {
     const d = body.delivery;
     appendRow("Deliveries", d, [
       "id", "item", "qty", "unit", "from", "receivedBy", "date", "tracking", "status"
     ]);
-    sendSlack("📦 *New Delivery*\n• *" + d.item + "* — " + d.qty + " " + d.unit +
-      " from " + (d.from || "—") + "\n• Received by: " + d.receivedBy +
-      " | Tracking: `" + (d.tracking || "—") + "`");
     return jsonResponse({ ok: true });
   }
 
+  // ── Add Checkout ──────────────────────────────────────────────────────────
   if (action === "addCheckout") {
     const c = body.checkout;
     appendRow("Checkouts", c, [
@@ -145,11 +173,10 @@ function doPost(e) {
     ]);
     // Update item status in Items sheet
     updateItemStatus(c.item, "In Use", c.user, "add");
-    sendSlack("🔬 *Checked Out*\n• *" + c.item + "* → " + c.user +
-      "\n• Return by: " + (c.ret || "—"));
     return jsonResponse({ ok: true });
   }
 
+  // ── Return Item ───────────────────────────────────────────────────────────
   if (action === "returnItem") {
     const coId = body.checkoutId;
     const sheet = getSheet("Checkouts");
@@ -166,11 +193,55 @@ function doPost(e) {
         const itemName = data[i][itemCol];
         const userName = data[i][userCol];
         updateItemStatus(itemName, "Available", userName, "remove");
-        sendSlack("✅ *Returned*\n• *" + itemName + "* returned by " + userName);
         break;
       }
     }
     return jsonResponse({ ok: true });
+  }
+
+  // ── Add Order ─────────────────────────────────────────────────────────────
+  if (action === "addOrder") {
+    const o = body.order;
+    appendRow("Orders", o, [
+      "id", "item", "qty", "unit", "requestedBy", "reason", "urgency", "date", "status"
+    ]);
+    return jsonResponse({ ok: true });
+  }
+
+  // ── Update Order Status ───────────────────────────────────────────────────
+  if (action === "updateOrderStatus") {
+    const orderId = body.orderId;
+    const newStatus = body.status;
+    const sheet = getSheet("Orders");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+    const statusCol = headers.indexOf("status");
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) === String(orderId)) {
+        sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
+        return jsonResponse({ ok: true });
+      }
+    }
+    return jsonResponse({ error: "Order not found", detail: "No order with id " + orderId });
+  }
+
+  // ── Delete Order ──────────────────────────────────────────────────────────
+  if (action === "deleteOrder") {
+    const orderId = body.orderId;
+    const sheet = getSheet("Orders");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) === String(orderId)) {
+        sheet.deleteRow(i + 1);
+        return jsonResponse({ ok: true });
+      }
+    }
+    return jsonResponse({ error: "Order not found", detail: "No order with id " + orderId });
   }
 
   return jsonResponse({ error: "Unknown action: " + action });
