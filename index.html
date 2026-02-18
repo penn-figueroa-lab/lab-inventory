@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>LabTrack — Lab Inventory</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -61,48 +61,24 @@ const getTodayParts = () => {
   return { d: d.getDate(), m: d.getMonth(), y: d.getFullYear() };
 };
 
-// ─── CONFIG (hardcoded — no setup needed for users) ─────────────────────────
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
 const APP_CONFIG = {
   oauth_client_id: "253618186533-8b7mt0hgcgdb4qlh8tg2admilfifuhgq.apps.googleusercontent.com",
   apps_script_url: "https://script.google.com/macros/s/AKfycbzLLvwOatqT3j5XRvUD3_DPoFzip1GVp9o17XY31bXrxi5wCyUkm8OXcS5IC3AysXsVBw/exec",
 };
-const CATEGORIES = ["Equipment","Instrument","Consumable","PPE","Glassware","Office Supply"];
 
-const SEED_ITEMS = [
-  {id:1,  name:"Centrifuge X200",        cat:"Equipment",     qty:2,  unit:"units",  loc:"Room 3A",      minQty:1, img:"", desc:"High-speed benchtop centrifuge, max 15,000 rpm.",           status:"In Use",      usedBy:["Dr. Chen"]},
-  {id:2,  name:"Vortex Mixer",           cat:"Equipment",     qty:3,  unit:"units",  loc:"Bench 2",      minQty:1, img:"", desc:"Variable speed lab vortex, 0-3200 rpm.",                    status:"Available",   usedBy:[]},
-  {id:3,  name:"Nitrile Gloves (M)",     cat:"PPE",           qty:2,  unit:"boxes",  loc:"Cabinet A1",   minQty:3, img:"", desc:"Powder-free nitrile gloves, 100 pcs/box.",                  status:"Low Stock",   usedBy:[]},
-  {id:4,  name:"PCR Thermocycler",       cat:"Equipment",     qty:1,  unit:"units",  loc:"Room 2B",      minQty:1, img:"", desc:"Gradient PCR thermocycler, 96-well, heated lid.",            status:"Maintenance", usedBy:[]},
-  {id:5,  name:"Micropipette Set",       cat:"Instrument",    qty:5,  unit:"sets",   loc:"Bench 1",      minQty:2, img:"", desc:"Precision micropipette 1-1000 uL, autoclavable.",            status:"Available",   usedBy:["Jake M."]},
-  {id:6,  name:"Lab Notebooks",          cat:"Office Supply", qty:12, unit:"pcs",    loc:"Supply Room",  minQty:5, img:"", desc:"Hardcover grid-ruled notebooks, 200 pages.",                status:"Available",   usedBy:[]},
-  {id:7,  name:"Eppendorf Tubes 1.5mL",  cat:"Consumable",    qty:4,  unit:"racks",  loc:"Cabinet B2",   minQty:2, img:"", desc:"1.5 mL snap-cap microcentrifuge tubes, 100/rack.",           status:"Available",   usedBy:[]},
-  {id:8,  name:"Analytical Balance",     cat:"Instrument",    qty:2,  unit:"units",  loc:"Room 1A",      minQty:1, img:"", desc:"0.1 mg precision balance with draft shield.",               status:"In Use",      usedBy:["Dr. Patel"]},
-  {id:9,  name:"UV-Vis Spectrophotometer",cat:"Instrument",   qty:1,  unit:"units",  loc:"Room 2A",      minQty:1, img:"", desc:"UV-Vis spectrophotometer, 190-1100 nm range.",               status:"Available",   usedBy:[]},
-  {id:10, name:"Magnetic Stir Plate",    cat:"Equipment",     qty:4,  unit:"units",  loc:"Bench 3",      minQty:2, img:"", desc:"Magnetic stir plate with heating, up to 380C.",             status:"Available",   usedBy:[]},
-  {id:11, name:"Safety Goggles",         cat:"PPE",           qty:8,  unit:"pcs",    loc:"Cabinet A1",   minQty:4, img:"", desc:"Chemical splash safety goggles, anti-fog.",                 status:"Available",   usedBy:[]},
-  {id:12, name:"Graduated Cylinders",    cat:"Glassware",     qty:6,  unit:"pcs",    loc:"Shelf C1",     minQty:2, img:"", desc:"Borosilicate glass cylinders, 10-1000 mL set.",              status:"Available",   usedBy:[]},
-  {id:13, name:"Disposable Syringes",    cat:"Consumable",    qty:1,  unit:"boxes",  loc:"Cabinet B3",   minQty:2, img:"", desc:"5 mL disposable syringes with 21G needles, 100/box.",       status:"Low Stock",   usedBy:[]},
-  {id:14, name:"pH Meter",               cat:"Instrument",    qty:2,  unit:"units",  loc:"Bench 1",      minQty:1, img:"", desc:"Digital pH meter with ATC, +/-0.01 accuracy.",              status:"Available",   usedBy:[]},
-  {id:15, name:"Lab Coat (L)",           cat:"PPE",           qty:3,  unit:"pcs",    loc:"Locker Room",  minQty:2, img:"", desc:"Cotton/poly blend lab coats, size Large.",                  status:"Available",   usedBy:["Sarah K."]},
-];
+const DEFAULT_CATEGORIES = ["Robot","Sensor","Actuator","Controller","Cable & Connector","Tool","Consumable","Safety","Computer & Electronics","Other"];
+const ITEMS_PER_PAGE = 24;
 
-const SEED_DELIVERIES = [
-  {id:1, item:"Nitrile Gloves (M)",    qty:10,  unit:"boxes", from:"FisherSci", receivedBy:"Dr. Chen", date:"2026-02-10", tracking:"FS2024001", status:"Logged"},
-  {id:2, item:"Eppendorf Tubes 1.5mL", qty:500, unit:"pcs",   from:"Eppendorf", receivedBy:"Maria L.", date:"2026-02-14", tracking:"EP0089234", status:"Logged"},
-  {id:3, item:"Safety Goggles",        qty:12,  unit:"pcs",   from:"VWR",       receivedBy:"Jake M.",  date:"2026-02-16", tracking:"VWR4421",   status:"Logged"},
-];
-
-const SEED_CHECKOUTS = [
-  {id:1, itemId:1,  item:"Centrifuge X200",      user:"Dr. Chen",  out:"2026-02-12", ret:"2026-02-19", status:"Active"},
-  {id:2, itemId:5,  item:"Micropipette Set",     user:"Jake M.",   out:"2026-02-15", ret:"2026-02-20", status:"Active"},
-  {id:3, itemId:8,  item:"Analytical Balance",   user:"Dr. Patel", out:"2026-02-10", ret:"2026-02-15", status:"Active"},
-  {id:4, itemId:15, item:"Lab Coat (L)",          user:"Sarah K.",  out:"2026-02-01", ret:"2026-02-28", status:"Active"},
-  {id:5, itemId:2,  item:"Vortex Mixer",          user:"Sarah K.",  out:"2026-01-28", ret:"2026-02-05", status:"Returned"},
-];
+const CAT_PALETTE = ["var(--cyan)","var(--purple)","var(--amber)","var(--green)","var(--blue)","var(--orange)","var(--red)","#e879f9","#67e8f9","var(--sub)"];
+const getCatAccent = (cat, categories) => {
+  const idx = categories.indexOf(cat);
+  if (idx < 0) return "var(--sub)";
+  return CAT_PALETTE[idx % CAT_PALETTE.length];
+};
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const isOverdue = (co) => co.status === "Active" && co.ret && co.ret < getToday();
-const CAT_ACCENT = {Equipment:"var(--cyan)",Instrument:"var(--purple)",Consumable:"var(--amber)",PPE:"var(--green)",Glassware:"var(--blue)","Office Supply":"var(--sub)"};
 const STATUS_C = {
   "Available":  {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
   "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
@@ -114,30 +90,55 @@ const STATUS_C = {
   "Overdue":    {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
 };
 
-// ─── SVG ICONS ────────────────────────────────────────────────────────────────
+// ─── IMAGE COMPRESSION ──────────────────────────────────────────────────────
+const compressImage = (file) => new Promise((resolve) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width, h = img.height;
+      if (w > 400) { h = Math.round(h * 400 / w); w = 400; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// ─── SVG ICONS ───────────────────────────────────────────────────────────────
 const P = {
-  box:      '<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-  truck:    '<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
-  users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
-  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
-  plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
-  check:    '<polyline points="20 6 9 17 4 12"/>',
-  x:        '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-  alert:    '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
-  search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-  grid:     '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
-  list:     '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
-  undo:     '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>',
-  layers:   '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
-  bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
-  clock:    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
-  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>',
-  logout:   '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
-  edit:     '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>',
-  cart:     '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>',
-  trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>',
+  box:'<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  truck:'<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  users:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  grid:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  list:'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  undo:'<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>',
+  layers:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  bell:'<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  tag:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  keyboard:'<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>',
+  logout:'<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  edit:'<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  cart:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>',
+  camera:'<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+  upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>',
+  link:'<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
+  sort:'<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+  chevL:'<polyline points="15 18 9 12 15 6"/>',
+  chevR:'<polyline points="9 18 15 12 9 6"/>',
 };
 const Ico = ({n,s=16,col="currentColor"}) => (
   React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:col,
@@ -146,17 +147,13 @@ const Ico = ({n,s=16,col="currentColor"}) => (
 );
 
 // ─── BACKEND API ──────────────────────────────────────────────────────────────
-// Apps Script web apps redirect (302) and don't support CORS preflight.
-// Fix: use text/plain to avoid preflight, and redirect:'follow' for GET.
 const API = {
   async fetchAll(token) {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
       const url = APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token);
-      console.log("[API] GET", url.slice(0, 80) + "...");
       const r = await fetch(url, { redirect: "follow" });
       const text = await r.text();
-      console.log("[API] GET response:", text.slice(0, 200));
       try { return JSON.parse(text); } catch { console.error("[API] Not JSON:", text.slice(0, 500)); return null; }
     } catch(e) { console.error("[API] fetchAll error:", e); return null; }
   },
@@ -164,21 +161,16 @@ const API = {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
       const body = JSON.stringify({ token, action, ...payload });
-      console.log("[API] POST", action, body.slice(0, 200));
-      // Use text/plain to avoid CORS preflight (Apps Script can't handle OPTIONS)
       const r = await fetch(APP_CONFIG.apps_script_url, {
-        method: "POST",
-        body: body,
-        redirect: "follow",
+        method: "POST", body: body, redirect: "follow",
       });
       const text = await r.text();
-      console.log("[API] POST response:", text.slice(0, 200));
       try { return JSON.parse(text); } catch { return { ok: true }; }
     } catch(e) { console.error("[API] post error:", e); return null; }
   }
 };
 
-// ─── ATOMS ────────────────────────────────────────────────────────────────────
+// ─── ATOMS ───────────────────────────────────────────────────────────────────
 const Badge = ({status}) => {
   const c = STATUS_C[status]||STATUS_C["Available"];
   return <span style={{background:c.bg,color:c.t,border:`1px solid ${c.b}`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",whiteSpace:"nowrap"}}>{status}</span>;
@@ -186,7 +178,7 @@ const Badge = ({status}) => {
 const MemberAvatar = ({name,sz=32}) => {
   const hue = name.split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360;
   const initials = name.split(" ").map(w=>w[0]).join("").slice(0,2);
-  return <div style={{width:sz,height:sz,borderRadius:"50%",flexShrink:0,background:`hsl(${hue},50%,22%)`,border:`2px solid hsl(${hue},50%,38%)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:sz*.36,color:`hsl(${hue},65%,82%)`,fontFamily:"'Syne',sans-serif"}}>{initials}</div>;
+  return <div style={{width:sz,height:sz,borderRadius:"50%",flexShrink:0,background:`hsl(${hue},50%,22%)`,border:`2px solid hsl(${hue},50%,38%)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:sz*.36,color:`hsl(${hue},65%,82%)`,fontFamily:"'Roboto',sans-serif"}}>{initials}</div>;
 };
 const Inp = ({style,...p}) => (
   <input style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",fontFamily:"'Outfit',sans-serif",transition:"border-color .15s",...style}}
@@ -207,21 +199,21 @@ const Fld = ({label,hint,children}) => (
 const Btn = ({children,onClick,v="primary",style,disabled,sm}) => {
   const VS={
     primary:{background:"var(--cyan)",color:"#000",border:"none"},
-    ghost:  {background:"transparent",color:"var(--sub)",border:"1px solid var(--border)"},
-    danger: {background:"var(--red-d)",color:"var(--red)",border:"1px solid #ff4d6a30"},
+    ghost:{background:"transparent",color:"var(--sub)",border:"1px solid var(--border)"},
+    danger:{background:"var(--red-d)",color:"var(--red)",border:"1px solid #ff4d6a30"},
     success:{background:"var(--green-d)",color:"var(--green)",border:"1px solid #00e67630"},
-    amber:  {background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330"},
+    amber:{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330"},
   };
   return <button disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
 };
 
-// ─── MODAL SHELL ──────────────────────────────────────────────────────────────
+// ─── MODAL SHELL ─────────────────────────────────────────────────────────────
 const Modal = ({onClose,title,mw=560,children,noPad}) => (
   <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
       {title!==false&&(
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
-          <h2 style={{margin:0,color:"var(--text)",fontSize:17,fontFamily:"'Syne',sans-serif",fontWeight:700}}>{title}</h2>
+          <h2 style={{margin:0,color:"var(--text)",fontSize:17,fontFamily:"'Roboto',sans-serif",fontWeight:700}}>{title}</h2>
           <button onClick={onClose} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}><Ico n="x" s={14}/></button>
         </div>
       )}
@@ -230,59 +222,122 @@ const Modal = ({onClose,title,mw=560,children,noPad}) => (
   </div>
 );
 
-// ─── TOAST ────────────────────────────────────────────────────────────────────
+// ─── TOAST ───────────────────────────────────────────────────────────────────
 const ToastStack = ({toasts,rm}) => (
   <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,minWidth:300,maxWidth:380}}>
     {toasts.map(t=>{
       const C={success:{bg:"var(--green-d)",col:"var(--green)",icon:"check"},error:{bg:"var(--red-d)",col:"var(--red)",icon:"alert"},info:{bg:"var(--blue-d)",col:"var(--blue)",icon:"bell"}}[t.type]||{};
       return(
-        <div key={t.id} style={{background:C.bg,border:`1px solid ${C.col}33`,borderRadius:12,padding:"11px 15px",display:"flex",alignItems:"flex-start",gap:10,animation:"toastSlide .28s cubic-bezier(.4,0,.2,1)",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
+        <div key={t.id} onClick={t.onClick||undefined} style={{background:C.bg,border:`1px solid ${C.col}33`,borderRadius:12,padding:"11px 15px",display:"flex",alignItems:"flex-start",gap:10,animation:"toastSlide .28s cubic-bezier(.4,0,.2,1)",boxShadow:"0 8px 32px rgba(0,0,0,.5)",cursor:t.onClick?"pointer":undefined}}>
           <span style={{color:C.col,marginTop:1,flexShrink:0}}><Ico n={C.icon} s={15} col={C.col}/></span>
           <span style={{color:"var(--text)",fontSize:13,flex:1,lineHeight:1.45}}>{t.msg}</span>
-          <button onClick={()=>rm(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--dim)",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>
+          <button onClick={e=>{e.stopPropagation();rm(t.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--dim)",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>
         </div>
       );
     })}
   </div>
 );
 
-// ─── SEARCHABLE ITEM PICKER ───────────────────────────────────────────────────
-const ItemPicker = ({items, value, onChange}) => {
-  const [q, setQ]       = useState("");
-  const [cat, setCat]   = useState("All");
+// ─── IMAGE UPLOAD WIDGET ─────────────────────────────────────────────────────
+const ImageUpload = ({value, onChange}) => {
+  const fileRef = useRef(null);
+  const cameraRef = useRef(null);
+  const [showUrl, setShowUrl] = useState(false);
+  const [urlVal, setUrlVal] = useState(value && !value.startsWith("data:") ? value : "");
+  const preview = value || "";
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImage(file);
+    onChange(compressed);
+  };
+
+  return (
+    <div>
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFile}/>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        {preview && <img src={preview} alt="Preview" style={{width:80,height:80,objectFit:"cover",borderRadius:10,border:"1px solid var(--border)"}}/>}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",gap:6}}>
+            <Btn sm v="ghost" onClick={()=>fileRef.current?.click()}><Ico n="upload" s={12}/>Upload Photo</Btn>
+            <Btn sm v="ghost" onClick={()=>cameraRef.current?.click()}><Ico n="camera" s={12}/>Take Photo</Btn>
+          </div>
+          {!showUrl ? (
+            <button onClick={()=>setShowUrl(true)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11,textAlign:"left",padding:0}}>Or paste URL...</button>
+          ) : (
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <Inp placeholder="https://..." value={urlVal} onChange={e=>{setUrlVal(e.target.value);onChange(e.target.value);}} style={{fontSize:12,padding:"5px 8px",width:200}}/>
+              <button onClick={()=>{setShowUrl(false);}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>
+            </div>
+          )}
+          {preview && <button onClick={()=>{onChange("");setUrlVal("");}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11,textAlign:"left",padding:0}}>Remove image</button>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── MANAGE CATEGORIES MODAL ─────────────────────────────────────────────────
+const ManageCategoriesModal = ({categories, onSave, onClose}) => {
+  const [cats, setCats] = useState([...categories]);
+  const [newCat, setNewCat] = useState("");
+  const addCat = () => {
+    const trimmed = newCat.trim();
+    if (trimmed && !cats.includes(trimmed)) {
+      setCats([...cats, trimmed]);
+      setNewCat("");
+    }
+  };
+  const removeCat = (c) => setCats(cats.filter(x=>x!==c));
+  return (
+    <Modal onClose={onClose} title="Manage Categories" mw={420}>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflow:"auto"}}>
+        {cats.map(c=>(
+          <div key={c} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px"}}>
+            <span style={{fontSize:14,color:"var(--text)"}}>{c}</span>
+            <button onClick={()=>removeCat(c)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={14}/></button>
+          </div>
+        ))}
+        {cats.length===0 && <div style={{color:"var(--dim)",fontSize:13,textAlign:"center",padding:16}}>No categories yet</div>}
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <Inp placeholder="New category name..." value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addCat();}} style={{flex:1}}/>
+        <Btn sm onClick={addCat} disabled={!newCat.trim()}><Ico n="plus" s={12} col="#000"/>Add</Btn>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{onSave(cats);onClose();}}><Ico n="check" s={14} col="#000"/>Save</Btn>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── SEARCHABLE ITEM PICKER ──────────────────────────────────────────────────
+const ItemPicker = ({items, value, onChange, categories}) => {
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("All");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const inputRef = useRef(null);
-
   const selected = items.find(i=>i.name===value);
   const avail = items.filter(i=>i.status!=="Maintenance");
-
   const filtered = avail.filter(i=>{
-    const match = i.name.toLowerCase().includes(q.toLowerCase()) ||
-                  i.loc?.toLowerCase().includes(q.toLowerCase()) ||
-                  i.desc?.toLowerCase().includes(q.toLowerCase());
+    const match = i.name.toLowerCase().includes(q.toLowerCase()) || i.loc?.toLowerCase().includes(q.toLowerCase()) || i.desc?.toLowerCase().includes(q.toLowerCase());
     return match && (cat==="All" || i.cat===cat);
   });
-
   useEffect(()=>{
     const handler=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
     document.addEventListener("mousedown",handler);
     return()=>document.removeEventListener("mousedown",handler);
   },[]);
-
   useEffect(()=>{if(open&&inputRef.current)inputRef.current.focus();},[open]);
-
   const pick=(item)=>{onChange(item.name);setOpen(false);setQ("");};
-  const ac = selected?CAT_ACCENT[selected.cat]||"var(--cyan)":"var(--dim)";
-
+  const ac = selected?getCatAccent(selected.cat,categories):"var(--dim)";
   return(
     <div ref={ref} style={{position:"relative"}}>
-      <button type="button" onClick={()=>setOpen(o=>!o)} style={{
-        width:"100%",background:"var(--bg3)",border:`1px solid ${open?"var(--cyan-m)":"var(--border)"}`,
-        color:selected?"var(--text)":"var(--sub)",borderRadius:8,padding:"9px 12px",fontSize:14,
-        fontFamily:"'Outfit',sans-serif",textAlign:"left",cursor:"pointer",display:"flex",
-        alignItems:"center",justifyContent:"space-between",gap:10,transition:"border-color .15s",
-      }}>
+      <button type="button" onClick={()=>setOpen(o=>!o)} style={{width:"100%",background:"var(--bg3)",border:`1px solid ${open?"var(--cyan-m)":"var(--border)"}`,color:selected?"var(--text)":"var(--sub)",borderRadius:8,padding:"9px 12px",fontSize:14,fontFamily:"'Outfit',sans-serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,transition:"border-color .15s"}}>
         {selected?(
           <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
             <span style={{width:8,height:8,borderRadius:"50%",background:ac,flexShrink:0}}/>
@@ -293,63 +348,38 @@ const ItemPicker = ({items, value, onChange}) => {
         ):<span>Search or select an item...</span>}
         <span style={{color:"var(--dim)",fontSize:10,flexShrink:0}}>{open?"▲":"▼"}</span>
       </button>
-
       {open&&(
         <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"var(--bg2)",border:"1px solid var(--border-hi)",borderRadius:12,zIndex:50,boxShadow:"0 16px 48px rgba(0,0,0,.7)",animation:"fadeUp .18s ease",overflow:"hidden"}}>
           <div style={{padding:"12px 12px 8px",borderBottom:"1px solid var(--border)"}}>
             <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}>
-                <Ico n="search" s={14} col="var(--dim)"/>
-              </span>
-              <input ref={inputRef} placeholder="Type item name, location..."
-                value={q} onChange={e=>setQ(e.target.value)}
-                style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"8px 10px 8px 32px",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif"}}
-              />
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
+              <input ref={inputRef} placeholder="Type item name, location..." value={q} onChange={e=>setQ(e.target.value)} style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"8px 10px 8px 32px",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
               {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
             </div>
           </div>
-
           <div style={{display:"flex",gap:6,padding:"8px 12px",flexWrap:"wrap",borderBottom:"1px solid var(--border)"}}>
-            {["All",...CATEGORIES].map(c=>{
+            {["All",...categories].map(c=>{
               const count = c==="All"?avail.length:avail.filter(i=>i.cat===c).length;
               if(count===0&&c!=="All")return null;
               const isSel = cat===c;
-              const ac2=CAT_ACCENT[c]||"var(--sub)";
-              return(
-                <button key={c} onClick={()=>setCat(c)} style={{
-                  background:isSel?(c==="All"?"var(--bg4)":`${ac2}18`):"var(--bg3)",
-                  color:isSel?(c==="All"?"var(--text)":ac2):"var(--sub)",
-                  border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac2):"var(--border)"}`,
-                  borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",
-                  fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",gap:5,transition:"all .15s",
-                }}>
-                  {c} <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span>
-                </button>
-              );
+              const ac2=getCatAccent(c,categories);
+              return(<button key={c} onClick={()=>setCat(c)} style={{background:isSel?(c==="All"?"var(--bg4)":`${ac2}18`):"var(--bg3)",color:isSel?(c==="All"?"var(--text)":ac2):"var(--sub)",border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac2):"var(--border)"}`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>{c} <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span></button>);
             })}
           </div>
-
           <div style={{maxHeight:280,overflow:"auto"}}>
             {filtered.length===0?(
-              <div style={{padding:"24px 16px",textAlign:"center",color:"var(--dim)",fontSize:13}}>
-                No items match "{q}"
-                {q&&<div style={{marginTop:8}}><button onClick={()=>setQ("")} style={{background:"none",border:"none",color:"var(--cyan)",cursor:"pointer",fontSize:12}}>Clear search</button></div>}
-              </div>
+              <div style={{padding:"24px 16px",textAlign:"center",color:"var(--dim)",fontSize:13}}>No items match "{q}"</div>
             ):filtered.map(item=>{
-              const itemAc=CAT_ACCENT[item.cat]||"var(--sub)";
-              const low=item.qty<=item.minQty;
-              const isSel=item.name===value;
+              const itemAc=getCatAccent(item.cat,categories);const low=item.qty<=item.minQty;const isSel=item.name===value;
               return(
-                <div key={item.id} onClick={()=>pick(item)}
-                  className={isSel?"item-sel-row":"row-hover"}
-                  style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid var(--border)",transition:"background .12s"}}>
+                <div key={item.id} onClick={()=>pick(item)} className={isSel?"item-sel-row":"row-hover"} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid var(--border)",transition:"background .12s"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:low?"var(--red)":itemAc,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:13,color:"var(--text)",marginBottom:1}}>{item.name}</div>
                     <div style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat} · {item.loc}</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:14,fontWeight:800,fontFamily:"'Syne',sans-serif",color:low?"var(--red)":itemAc}}>{item.qty}</div>
+                    <div style={{fontSize:14,fontWeight:800,fontFamily:"'Roboto',sans-serif",color:low?"var(--red)":itemAc}}>{item.qty}</div>
                     <div style={{fontSize:10,color:"var(--dim)"}}>{item.unit}</div>
                   </div>
                   {(low||item.status==="In Use")&&<Badge status={low?"Low Stock":item.status}/>}
@@ -358,10 +388,9 @@ const ItemPicker = ({items, value, onChange}) => {
               );
             })}
           </div>
-
           <div style={{padding:"8px 14px",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{color:"var(--dim)",fontSize:11}}>{filtered.length} item{filtered.length!==1?"s":""} shown</span>
-            {value&&<button onClick={()=>{onChange("");setQ("");}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11}}>Clear selection</button>}
+            <span style={{color:"var(--dim)",fontSize:11}}>{filtered.length} item{filtered.length!==1?"s":""}</span>
+            {value&&<button onClick={()=>{onChange("");setQ("");}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11}}>Clear</button>}
           </div>
         </div>
       )}
@@ -370,135 +399,113 @@ const ItemPicker = ({items, value, onChange}) => {
 };
 
 // ─── CHECKOUT MODAL ──────────────────────────────────────────────────────────
-const CheckoutModal = ({items,onClose,onAdd,preItem="",userName=""}) => {
+const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) => {
   const [f,setF]=useState({item:preItem,user:userName,out:getToday(),ret:"",qty:1,notes:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const selected=items.find(i=>i.name===f.item);
   const maxQty=selected?.qty||1;
-
   return(
     <Modal onClose={onClose} title="Check Out Item" mw={620}>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <Fld label="Select Item">
-          <ItemPicker items={items} value={f.item} onChange={v=>setF(p=>({...p,item:v,qty:1}))}/>
-        </Fld>
-
+        <Fld label="Select Item"><ItemPicker items={items} value={f.item} onChange={v=>setF(p=>({...p,item:v,qty:1}))} categories={categories}/></Fld>
         {selected&&(
-          <div style={{background:"var(--bg2)",border:`1px solid ${CAT_ACCENT[selected.cat]||"var(--border)"}30`,borderRadius:10,padding:"12px 14px",display:"flex",gap:14,alignItems:"flex-start",animation:"fadeIn .2s ease"}}>
-            <img src={selected.img||`https://placehold.co/64x48/141b24/3d5068?text=${encodeURIComponent(selected.cat)}`}
-              alt={selected.name} style={{width:64,height:48,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)",flexShrink:0}}/>
+          <div style={{background:"var(--bg2)",border:`1px solid ${getCatAccent(selected.cat,categories)}30`,borderRadius:10,padding:"12px 14px",display:"flex",gap:14,alignItems:"flex-start",animation:"fadeIn .2s ease"}}>
+            <img src={selected.img||`https://placehold.co/64x48/141b24/3d5068?text=${encodeURIComponent(selected.cat)}`} alt={selected.name} style={{width:64,height:48,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)",flexShrink:0}}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2}}>{selected.name}</div>
               <div style={{color:"var(--dim)",fontSize:12,marginBottom:6,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.loc} · {selected.cat}</div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                <span style={{color:"var(--sub)",fontSize:12}}>Available: <strong style={{color:selected.qty<=selected.minQty?"var(--red)":"var(--green)",fontFamily:"'IBM Plex Mono',monospace"}}>{selected.qty} {selected.unit}</strong></span>
-                {selected.usedBy?.length>0&&<span style={{color:"var(--sub)",fontSize:12}}>· Used by: {selected.usedBy.join(", ")}</span>}
-              </div>
+              <span style={{color:"var(--sub)",fontSize:12}}>Available: <strong style={{color:selected.qty<=selected.minQty?"var(--red)":"var(--green)",fontFamily:"'IBM Plex Mono',monospace"}}>{selected.qty} {selected.unit}</strong></span>
             </div>
           </div>
         )}
-
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fld label="Person">
-            <Inp placeholder="Your name" value={f.user} onChange={s("user")}/>
-          </Fld>
+          <Fld label="Person"><Inp placeholder="Your name" value={f.user} onChange={s("user")}/></Fld>
           <Fld label={`Quantity ${selected?`(max ${maxQty})`:""}`}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <button onClick={()=>setF(p=>({...p,qty:Math.max(1,p.qty-1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>-</button>
-              <div style={{flex:1,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)"}}>{f.qty}</div>
+              <div style={{flex:1,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)"}}>{f.qty}</div>
               <button onClick={()=>setF(p=>({...p,qty:Math.min(maxQty,p.qty+1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>+</button>
             </div>
           </Fld>
           <Fld label="Checkout Date"><Inp type="date" value={f.out} onChange={s("out")}/></Fld>
           <Fld label="Return By"><Inp type="date" value={f.ret} onChange={s("ret")}/></Fld>
         </div>
-
         <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose, any notes..." value={f.notes} onChange={s("notes")}/></Fld>
-
-        <div style={{display:"flex",alignItems:"center",gap:6,color:"var(--dim)",fontSize:11}}>
-          <Ico n="keyboard" s={12} col="var(--dim)"/>
-          <span>Tip: Press <kbd style={{background:"var(--bg4)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 5px",fontSize:10}}>Esc</kbd> to close</span>
-        </div>
-
         <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.item&&f.user){onAdd({id:Date.now(),...f,status:"Active"});onClose();}}} disabled={!f.item||!f.user}>
-            <Ico n="check" s={14} col="#000"/>Confirm Checkout
-          </Btn>
+          <Btn onClick={()=>{if(f.item&&f.user){onAdd({id:Date.now(),...f,status:"Active"});onClose();}}} disabled={!f.item||!f.user}><Ico n="check" s={14} col="#000"/>Confirm Checkout</Btn>
         </div>
       </div>
     </Modal>
   );
 };
 
-// ─── DELIVERY MODAL ───────────────────────────────────────────────────────────
+// ─── DELIVERY MODAL ──────────────────────────────────────────────────────────
 const DeliveryModal = ({onClose,onAdd,userName=""}) => {
   const [f,setF]=useState({item:"",qty:"",unit:"boxes",from:"",receivedBy:userName,date:getToday(),tracking:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
     <Modal onClose={onClose} title="Log Package Delivery">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Package Name"><Inp placeholder="e.g. Nitrile Gloves (M)" value={f.item} onChange={s("item")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Package Name"><Inp placeholder="e.g. Intel RealSense D435" value={f.item} onChange={s("item")}/></Fld></div>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["boxes","pcs","units","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Supplier"><Inp placeholder="FisherSci, VWR, Sigma..." value={f.from} onChange={s("from")}/></Fld>
+        <Fld label="Supplier"><Inp placeholder="Digi-Key, Mouser, Amazon..." value={f.from} onChange={s("from")}/></Fld>
         <Fld label="Received By"><Inp placeholder="Your name" value={f.receivedBy} onChange={s("receivedBy")}/></Fld>
         <Fld label="Date"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
         <Fld label="Tracking No."><Inp placeholder="Optional" value={f.tracking} onChange={s("tracking")}/></Fld>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}>
-          <Ico n="check" s={14} col="#000"/>Log Delivery
-        </Btn>
+        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="check" s={14} col="#000"/>Log Delivery</Btn>
       </div>
     </Modal>
   );
 };
 
-// ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
-const AddItemModal = ({onClose,onAdd}) => {
-  const [f,setF]=useState({name:"",cat:"Equipment",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:""});
+// ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────
+const AddItemModal = ({onClose,onAdd,categories}) => {
+  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:"",serial:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
     <Modal onClose={onClose} title="Add Item">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp placeholder="e.g. PCR Thermocycler Pro" value={f.name} onChange={s("name")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld></div>
+        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" placeholder="1" value={f.minQty} onChange={s("minQty")}/></Fld>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Cabinet B2 / Bench 1" value={f.loc} onChange={s("loc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Image URL" hint="Direct image link - leave blank for auto-placeholder"><Inp placeholder="https://..." value={f.img} onChange={s("img")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[]});onClose();}}} disabled={!f.name||!f.qty}>
-          <Ico n="plus" s={14} col="#000"/>Add Item
-        </Btn>
+        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[],serial:f.serial});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
       </div>
     </Modal>
   );
 };
 
-// ─── EDIT ITEM MODAL ──────────────────────────────────────────────────────────
-const EditItemModal = ({item,onClose,onSave,onDelete}) => {
-  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status});
+// ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
+const EditItemModal = ({item,onClose,onSave,onDelete,categories}) => {
+  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status,serial:item.serial||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const [confirmDel,setConfirmDel]=useState(false);
   return(
     <Modal onClose={onClose} title="Edit Item" mw={560}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Image URL"><Inp placeholder="https://..." value={f.img} onChange={s("img")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
         <div>
@@ -514,44 +521,39 @@ const EditItemModal = ({item,onClose,onSave,onDelete}) => {
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1});onClose();}}} disabled={!f.name||!f.qty}>
-            <Ico n="check" s={14} col="#000"/>Save Changes
-          </Btn>
+          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
         </div>
       </div>
     </Modal>
   );
 };
 
-// ─── ORDER REQUEST MODAL ──────────────────────────────────────────────────────
-const OrderModal = ({onClose,onAdd,userName=""}) => {
-  const [f,setF]=useState({item:"",qty:"",unit:"units",reason:"",urgency:"Normal",date:getToday()});
+// ─── ORDER REQUEST MODAL ─────────────────────────────────────────────────────
+const OrderModal = ({onClose,onAdd,userName="",categories}) => {
+  const [f,setF]=useState({item:"",qty:"",unit:"units",reason:"",urgency:"Normal",date:getToday(),price:"",link:"",cat:categories[0]||"Other"});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
     <Modal onClose={onClose} title="Request Order">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Supply Name"><Inp placeholder="e.g. Nitrile Gloves (M), Eppendorf tubes..." value={f.item} onChange={s("item")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Supply Name"><Inp placeholder="e.g. Dynamixel XM430-W350" value={f.item} onChange={s("item")}/></Fld></div>
+        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Urgency">
-          <Sel value={f.urgency} onChange={s("urgency")}>
-            <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
-          </Sel>
-        </Fld>
+        <Fld label="Urgency"><Sel value={f.urgency} onChange={s("urgency")}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></Sel></Fld>
         <Fld label="Date Needed By"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
+        <Fld label="Est. Price"><Inp placeholder="e.g. $49.99 or ~$200" value={f.price} onChange={s("price")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Purchase Link (optional)"><Inp placeholder="https://..." value={f.link} onChange={s("link")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp placeholder="Why do we need this? For which experiment?" value={f.reason} onChange={s("reason")}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,requestedBy:userName,status:"Pending"});onClose();}}} disabled={!f.item||!f.qty}>
-          <Ico n="cart" s={14} col="#000"/>Submit Request
-        </Btn>
+        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,requestedBy:userName,status:"Pending"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="cart" s={14} col="#000"/>Submit Request</Btn>
       </div>
     </Modal>
   );
 };
 
-// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
+// ─── CONFIRM MODAL ───────────────────────────────────────────────────────────
 const ConfirmModal = ({msg,onConfirm,onClose}) => (
   <Modal onClose={onClose} title="Confirm Action" mw={400}>
     <p style={{color:"var(--sub)",fontSize:14,lineHeight:1.6,marginBottom:20}}>{msg}</p>
@@ -562,30 +564,28 @@ const ConfirmModal = ({msg,onConfirm,onClose}) => (
   </Modal>
 );
 
-// ─── ITEM DETAIL MODAL ────────────────────────────────────────────────────────
-const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit}) => {
+// ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────
+const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories}) => {
   const [confirmId,setConfirmId]=useState(null);
   const hist=checkouts.filter(c=>c.item===item.name);
-  const ac=CAT_ACCENT[item.cat]||"var(--cyan)";
+  const ac=getCatAccent(item.cat,categories);
   const isLow=item.qty<=item.minQty;
   return(
     <>
     <Modal onClose={onClose} title="" mw={640}>
       <div style={{display:"flex",gap:20,marginBottom:22,flexWrap:"wrap"}}>
         <div style={{position:"relative",flexShrink:0}}>
-          <img src={item.img||`https://placehold.co/200x148/141b24/3d5068?text=${encodeURIComponent(item.cat)}`}
-            alt={item.name} style={{width:200,height:148,objectFit:"cover",borderRadius:12,border:"1px solid var(--border)",display:"block"}}/>
-          <div style={{position:"absolute",inset:-1,borderRadius:12,border:`2px solid ${ac}44`,pointerEvents:"none"}}/>
+          <img src={item.img||`https://placehold.co/200x148/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:200,height:148,objectFit:"cover",borderRadius:12,border:"1px solid var(--border)",display:"block"}}/>
         </div>
         <div style={{flex:1,minWidth:200}}>
-          <h3 style={{margin:"0 0 8px",fontSize:19,fontFamily:"'Syne',sans-serif",fontWeight:800}}>{item.name}</h3>
+          <h3 style={{margin:"0 0 8px",fontSize:19,fontFamily:"'Roboto',sans-serif",fontWeight:800}}>{item.name}</h3>
           <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
             <Badge status={isLow?"Low Stock":item.status}/>
             <span style={{background:"var(--bg3)",color:ac,border:`1px solid ${ac}30`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat}</span>
           </div>
           <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 14px"}}>{item.desc||"No description."}</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Status",item.status]].map(([k,v])=>(
+            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Serial",item.serial||"—"]].map(([k,v])=>(
               <div key={k}>
                 <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace"}}>{k}</div>
                 <div style={{color:"var(--text)",fontSize:13}}>{v}</div>
@@ -593,18 +593,11 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit}) =>
             ))}
           </div>
           <div style={{display:"flex",gap:8}}>
-            {item.status!=="Maintenance"&&(
-              <Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}>
-                <Ico n="tag" s={14} col="#000"/>Quick Check Out
-              </Btn>
-            )}
-            <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}}>
-              <Ico n="edit" s={14}/>Edit
-            </Btn>
+            {item.status!=="Maintenance"&&<Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}><Ico n="tag" s={14} col="#000"/>Quick Check Out</Btn>}
+            <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}}><Ico n="edit" s={14}/>Edit</Btn>
           </div>
         </div>
       </div>
-
       {item.usedBy?.length>0&&(
         <div style={{marginBottom:18}}>
           <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Currently Using</div>
@@ -617,47 +610,36 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit}) =>
           </div>
         </div>
       )}
-
       {hist.length>0&&(
         <div>
           <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Checkout History</div>
           {hist.map(c=>{
             const od=isOverdue(c);
             return(
-              <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,background:od?"var(--red-d)":"var(--bg2)",border:`1px solid ${od?"#ff4d6a30":"var(--border)"}`,borderRadius:8,padding:"8px 12px",marginBottom:6,flexWrap:"wrap",transition:"background .2s"}}>
+              <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,background:od?"var(--red-d)":"var(--bg2)",border:`1px solid ${od?"#ff4d6a30":"var(--border)"}`,borderRadius:8,padding:"8px 12px",marginBottom:6,flexWrap:"wrap"}}>
                 <MemberAvatar name={c.user} sz={26}/>
                 <span style={{color:"var(--text)",fontSize:13,flex:1}}>{c.user}</span>
-                <span style={{color:od?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{c.out} {'→'} {c.ret||"—"}{od&&" OVERDUE"}</span>
+                <span style={{color:od?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{c.out} → {c.ret||"—"}{od&&" OVERDUE"}</span>
                 <Badge status={od?"Overdue":c.status}/>
-                {c.status==="Active"&&(
-                  <Btn v="ghost" sm onClick={()=>setConfirmId(c.id)}>
-                    <Ico n="undo" s={12}/>Return
-                  </Btn>
-                )}
+                {c.status==="Active"&&<Btn v="ghost" sm onClick={()=>setConfirmId(c.id)}><Ico n="undo" s={12}/>Return</Btn>}
               </div>
             );
           })}
         </div>
       )}
     </Modal>
-    {confirmId&&(
-      <ConfirmModal
-        msg="Mark this item as returned? This will update the inventory and notify Slack."
-        onConfirm={()=>{onReturn(confirmId);onClose();}}
-        onClose={()=>setConfirmId(null)}
-      />
-    )}
+    {confirmId&&<ConfirmModal msg="Mark this item as returned?" onConfirm={()=>{onReturn(confirmId);onClose();}} onClose={()=>setConfirmId(null)}/>}
     </>
   );
 };
 
-// ─── STAT CARD ────────────────────────────────────────────────────────────────
+// ─── STAT CARD ───────────────────────────────────────────────────────────────
 const Stat=({label,val,icon,ac,sub,warn})=>(
   <div style={{background:"var(--bg1)",border:`1px solid ${warn?"#ff4d6a30":"var(--border)"}`,borderLeft:`3px solid ${ac}`,borderRadius:14,padding:"17px 20px",flex:1,minWidth:130}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
       <div>
         <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:5}}>{label}</div>
-        <div style={{color:ac,fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800,lineHeight:1,letterSpacing:"-0.02em",textShadow:`0 0 20px ${ac}22`}}>{val}</div>
+        <div style={{color:ac,fontFamily:"'Roboto',sans-serif",fontSize:34,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em",textShadow:`0 0 24px ${ac}33`}}>{val}</div>
         {sub&&<div style={{color:"var(--dim)",fontSize:11,marginTop:3}}>{sub}</div>}
       </div>
       <Ico n={icon} s={20} col={ac}/>
@@ -665,7 +647,38 @@ const Stat=({label,val,icon,ac,sub,warn})=>(
   </div>
 );
 
-// ─── CALENDAR (FIXED) ────────────────────────────────────────────────────────
+// ─── PAGINATION ──────────────────────────────────────────────────────────────
+const Pagination = ({total, page, setPage}) => {
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+  if (totalPages <= 1) return null;
+  const start = page * ITEMS_PER_PAGE + 1;
+  const end = Math.min((page+1) * ITEMS_PER_PAGE, total);
+  const pages = [];
+  for (let i = 0; i < totalPages; i++) {
+    if (i === 0 || i === totalPages-1 || Math.abs(i - page) <= 1) pages.push(i);
+    else if (pages[pages.length-1] !== "...") pages.push("...");
+  }
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:20,flexWrap:"wrap",gap:10}}>
+      <span style={{color:"var(--dim)",fontSize:12}}>Showing {start}–{end} of {total} items</span>
+      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+        <button onClick={()=>setPage(Math.max(0,page-1))} disabled={page===0} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:page===0?"var(--dim)":"var(--text)",borderRadius:6,padding:"5px 10px",cursor:page===0?"default":"pointer",fontSize:13}}>
+          <Ico n="chevL" s={14}/>
+        </button>
+        {pages.map((p,i)=>p==="..." ? (
+          <span key={`d${i}`} style={{color:"var(--dim)",padding:"0 4px"}}>...</span>
+        ) : (
+          <button key={p} onClick={()=>setPage(p)} style={{background:p===page?"var(--cyan)":"var(--bg3)",color:p===page?"#000":"var(--sub)",border:`1px solid ${p===page?"var(--cyan)":"var(--border)"}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12,fontWeight:p===page?700:400,minWidth:32}}>{p+1}</button>
+        ))}
+        <button onClick={()=>setPage(Math.min(totalPages-1,page+1))} disabled={page===totalPages-1} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:page===totalPages-1?"var(--dim)":"var(--text)",borderRadius:6,padding:"5px 10px",cursor:page===totalPages-1?"default":"pointer",fontSize:13}}>
+          <Ico n="chevR" s={14}/>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── CALENDAR ────────────────────────────────────────────────────────────────
 const CalView=({checkouts,deliveries})=>{
   const now = new Date();
   const [yr,setYr]=useState(now.getFullYear());
@@ -681,14 +694,14 @@ const CalView=({checkouts,deliveries})=>{
     checkouts.forEach(x=>{if(x.out===ds)r.push({t:"out",l:x.item});if(x.ret===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item});});
     return r;
   };
-  const EC={pkg:{bg:"var(--green-d)",col:"var(--green)",ic:"pkg"},out:{bg:"var(--blue-d)",col:"var(--blue)",ic:"out"},ret:{bg:"var(--amber-d)",col:"var(--amber)",ic:"ret"},odd:{bg:"var(--red-d)",col:"var(--red)",ic:"odd"}};
+  const EC={pkg:{bg:"var(--green-d)",col:"var(--green)"},out:{bg:"var(--blue-d)",col:"var(--blue)"},ret:{bg:"var(--amber-d)",col:"var(--amber)"},odd:{bg:"var(--red-d)",col:"var(--red)"}};
   const EC_LABELS={pkg:"Pkg",out:"Out",ret:"Ret",odd:"Due!"};
   const td=getTodayParts();
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={prev} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>←</button>
-        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:19}}>{MNS[mo]} {yr}</span>
+        <span style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:19}}>{MNS[mo]} {yr}</span>
         <button onClick={next} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>→</button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
@@ -719,79 +732,42 @@ const CalView=({checkouts,deliveries})=>{
   );
 };
 
-// ─── KEYBOARD SHORTCUT HINT ───────────────────────────────────────────────────
-const KbdHint=()=>(
-  <div style={{display:"flex",alignItems:"center",gap:12,color:"var(--dim)",fontSize:11,padding:"8px 12px",background:"var(--bg2)",borderRadius:8,border:"1px solid var(--border)"}}>
-    <Ico n="keyboard" s={13} col="var(--dim)"/>
-    <span>Shortcuts:</span>
-    {[["N","New Delivery"],["C","Check Out"],["Esc","Close"]].map(([k,l])=>(
-      <span key={k} style={{display:"flex",alignItems:"center",gap:4}}>
-        <kbd style={{background:"var(--bg4)",border:"1px solid var(--border-hi)",borderRadius:4,padding:"1px 6px",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{k}</kbd>
-        <span>{l}</span>
-      </span>
-    ))}
-  </div>
-);
-
-// ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
+// ─── LOGIN PAGE ──────────────────────────────────────────────────────────────
 const LoginPage = ({onSignIn}) => {
   const btnRef = useRef(null);
   const [error, setError] = useState("");
   const [gsiReady, setGsiReady] = useState(false);
-
   useEffect(()=>{
     const init = () => {
-      if (typeof google === 'undefined' || !google.accounts) {
-        setTimeout(init, 200);
-        return;
-      }
+      if (typeof google === 'undefined' || !google.accounts) { setTimeout(init, 200); return; }
       try {
         google.accounts.id.initialize({
           client_id: APP_CONFIG.oauth_client_id,
           callback: (response) => {
             try {
               const payload = JSON.parse(atob(response.credential.split('.')[1]));
-              if (payload.hd !== "seas.upenn.edu") {
-                setError("Access restricted to @seas.upenn.edu accounts only.");
-                return;
-              }
-              onSignIn({
-                token: response.credential,
-                name: payload.name,
-                email: payload.email,
-                picture: payload.picture,
-              });
-            } catch(e) {
-              setError("Failed to verify account. Please try again.");
-            }
+              if (payload.hd !== "seas.upenn.edu") { setError("Access restricted to @seas.upenn.edu accounts only."); return; }
+              onSignIn({ token: response.credential, name: payload.name, email: payload.email, picture: payload.picture });
+            } catch(e) { setError("Failed to verify account. Please try again."); }
           },
           hd: "seas.upenn.edu",
           auto_select: false,
         });
-        google.accounts.id.renderButton(btnRef.current, {
-          type: "standard",
-          theme: "filled_black",
-          size: "large",
-          text: "signin_with",
-          shape: "pill",
-          width: 300,
-        });
+        google.accounts.id.renderButton(btnRef.current, { type: "standard", theme: "filled_black", size: "large", text: "signin_with", shape: "pill", width: 300 });
         setGsiReady(true);
       } catch(e) { console.error("GSI init error:", e); }
     };
     init();
   }, []);
-
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)"}}>
       <div style={{textAlign:"center",animation:"fadeUp .5s ease",maxWidth:420,padding:"0 24px"}}>
         <div style={{width:72,height:72,borderRadius:18,background:"linear-gradient(135deg,#00d4c8,#004d4a)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px rgba(0,212,200,.25)",margin:"0 auto 24px"}}>
           <Ico n="layers" s={32} col="var(--bg0)"/>
         </div>
-        <h1 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,margin:"0 0 6px",letterSpacing:"-0.03em"}}>LabTrack</h1>
+        <h1 style={{fontFamily:"'Roboto',sans-serif",fontWeight:900,fontSize:32,margin:"0 0 6px",letterSpacing:"-0.03em"}}>LabTrack</h1>
         <p style={{color:"var(--sub)",fontSize:15,margin:"0 0 8px",lineHeight:1.5}}>Figueroa Lab Inventory</p>
         <p style={{color:"var(--dim)",fontSize:13,margin:"0 0 32px"}}>Penn Engineering</p>
-
         <div>
           <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
           {!gsiReady && <p style={{color:"var(--dim)",fontSize:12}}>Loading sign-in...</p>}
@@ -803,39 +779,40 @@ const LoginPage = ({onSignIn}) => {
   );
 };
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── MAIN APP ────────────────────────────────────────────────────────────────
 function LabInventory(){
-  // Auth state
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchingData, setFetchingData] = useState(false);
 
-  // App state
-  const [tab,setTab]           = useState("inventory");
-  const [items,setItems]       = useState(SEED_ITEMS);
-  const [deliveries,setDeliv]  = useState(SEED_DELIVERIES);
-  const [checkouts,setCheckouts]=useState(SEED_CHECKOUTS);
-  const [orders,setOrders]     = useState([]);
-  const [modal,setModal]       = useState(null);
-  const [preItem,setPreItem]   = useState("");
-  const [detail,setDetail]     = useState(null);
+  const [tab,setTab] = useState("inventory");
+  const [items,setItems] = useState([]);
+  const [deliveries,setDeliv] = useState([]);
+  const [checkouts,setCheckouts] = useState([]);
+  const [orders,setOrders] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [modal,setModal] = useState(null);
+  const [preItem,setPreItem] = useState("");
+  const [detail,setDetail] = useState(null);
   const [editItem,setEditItem] = useState(null);
-  const [search,setSearch]     = useState("");
-  const [catF,setCatF]         = useState("All");
-  const [view,setView]         = useState("grid");
+  const [search,setSearch] = useState("");
+  const [catF,setCatF] = useState("All");
+  const [view,setView] = useState("grid");
   const [selected,setSelected] = useState(new Set());
-  const [toasts,setToasts]     = useState([]);
-  const [confirm,setConfirm]   = useState(null);
+  const [toasts,setToasts] = useState([]);
+  const [confirm,setConfirm] = useState(null);
   const [dataLoaded,setDataLoaded] = useState(false);
+  const [page, setPage] = useState(0);
+  const [sortBy, setSortBy] = useState("name-az");
   const tid = useRef(0);
 
   // Restore session
   useEffect(()=>{
     try {
       const saved = localStorage.getItem("labtrack_user");
-      if (saved) {
-        const u = JSON.parse(saved);
-        setUser(u);
-      }
+      if (saved) setUser(JSON.parse(saved));
+      const savedCats = localStorage.getItem("labtrack_categories");
+      if (savedCats) setCategories(JSON.parse(savedCats));
     } catch {}
     setLoading(false);
   },[]);
@@ -844,7 +821,6 @@ function LabInventory(){
   useEffect(()=>{
     if (!user || dataLoaded) return;
     if (!APP_CONFIG.apps_script_url || user.token === "local") {
-      // Use seed data / localStorage fallback
       try {
         const saved = localStorage.getItem("labtrack_data");
         if (saved) {
@@ -858,12 +834,11 @@ function LabInventory(){
       setDataLoaded(true);
       return;
     }
-    // Fetch from Apps Script
+    setFetchingData(true);
     (async ()=>{
       const data = await API.fetchAll(user.token);
       if (data && data.error) {
         console.error("[LabTrack] Backend error:", data.error, data.detail);
-        // Fall back to localStorage
         try {
           const saved = localStorage.getItem("labtrack_data");
           if (saved) {
@@ -879,8 +854,19 @@ function LabInventory(){
         setDeliv(data.deliveries || []);
         setCheckouts(data.checkouts || []);
         setOrders(data.orders || []);
+        // Load categories from settings
+        if (data.settings && data.settings.categories) {
+          try {
+            const serverCats = JSON.parse(data.settings.categories);
+            if (Array.isArray(serverCats) && serverCats.length > 0) {
+              setCategories(serverCats);
+              localStorage.setItem("labtrack_categories", JSON.stringify(serverCats));
+            }
+          } catch {}
+        }
       }
       setDataLoaded(true);
+      setFetchingData(false);
     })();
   },[user]);
 
@@ -888,23 +874,28 @@ function LabInventory(){
   useEffect(()=>{
     if (!dataLoaded) return;
     localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts, orders}));
-  },[items, deliveries, checkouts, dataLoaded]);
+  },[items, deliveries, checkouts, orders, dataLoaded]);
 
-  const addToast=useCallback((type,msg)=>{
+  // Reset page when filters change
+  useEffect(()=>{ setPage(0); },[search, catF]);
+
+  const addToast=useCallback((type,msg,onClick)=>{
     const id=++tid.current;
-    setToasts(t=>[...t,{id,type,msg}]);
-    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),5000);
+    setToasts(t=>[...t,{id,type,msg,onClick}]);
+    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),6000);
+    return id;
   },[]);
 
-  const handleSignIn = (u) => {
-    setUser(u);
-    localStorage.setItem("labtrack_user", JSON.stringify(u));
-  };
-  const handleSignOut = () => {
-    setUser(null);
-    setDataLoaded(false);
-    localStorage.removeItem("labtrack_user");
-    try { google.accounts.id.disableAutoSelect(); } catch {}
+  const handleSignIn = (u) => { setUser(u); localStorage.setItem("labtrack_user", JSON.stringify(u)); };
+  const handleSignOut = () => { setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
+
+  const handleSaveCategories = async (newCats) => {
+    setCategories(newCats);
+    localStorage.setItem("labtrack_categories", JSON.stringify(newCats));
+    if (APP_CONFIG.apps_script_url && user?.token !== "local") {
+      await API.post(user.token, "saveSettings", { key: "categories", value: JSON.stringify(newCats) });
+    }
+    addToast("success", "Categories updated");
   };
 
   // keyboard shortcuts
@@ -921,9 +912,9 @@ function LabInventory(){
   },[user]);
 
   // computed
-  const lowStock   = items.filter(i=>i.qty<=i.minQty);
-  const activeOut  = checkouts.filter(c=>c.status==="Active");
-  const overdues   = checkouts.filter(c=>isOverdue(c));
+  const lowStock = items.filter(i=>i.qty<=i.minQty);
+  const activeOut = checkouts.filter(c=>c.status==="Active");
+  const overdues = checkouts.filter(c=>isOverdue(c));
 
   // handlers
   const postAction = async (action, payload) => {
@@ -931,6 +922,9 @@ function LabInventory(){
       const result = await API.post(user.token, action, payload);
       if (result && result.error === "Unauthorized") {
         addToast("error", "Session expired — please sign out and sign in again.");
+      }
+      if (result && result.error && result.error !== "Unauthorized") {
+        addToast("error", `Error: ${result.error} — ${result.detail || ""}`);
       }
       return result;
     }
@@ -965,10 +959,7 @@ function LabInventory(){
     addToast("success",`${ids.length} item${ids.length>1?"s":""} returned`);
   };
 
-  const handleQuickCheckout=(itemName)=>{
-    setPreItem(itemName);
-    setModal("checkout");
-  };
+  const handleQuickCheckout=(itemName)=>{ setPreItem(itemName); setModal("checkout"); };
 
   const handleAddItem = async (item) => {
     setItems(p=>[item,...p]);
@@ -988,9 +979,7 @@ function LabInventory(){
     await postAction("deleteItem", {itemId});
   };
 
-  const handleEditItem = (item) => {
-    setEditItem(item);
-  };
+  const handleEditItem = (item) => { setEditItem(item); };
 
   const handleAddOrder = async (order) => {
     setOrders(p=>[order,...p]);
@@ -1010,15 +999,49 @@ function LabInventory(){
     await postAction("deleteOrder", {orderId});
   };
 
-  // filtered inventory
-  const filtered=items.filter(i=>{
-    const q=search.toLowerCase();
-    return(i.name.toLowerCase().includes(q)||i.loc?.toLowerCase().includes(q)||i.cat?.toLowerCase().includes(q)||i.desc?.toLowerCase().includes(q))
-      &&(catF==="All"||i.cat===catF);
-  });
+  // Auto-add to inventory when order received
+  const handleOrderReceived = async (order) => {
+    // Create delivery
+    const delivery={id:Date.now(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
+    await handleDelivery(delivery);
+    // Update order status
+    await handleUpdateOrderStatus(order.id, "Received");
+    // Auto-add inventory item
+    const newItem = {id:Date.now()+1, name:order.item, cat:order.cat||"Other", qty:order.qty, unit:order.unit, loc:"", minQty:1, img:"", desc:"Auto-added from order #"+order.id, status:"Available", usedBy:[], serial:""};
+    setItems(p=>[newItem,...p]);
+    await postAction("addItem", {item: newItem});
+    addToast("info", `"${order.item}" added to inventory! Click to fill in details.`, ()=>{setEditItem(newItem);});
+  };
 
-  const TABS=[{id:"inventory",l:"Inventory",n:"grid"},{id:"deliveries",l:"Deliveries",n:"truck"},{id:"usage",l:"Usage",n:"users"},{id:"orders",l:"Orders",n:"cart"},{id:"calendar",l:"Calendar",n:"calendar"}];
+  // filtered & sorted inventory
+  const filtered = useMemo(()=>{
+    let f = items.filter(i=>{
+      const q=search.toLowerCase();
+      return(i.name?.toLowerCase().includes(q)||i.loc?.toLowerCase().includes(q)||i.cat?.toLowerCase().includes(q)||i.desc?.toLowerCase().includes(q)||i.serial?.toLowerCase().includes(q))
+        &&(catF==="All"||i.cat===catF);
+    });
+    // Sort
+    if(sortBy==="name-az") f.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    else if(sortBy==="name-za") f.sort((a,b)=>(b.name||"").localeCompare(a.name||""));
+    else if(sortBy==="newest") f.sort((a,b)=>Number(b.id)-Number(a.id));
+    else if(sortBy==="qty-low") f.sort((a,b)=>a.qty-b.qty);
+    else if(sortBy==="qty-high") f.sort((a,b)=>b.qty-a.qty);
+    return f;
+  },[items, search, catF, sortBy]);
+
+  // Paginated
+  const paginatedItems = filtered.slice(page * ITEMS_PER_PAGE, (page+1) * ITEMS_PER_PAGE);
+
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
+  const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected");
+  const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected");
+
+  const TABS=[
+    {id:"inventory",l:"Inventory",n:"grid",count:items.length},
+    {id:"procurement",l:"Procurement",n:"cart",count:activeOrders.length},
+    {id:"usage",l:"Usage",n:"users",count:activeOut.length},
+    {id:"calendar",l:"Calendar",n:"calendar",count:0},
+  ];
 
   // Loading
   if (loading) {
@@ -1030,12 +1053,7 @@ function LabInventory(){
     </div>;
   }
 
-  // Login page
-  if (!user) {
-    return <>
-      <LoginPage onSignIn={handleSignIn}/>
-    </>;
-  }
+  if (!user) return <LoginPage onSignIn={handleSignIn}/>;
 
   return(
     <div style={{background:"var(--bg0)",minHeight:"100vh",color:"var(--text)"}}>
@@ -1046,11 +1064,10 @@ function LabInventory(){
             <Ico n="layers" s={18} col="var(--bg0)"/>
           </div>
           <div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,letterSpacing:"-0.02em"}}>LabTrack</div>
-            <div style={{color:"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>equipment · supplies · v3.0</div>
+            <div style={{fontFamily:"'Roboto',sans-serif",fontWeight:900,fontSize:16,letterSpacing:"-0.02em"}}>LabTrack</div>
+            <div style={{color:"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>robotics · inventory · v4.0</div>
           </div>
         </div>
-
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {overdues.length>0&&(
             <div className="overdue-pulse" style={{display:"flex",alignItems:"center",gap:6,background:"var(--red-d)",border:"1px solid #ff4d6a44",borderRadius:20,padding:"5px 12px",fontSize:12,color:"var(--red)"}}>
@@ -1062,18 +1079,12 @@ function LabInventory(){
               <Ico n="alert" s={13} col="var(--amber)"/>{lowStock.length} low stock
             </div>
           )}
-          {/* User info */}
           <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"5px 12px 5px 6px"}}>
             {user.picture ? (
-              <img src={user.picture} alt="" style={{width:28,height:28,borderRadius:"50%",border:"2px solid var(--border-hi)"}}
-                onError={e=>{e.target.style.display='none';}}/>
-            ) : (
-              <MemberAvatar name={user.name} sz={28}/>
-            )}
+              <img src={user.picture} alt="" style={{width:28,height:28,borderRadius:"50%",border:"2px solid var(--border-hi)"}} onError={e=>{e.target.style.display='none';}}/>
+            ) : (<MemberAvatar name={user.name} sz={28}/>)}
             <span style={{color:"var(--sub)",fontSize:12,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span>
-            <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}>
-              <Ico n="logout" s={14}/>
-            </button>
+            <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}><Ico n="logout" s={14}/></button>
           </div>
         </div>
       </header>
@@ -1083,22 +1094,29 @@ function LabInventory(){
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"transparent",border:"none",borderBottom:`2px solid ${tab===t.id?"var(--cyan)":"transparent"}`,color:tab===t.id?"var(--cyan)":"var(--dim)",padding:"13px 16px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:7,fontFamily:"'Outfit',sans-serif",transition:"color .15s,border-color .15s"}}>
             <Ico n={t.n} s={14} col={tab===t.id?"var(--cyan)":"var(--dim)"}/>{t.l}
-            {t.id==="usage"&&overdues.length>0&&<span style={{background:"var(--red)",color:"#000",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{overdues.length}</span>}
-            {t.id==="orders"&&pendingOrders>0&&<span style={{background:"var(--amber)",color:"#000",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{pendingOrders}</span>}
+            {t.count>0&&<span style={{background:t.id==="usage"&&overdues.length>0?"var(--red)":tab===t.id?"var(--cyan)":"var(--bg4)",color:t.id==="usage"&&overdues.length>0?"#000":tab===t.id?"#000":"var(--sub)",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,fontFamily:"'IBM Plex Mono',monospace"}}>{t.count}</span>}
           </button>
         ))}
       </nav>
 
-      {/* MAIN */}
+      {/* Loading overlay */}
+      {fetchingData && (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",flexDirection:"column",gap:16}}>
+          <div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"var(--cyan)",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+          <div style={{color:"var(--sub)",fontSize:14}}>Fetching inventory data...</div>
+        </div>
+      )}
+
+      {!fetchingData && (
       <main style={{padding:"24px",maxWidth:1360,margin:"0 auto"}}>
 
         {/* Stats */}
         <div style={{display:"flex",gap:12,marginBottom:overdues.length||lowStock.length?16:24,flexWrap:"wrap"}}>
-          <Stat label="Total Items"   val={items.length}    icon="box"      ac="var(--cyan)"   sub="in inventory"/>
-          <Stat label="Equipment"     val={items.filter(i=>i.cat==="Equipment"||i.cat==="Instrument").length} icon="layers" ac="var(--purple)" sub="& instruments"/>
-          <Stat label="Consumables"   val={items.filter(i=>["Consumable","PPE","Office Supply"].includes(i.cat)).length} icon="box" ac="var(--amber)" sub="supplies & PPE"/>
-          <Stat label="Checked Out"   val={activeOut.length} icon="users"   ac="var(--blue)"   sub="active"/>
-          <Stat label="Overdue"       val={overdues.length}  icon="clock"   ac={overdues.length?"var(--red)":"var(--green)"} sub="past return date" warn={overdues.length>0}/>
+          <Stat label="Total Items" val={items.length} icon="box" ac="var(--cyan)" sub="in inventory"/>
+          <Stat label="Categories" val={[...new Set(items.map(i=>i.cat))].length} icon="layers" ac="var(--purple)" sub="active types"/>
+          <Stat label="Orders" val={activeOrders.length} icon="cart" ac="var(--amber)" sub="in pipeline"/>
+          <Stat label="Checked Out" val={activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
+          <Stat label="Overdue" val={overdues.length} icon="clock" ac={overdues.length?"var(--red)":"var(--green)"} sub="past return date" warn={overdues.length>0}/>
         </div>
 
         {/* Alert banners */}
@@ -1124,29 +1142,41 @@ function LabInventory(){
           </div>
         )}
 
-        {/* INVENTORY */}
+        {/* ════════ INVENTORY TAB ════════ */}
         {tab==="inventory"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
               <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
-                <Inp placeholder="Search name, location, description..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
+                <Inp placeholder="Search name, location, serial..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
                 {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
               </div>
 
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {["All",...CATEGORIES].map(c=>{
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                {["All",...categories].map(c=>{
                   const count=c==="All"?items.length:items.filter(i=>i.cat===c).length;
                   if(count===0&&c!=="All")return null;
                   const isSel=catF===c;
-                  const ac=CAT_ACCENT[c]||"var(--sub)";
+                  const ac=getCatAccent(c,categories);
                   return(
                     <button key={c} onClick={()=>setCatF(c)} style={{background:isSel?(c==="All"?"var(--bg4)":`${ac}18`):"var(--bg2)",color:isSel?(c==="All"?"var(--text)":ac):"var(--sub)",border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac):"var(--border)"}`,borderRadius:20,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif",transition:"all .15s",display:"flex",alignItems:"center",gap:4}}>
                       {c}{c!=="All"&&<span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span>}
                     </button>
                   );
                 })}
+                <button onClick={()=>setModal("manageCategories")} title="Manage Categories" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:20,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
+                  <Ico n="settings" s={13} col="var(--dim)"/>
+                </button>
               </div>
+
+              {/* Sort */}
+              <Sel value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:"auto",padding:"6px 10px",fontSize:12,borderRadius:8}}>
+                <option value="name-az">Name A-Z</option>
+                <option value="name-za">Name Z-A</option>
+                <option value="newest">Newest</option>
+                <option value="qty-low">Qty Low→High</option>
+                <option value="qty-high">Qty High→Low</option>
+              </Sel>
 
               <div style={{display:"flex",gap:2,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:3,marginLeft:"auto"}}>
                 {["grid","list"].map(v=>(
@@ -1156,27 +1186,27 @@ function LabInventory(){
                 ))}
               </div>
 
-              <Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}>
-                <Ico n="tag" s={14}/>Check Out
-              </Btn>
-              <Btn onClick={()=>setModal("addItem")}>
-                <Ico n="plus" s={14} col="#000"/>Add Item
-              </Btn>
+              <Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}><Ico n="tag" s={14}/>Check Out</Btn>
+              <Btn onClick={()=>setModal("addItem")}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
             </div>
 
             {search&&<div style={{color:"var(--dim)",fontSize:12,marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} for "{search}"</div>}
 
             {filtered.length===0?(
               <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
-                <Ico n="search" s={48} col="var(--bg4)"/>
-                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No items found</div>
-                <div style={{fontSize:13,marginTop:4}}>Try a different search or category</div>
-                <button onClick={()=>{setSearch("");setCatF("All");}} style={{marginTop:16,background:"none",border:"1px solid var(--border)",color:"var(--cyan)",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:13}}>Clear filters</button>
+                <Ico n={items.length===0?"box":"search"} s={48} col="var(--bg4)"/>
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>{items.length===0?"No items in inventory yet":"No items found"}</div>
+                <div style={{fontSize:13,marginTop:4}}>{items.length===0?"Add your first item to get started":"Try a different search or category"}</div>
+                {items.length===0 ? (
+                  <Btn style={{marginTop:16}} onClick={()=>setModal("addItem")}><Ico n="plus" s={14} col="#000"/>Add First Item</Btn>
+                ) : (
+                  <button onClick={()=>{setSearch("");setCatF("All");}} style={{marginTop:16,background:"none",border:"1px solid var(--border)",color:"var(--cyan)",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:13}}>Clear filters</button>
+                )}
               </div>
             ):view==="grid"?(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
-                {filtered.map((item,idx)=>{
-                  const ac=CAT_ACCENT[item.cat]||"var(--cyan)";
+                {paginatedItems.map((item,idx)=>{
+                  const ac=getCatAccent(item.cat,categories);
                   const isLow=item.qty<=item.minQty;
                   return(
                     <div key={item.id} className="card-item" onClick={()=>setDetail(item)} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`}}>
@@ -1185,21 +1215,19 @@ function LabInventory(){
                         <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
                         <div style={{position:"absolute",top:10,right:10}}><Badge status={isLow?"Low Stock":item.status}/></div>
                         <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
-                          <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{item.cat.toUpperCase()}</span>
+                          <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
                         </div>
                       </div>
                       <div style={{padding:"11px 14px 13px"}}>
-                        <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
-                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
+                        <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}{item.serial?` · S/N: ${item.serial}`:""}</div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
+                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Roboto',sans-serif",fontSize:24,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
                             <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
                           </div>
                           {item.usedBy?.length>0&&(
-                            <div style={{display:"flex"}}>
-                              {item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}
-                            </div>
+                            <div style={{display:"flex"}}>{item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
                           )}
                         </div>
                       </div>
@@ -1211,20 +1239,19 @@ function LabInventory(){
               <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
                 <div style={{overflow:"auto",maxHeight:"65vh"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                    <thead>
-                      <tr style={{borderBottom:"1px solid var(--border)"}}>
-                        {["Item","Category","Stock","Location","Status","In Use By"].map(h=>(
-                          <th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
+                    <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
+                      {["Item","Category","Stock","Location","Serial","Status","In Use By"].map(h=>(
+                        <th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
+                      ))}
+                    </tr></thead>
                     <tbody>
-                      {filtered.map((item,i)=>(
-                        <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<filtered.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
+                      {paginatedItems.map((item,i)=>(
+                        <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
                           <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}</td>
-                          <td style={{padding:"10px 16px"}}><span style={{color:CAT_ACCENT[item.cat]||"var(--sub)",fontSize:12}}>{item.cat}</span></td>
+                          <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
                           <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
                           <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
+                          <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.serial||"—"}</td>
                           <td style={{padding:"10px 16px"}}><Badge status={item.qty<=item.minQty?"Low Stock":item.status}/></td>
                           <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
                         </tr>
@@ -1234,55 +1261,139 @@ function LabInventory(){
                 </div>
               </div>
             )}
-            <div style={{marginTop:18}}><KbdHint/></div>
+            <Pagination total={filtered.length} page={page} setPage={setPage}/>
           </div>
         )}
 
-        {/* DELIVERIES */}
-        {tab==="deliveries"&&(
+        {/* ════════ PROCUREMENT TAB (Orders + Deliveries) ════════ */}
+        {tab==="procurement"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
               <div>
-                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Package Deliveries</h2>
-                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{deliveries.length} total · Slack notifies on each arrival</p>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Procurement</h2>
+                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOrders.length} active orders · {deliveries.length} deliveries logged</p>
               </div>
-              <Btn onClick={()=>setModal("delivery")}><Ico n="truck" s={14} col="#000"/>Log Delivery</Btn>
+              <div style={{display:"flex",gap:8}}>
+                <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
+                <Btn onClick={()=>setModal("order")}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
+              </div>
             </div>
-            {deliveries.length===0?(
-              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
-                <Ico n="truck" s={48} col="var(--bg4)"/>
-                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No deliveries logged yet</div>
-                <Btn style={{marginTop:16}} onClick={()=>setModal("delivery")}><Ico n="plus" s={14} col="#000"/>Log first delivery</Btn>
-              </div>
-            ):(
-              <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-                <div style={{overflow:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                    <thead><tr style={{borderBottom:"1px solid var(--border)"}}>{["Item","Qty","Supplier","Received By","Tracking","Date","Status"].map(h=><th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>)}</tr></thead>
-                    <tbody>{deliveries.map((d,i)=>(
-                      <tr key={d.id} className="row-hover" style={{borderBottom:i<deliveries.length-1?"1px solid var(--border)":"none",transition:"background .15s"}}>
-                        <td style={{padding:"11px 16px",color:"var(--text)",fontWeight:600}}>{d.item}</td>
-                        <td style={{padding:"11px 16px",color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace"}}>{d.qty} {d.unit}</td>
-                        <td style={{padding:"11px 16px",color:"var(--sub)"}}>{d.from||"—"}</td>
-                        <td style={{padding:"11px 16px"}}>{d.receivedBy?<div style={{display:"flex",alignItems:"center",gap:7}}><MemberAvatar name={d.receivedBy} sz={24}/><span style={{color:"var(--sub)"}}>{d.receivedBy}</span></div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
-                        <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.tracking||"—"}</td>
-                        <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.date}</td>
-                        <td style={{padding:"11px 16px"}}><Badge status={d.status}/></td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
+
+            {/* Active Orders */}
+            <div style={{marginBottom:28}}>
+              <h3 style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,marginBottom:12,color:"var(--text)"}}>Active Orders</h3>
+              {activeOrders.length===0?(
+                <div style={{textAlign:"center",padding:"40px 20px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>
+                  <Ico n="cart" s={40} col="var(--bg4)"/>
+                  <div style={{marginTop:12,fontSize:14,color:"var(--sub)"}}>No active orders</div>
+                  <div style={{fontSize:12,marginTop:4}}>Request supplies or equipment your lab needs</div>
+                  <Btn style={{marginTop:12}} onClick={()=>setModal("order")}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
+                </div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {activeOrders.map((o,idx)=>{
+                    const urgColors={Urgent:{bg:"var(--red-d)",col:"var(--red)"},High:{bg:"var(--amber-d)",col:"var(--amber)"},Normal:{bg:"var(--blue-d)",col:"var(--blue)"},Low:{bg:"var(--bg3)",col:"var(--dim)"}};
+                    const uc=urgColors[o.urgency]||urgColors.Normal;
+                    const statusColors={Pending:{bg:"var(--amber-d)",col:"var(--amber)"},Approved:{bg:"var(--blue-d)",col:"var(--blue)"},Ordered:{bg:"var(--purple-d)",col:"var(--purple)"}};
+                    const sc=statusColors[o.status]||statusColors.Pending;
+                    const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
+                    const ns=nextStatus[o.status];
+                    return(
+                      <div key={o.id} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`}}>
+                        <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+                          <div style={{flex:1,minWidth:200}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                              <span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Roboto',sans-serif"}}>{o.item}</span>
+                              <span style={{background:sc.bg,color:sc.col,border:`1px solid ${sc.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
+                              <span style={{background:uc.bg,color:uc.col,border:`1px solid ${uc.col}30`,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace"}}>{o.urgency}</span>
+                              {o.cat&&<span style={{color:getCatAccent(o.cat,categories),fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{o.cat}</span>}
+                            </div>
+                            <div style={{color:"var(--sub)",fontSize:12,marginBottom:4}}>
+                              <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{o.qty} {o.unit}</span>
+                              {o.price&&<span> · {o.price}</span>}
+                              {o.requestedBy&&<span> · by <strong>{o.requestedBy}</strong></span>}
+                              {o.date&&<span> · need by {o.date}</span>}
+                            </div>
+                            {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic"}}>{o.reason}</div>}
+                            {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4,marginTop:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
+                          </div>
+                          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
+                            {ns&&(
+                              <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
+                                if(ns==="Received"){ handleOrderReceived(o); }
+                                else { handleUpdateOrderStatus(o.id,ns); }
+                              }}>
+                                {ns==="Received"?<><Ico n="check" s={12} col="var(--green)"/>Mark Received</>:<>{ns} →</>}
+                              </Btn>
+                            )}
+                            {o.status==="Pending"&&<Btn sm v="danger" onClick={()=>handleUpdateOrderStatus(o.id,"Rejected")}>Reject</Btn>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Completed Orders */}
+            {receivedOrders.length>0&&(
+              <div style={{marginBottom:28}}>
+                <h3 style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,marginBottom:12,color:"var(--text)"}}>Completed Orders</h3>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {receivedOrders.map(o=>{
+                    const sc2=o.status==="Received"?{bg:"var(--green-d)",col:"var(--green)"}:{bg:"var(--red-d)",col:"var(--red)"};
+                    return(
+                      <div key={o.id} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:600,fontSize:13,color:"var(--text)",flex:1}}>{o.item}</span>
+                        <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:"var(--dim)"}}>{o.qty} {o.unit}</span>
+                        <span style={{background:sc2.bg,color:sc2.col,border:`1px solid ${sc2.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
+                        <Btn sm v="ghost" onClick={()=>handleDeleteOrder(o.id)}><Ico n="trash" s={12}/></Btn>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
+            {/* Delivery Log */}
+            <div>
+              <h3 style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,marginBottom:12,color:"var(--text)"}}>Delivery Log</h3>
+              {deliveries.length===0?(
+                <div style={{textAlign:"center",padding:"40px 20px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>
+                  <Ico n="truck" s={40} col="var(--bg4)"/>
+                  <div style={{marginTop:12,fontSize:14,color:"var(--sub)"}}>No deliveries logged yet</div>
+                </div>
+              ):(
+                <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+                  <div style={{overflow:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                      <thead><tr style={{borderBottom:"1px solid var(--border)"}}>{["Item","Qty","Supplier","Received By","Tracking","Date","Status"].map(h=><th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>)}</tr></thead>
+                      <tbody>{deliveries.map((d,i)=>(
+                        <tr key={d.id} className="row-hover" style={{borderBottom:i<deliveries.length-1?"1px solid var(--border)":"none",transition:"background .15s"}}>
+                          <td style={{padding:"11px 16px",color:"var(--text)",fontWeight:600}}>{d.item}</td>
+                          <td style={{padding:"11px 16px",color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace"}}>{d.qty} {d.unit}</td>
+                          <td style={{padding:"11px 16px",color:"var(--sub)"}}>{d.from||"—"}</td>
+                          <td style={{padding:"11px 16px"}}>{d.receivedBy?<div style={{display:"flex",alignItems:"center",gap:7}}><MemberAvatar name={d.receivedBy} sz={24}/><span style={{color:"var(--sub)"}}>{d.receivedBy}</span></div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                          <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.tracking||"—"}</td>
+                          <td style={{padding:"11px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{d.date}</td>
+                          <td style={{padding:"11px 16px"}}><Badge status={d.status}/></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* USAGE */}
+        {/* ════════ USAGE TAB ════════ */}
         {tab==="usage"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
               <div>
-                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Item Usage</h2>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Item Usage</h2>
                 <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOut.length} active · {overdues.length>0&&<span style={{color:"var(--red)",fontWeight:600}}>{overdues.length} overdue · </span>}Slack notifies on checkout & return</p>
               </div>
               <div style={{display:"flex",gap:8}}>
@@ -1295,8 +1406,15 @@ function LabInventory(){
               </div>
             </div>
 
+            {activeOut.length===0 && checkouts.length===0 ? (
+              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>
+                <Ico n="users" s={48} col="var(--bg4)"/>
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No checkouts yet</div>
+                <div style={{fontSize:13,marginTop:4}}>Check out items to track who is using what</div>
+              </div>
+            ) : (
+              <>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(255px,1fr))",gap:14,marginBottom:28}}>
-              {/* Derive members from checkout data — anyone who has active checkouts */}
               {[...new Set(checkouts.filter(c=>c.status==="Active").map(c=>c.user))].map((m,idx)=>{
                 const outs=checkouts.filter(c=>c.user===m&&c.status==="Active");
                 const od=outs.filter(c=>isOverdue(c)).length;
@@ -1305,7 +1423,7 @@ function LabInventory(){
                     <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12}}>
                       <MemberAvatar name={m} sz={40}/>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:14,fontFamily:"'Syne',sans-serif"}}>{m}</div>
+                        <div style={{fontWeight:700,fontSize:14,fontFamily:"'Roboto',sans-serif"}}>{m}</div>
                         <div style={{color:od?"var(--red)":outs.length?"var(--blue)":"var(--dim)",fontSize:12}}>
                           {od?`${od} overdue!`:outs.length?`${outs.length} item${outs.length>1?"s":""} out`:"Nothing checked out"}
                         </div>
@@ -1319,9 +1437,7 @@ function LabInventory(){
                             <div style={{color:"var(--text)",fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.item}</div>
                             <div style={{color:od2?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace",marginTop:2}}>{od2?"OVERDUE":"Return"} {c.ret||"—"}</div>
                           </div>
-                          <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}>
-                            <Ico n="undo" s={11}/>
-                          </Btn>
+                          <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}><Ico n="undo" s={11}/></Btn>
                         </div>
                       );
                     })}
@@ -1332,7 +1448,7 @@ function LabInventory(){
 
             <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
               <div style={{padding:"13px 18px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontWeight:700,fontFamily:"'Syne',sans-serif",fontSize:15}}>All Records</span>
+                <span style={{fontWeight:700,fontFamily:"'Roboto',sans-serif",fontSize:15}}>All Records</span>
                 {selected.size>0&&<span style={{color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.size} selected</span>}
               </div>
               <div style={{overflow:"auto",maxHeight:"65vh"}}>
@@ -1344,136 +1460,54 @@ function LabInventory(){
                     ))}
                   </tr></thead>
                   <tbody>{checkouts.map((c,i)=>{
-                    const od=isOverdue(c);
-                    const isSel=selected.has(c.id);
+                    const od=isOverdue(c);const isSel=selected.has(c.id);
                     return(
                       <tr key={c.id} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined}}>
-                        <td style={{padding:"10px 16px"}}>
-                          {c.status==="Active"&&(
-                            <input type="checkbox" checked={isSel} onChange={e=>{const ns=new Set(selected);e.target.checked?ns.add(c.id):ns.delete(c.id);setSelected(ns);}} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>
-                          )}
-                        </td>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<input type="checkbox" checked={isSel} onChange={e=>{const ns=new Set(selected);e.target.checked?ns.add(c.id):ns.delete(c.id);setSelected(ns);}} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>}</td>
                         <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{c.item}</td>
                         <td style={{padding:"10px 16px"}}><div style={{display:"flex",alignItems:"center",gap:8}}><MemberAvatar name={c.user} sz={26}/><span style={{color:"var(--sub)"}}>{c.user}</span></div></td>
                         <td style={{padding:"10px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{c.out}</td>
                         <td style={{padding:"10px 16px",color:od?"var(--red)":"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:od?700:400}}>{c.ret||"—"}{od&&" !"}</td>
                         <td style={{padding:"10px 16px"}}><Badge status={od?"Overdue":c.status}/></td>
-                        <td style={{padding:"10px 16px"}}>
-                          {c.status==="Active"&&(
-                            <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}>
-                              <Ico n="undo" s={12}/>Return
-                            </Btn>
-                          )}
-                        </td>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}><Ico n="undo" s={12}/>Return</Btn>}</td>
                       </tr>
                     );
                   })}</tbody>
                 </table>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ORDERS */}
-        {tab==="orders"&&(
-          <div style={{animation:"fadeUp .3s ease"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
-              <div>
-                <h2 style={{margin:"0 0 3px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Order Requests</h2>
-                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{orders.length} total · {pendingOrders} pending</p>
-              </div>
-              <Btn onClick={()=>setModal("order")}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
-            </div>
-            {orders.length===0?(
-              <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
-                <Ico n="cart" s={48} col="var(--bg4)"/>
-                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>No order requests yet</div>
-                <div style={{fontSize:13,marginTop:4,color:"var(--dim)"}}>Request supplies or equipment your lab needs</div>
-                <Btn style={{marginTop:16}} onClick={()=>setModal("order")}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
-              </div>
-            ):(
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {orders.map((o,idx)=>{
-                  const urgColors={Urgent:{bg:"var(--red-d)",col:"var(--red)"},High:{bg:"var(--amber-d)",col:"var(--amber)"},Normal:{bg:"var(--blue-d)",col:"var(--blue)"},Low:{bg:"var(--bg3)",col:"var(--dim)"}};
-                  const uc=urgColors[o.urgency]||urgColors.Normal;
-                  const statusColors={Pending:{bg:"var(--amber-d)",col:"var(--amber)"},Approved:{bg:"var(--blue-d)",col:"var(--blue)"},Ordered:{bg:"var(--purple-d)",col:"var(--purple)"},Received:{bg:"var(--green-d)",col:"var(--green)"},Rejected:{bg:"var(--red-d)",col:"var(--red)"}};
-                  const sc=statusColors[o.status]||statusColors.Pending;
-                  const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
-                  const ns=nextStatus[o.status];
-                  return(
-                    <div key={o.id} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`}}>
-                      <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
-                        <div style={{flex:1,minWidth:200}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-                            <span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Syne',sans-serif"}}>{o.item}</span>
-                            <span style={{background:sc.bg,color:sc.col,border:`1px solid ${sc.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
-                            <span style={{background:uc.bg,color:uc.col,border:`1px solid ${uc.col}30`,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace"}}>{o.urgency}</span>
-                          </div>
-                          <div style={{color:"var(--sub)",fontSize:12,marginBottom:4}}>
-                            <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{o.qty} {o.unit}</span>
-                            {o.requestedBy&&<span> · Requested by <strong>{o.requestedBy}</strong></span>}
-                            {o.date&&<span> · Need by {o.date}</span>}
-                          </div>
-                          {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic"}}>{o.reason}</div>}
-                        </div>
-                        <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
-                          {ns&&(
-                            <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
-                              if(ns==="Received"){
-                                // Auto-create delivery when order is received
-                                const delivery={id:Date.now(),item:o.item,qty:o.qty,unit:o.unit,from:"(Order #"+o.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
-                                handleDelivery(delivery);
-                              }
-                              handleUpdateOrderStatus(o.id,ns);
-                            }}>
-                              {ns==="Received"?<><Ico n="check" s={12} col="var(--green)"/>Mark Received</>:<>{ns} →</>}
-                            </Btn>
-                          )}
-                          {o.status==="Pending"&&(
-                            <Btn sm v="danger" onClick={()=>handleUpdateOrderStatus(o.id,"Rejected")}>Reject</Btn>
-                          )}
-                          {(o.status==="Received"||o.status==="Rejected")&&(
-                            <Btn sm v="ghost" onClick={()=>handleDeleteOrder(o.id)}>
-                              <Ico n="trash" s={12}/>
-                            </Btn>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              </>
             )}
           </div>
         )}
 
-        {/* CALENDAR */}
+        {/* ════════ CALENDAR TAB ════════ */}
         {tab==="calendar"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
-            <h2 style={{margin:"0 0 20px",fontFamily:"'Syne',sans-serif",fontSize:18}}>Activity Calendar</h2>
+            <h2 style={{margin:"0 0 20px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Activity Calendar</h2>
             <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,padding:24}}>
               <CalView checkouts={checkouts} deliveries={deliveries}/>
             </div>
           </div>
         )}
       </main>
+      )}
 
       {/* MODALS */}
-      {modal==="delivery"  && <DeliveryModal  onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
-      {modal==="checkout"  && <CheckoutModal  items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""}/>}
-      {modal==="addItem"   && <AddItemModal   onClose={()=>setModal(null)} onAdd={handleAddItem}/>}
-      {modal==="order"     && <OrderModal    onClose={()=>setModal(null)} onAdd={handleAddOrder} userName={user?.name||""}/>}
-      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem}/>}
-      {detail  && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem}/>}
+      {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
+      {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} categories={categories}/>}
+      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories}/>}
+      {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAdd={handleAddOrder} userName={user?.name||""} categories={categories}/>}
+      {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
+      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories}/>}
+      {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
-      {/* TOASTS */}
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
     </div>
   );
 }
 
-// Mount
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(React.createElement(LabInventory));
 </script>

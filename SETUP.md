@@ -3,8 +3,8 @@
 ## Quick Start (Local Mode)
 
 1. Open `index.html` in any browser
-2. Click **Continue Locally** on the login page
-3. The app works immediately with seed data, persisted in localStorage
+2. Sign in with your `@seas.upenn.edu` Google account
+3. Data is fetched from Google Sheets; localStorage is used as fallback
 
 ---
 
@@ -28,11 +28,11 @@
 ### Step 2: Create the Google Sheet
 
 1. Create a new Google Sheet
-2. Create 3 tabs (rename the sheets) with these exact names and column headers:
+2. Create **5 tabs** (rename the sheets) with these exact names and column headers:
 
 **Tab: Items**
-| id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy |
-|----|------|-----|-----|------|-----|--------|-----|------|--------|--------|
+| id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial |
+|----|------|-----|-----|------|-----|--------|-----|------|--------|--------|--------|
 
 **Tab: Deliveries**
 | id | item | qty | unit | from | receivedBy | date | tracking | status |
@@ -43,41 +43,46 @@
 |----|--------|------|------|-----|-----|--------|
 
 **Tab: Orders**
-| id | item | qty | unit | requestedBy | reason | urgency | date | status |
-|----|------|-----|------|-------------|--------|---------|------|--------|
+| id | item | qty | unit | requestedBy | reason | urgency | date | status | price | link | cat |
+|----|------|-----|------|-------------|--------|---------|------|--------|-------|------|-----|
 
-3. Type the headers in row 1 of each tab exactly as shown above (4 tabs total)
+**Tab: Settings**
+| key | value |
+|-----|-------|
+| categories | ["Robot","Sensor","Actuator","Controller","Cable & Connector","Tool","Consumable","Safety","Computer & Electronics","Other"] |
+
+3. Type the headers in row 1 of each tab exactly as shown above (5 tabs total)
 
 ### Step 3: Deploy the Apps Script Backend
 
 1. In your Google Sheet, go to **Extensions → Apps Script**
 2. Delete any existing code in the editor
 3. Paste the entire contents of `google-apps-script.js`
-4. Click **Deploy → New deployment**
+4. **(Optional) Slack notifications**: On line 2 of the script, replace `"YOUR_SLACK_WEBHOOK_URL_HERE"` with your Slack Incoming Webhook URL. If left as-is, Slack notifications are silently skipped.
+5. Click **Deploy → New deployment**
    - Type: **Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
 6. Click **Deploy** and authorize when prompted
 7. Copy the **Web app URL** (looks like `https://script.google.com/macros/s/.../exec`)
 
+> **Important**: After updating the Apps Script code, you must create a **new deployment** (not just save) for changes to take effect. Go to Deploy → Manage deployments → Create new version.
+
 ### Step 4: Configure the App
 
-1. Open `index.html` in your browser
-2. Click **Settings** on the login page
-3. Enter:
-   - **Apps Script Web App URL**: the URL from Step 3
-   - **OAuth Client ID**: the Client ID from Step 1
-4. Click **Save**
-5. The Google Sign-In button will now appear — sign in with your `@seas.upenn.edu` account
+1. Open `index.html` and update the `APP_CONFIG` object at the top of the `<script>` section with:
+   - `apps_script_url`: the Web App URL from Step 3
+   - `oauth_client_id`: the Client ID from Step 1
+2. Open the app in your browser and sign in with your `@seas.upenn.edu` account
 
 ### Step 5: Deploy to GitHub Pages
 
 1. Create a GitHub repository (e.g., `lab-inventory`)
-2. Push `index.html` to the repo:
+2. Push files to the repo:
    ```bash
    git init
-   git add index.html
-   git commit -m "Initial LabTrack deployment"
+   git add index.html google-apps-script.js SETUP.md
+   git commit -m "LabTrack deployment"
    git remote add origin https://github.com/YOUR_USERNAME/lab-inventory.git
    git push -u origin main
    ```
@@ -87,6 +92,19 @@
 4. Your app will be live at `https://YOUR_USERNAME.github.io/lab-inventory/`
 
 > **Important:** Make sure the GitHub Pages URL is listed in your OAuth client's Authorized JavaScript Origins (Step 1).
+
+---
+
+## Features
+
+- **Inventory Management**: Add, edit, delete items with serial numbers, image upload (camera/file/URL), and category management
+- **Procurement**: Unified Orders + Deliveries tab with auto-add to inventory when orders are marked "Received"
+- **Usage Tracking**: Check out/return items, overdue alerts, bulk return
+- **Calendar**: Visual calendar showing deliveries, checkouts, and return dates
+- **Categories**: Customizable categories synced to Google Sheets (Settings tab) — shared across all users
+- **Pagination**: Automatic pagination at 24 items per page with sort options
+- **Slack Notifications**: Server-side notifications for all inventory actions (add, delete, checkout, return, order, delivery)
+- **Image Upload**: Take photos or upload files, auto-compressed to ~50KB thumbnails
 
 ---
 
@@ -100,6 +118,8 @@
 ## Troubleshooting
 
 - **"Access restricted" error**: You must sign in with a `@seas.upenn.edu` Google account
-- **Data not persisting**: Check that your Apps Script URL is correct in Settings, and that the script is deployed as a Web App
-- **Google Sign-In button not showing**: Ensure the OAuth Client ID is set in Settings and the page is served over HTTPS (or localhost)
+- **Data not persisting**: Check that your Apps Script URL is correct, and that the script is deployed as a Web App
+- **Google Sign-In button not showing**: Ensure the OAuth Client ID is set and the page is served over HTTPS (or localhost)
 - **CORS errors**: Apps Script web apps handle CORS automatically; make sure you're using the `/exec` URL, not `/dev`
+- **Delete not working**: Large numeric IDs can lose precision in Google Sheets. The updated Apps Script uses robust ID comparison to handle this.
+- **Images not showing**: Base64 images are stored in Google Sheets cells (max ~50K chars). The app compresses images to fit within this limit.
