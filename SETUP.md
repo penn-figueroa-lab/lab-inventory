@@ -50,8 +50,14 @@
 | key | value |
 |-----|-------|
 | categories | ["Robot","Sensor","Actuator","Controller","Cable & Connector","Tool","Consumable","Safety","Computer & Electronics","Other"] |
+| admins | ["admin1@seas.upenn.edu","admin2@seas.upenn.edu"] |
 
-3. Type the headers in row 1 of each tab exactly as shown above (5 tabs total)
+**Tab: DeleteLog** (auto-created on first deletion)
+| date | type | name | details | deletedBy |
+|------|------|------|---------|-----------|
+
+3. Type the headers in row 1 of each tab exactly as shown above (5 tabs + DeleteLog is auto-created)
+4. **Important**: Add your email to the `admins` list in the Settings tab to enable admin features (delete items/orders, manage categories)
 
 ### Step 3: Deploy the Apps Script Backend
 
@@ -105,6 +111,8 @@
 - **Pagination**: Automatic pagination at 24 items per page with sort options
 - **Slack Notifications**: Server-side notifications for all inventory actions (add, delete, checkout, return, order, delivery)
 - **Image Upload**: Take photos or upload files, auto-compressed to ~50KB thumbnails
+- **Admin Permissions**: Only admins (listed in Settings tab) can delete items/orders and manage categories. Regular users can add/edit freely.
+- **Delete Log**: All deletions are recorded in a DeleteLog sheet with timestamp, item details, and who deleted it
 
 ---
 

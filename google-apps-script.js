@@ -5,14 +5,13 @@
  *   Extensions → Apps Script → paste this code → Deploy → Web App
  *   Execute as: Me | Who has access: Anyone
  *
- * The script verifies Google ID tokens server-side and checks for @seas.upenn.edu domain.
- *
- * Google Sheet must have 5 tabs:
+ * Google Sheet must have 6 tabs:
  *   Items      — id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial
  *   Deliveries — id | item | qty | unit | from | receivedBy | date | tracking | status
  *   Checkouts  — id | itemId | item | user | out | ret | status
  *   Orders     — id | item | qty | unit | requestedBy | reason | urgency | date | status | price | link | cat
  *   Settings   — key | value
+ *   DeleteLog  — date | type | name | details | deletedBy
  */
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -30,7 +29,6 @@ function sendSlack(text) {
       muteHttpExceptions: true,
     });
   } catch (e) {
-    // Silently skip — don't break the main action
     console.log("Slack error (non-fatal): " + e.message);
   }
 }
@@ -44,10 +42,35 @@ function verifyToken(token) {
     );
     const payload = JSON.parse(resp.getContentText());
     if (payload.hd !== ALLOWED_DOMAIN) return null;
-    return payload; // { email, name, hd, ... }
+    return payload;
   } catch (e) {
     return null;
   }
+}
+
+// ─── ADMIN CHECK ─────────────────────────────────────────────────────────────
+function isAdmin(email) {
+  var settingsSheet = getSheet("Settings");
+  if (!settingsSheet) return false;
+  var data = settingsSheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === "admins") {
+      try {
+        var admins = JSON.parse(data[i][1]);
+        return Array.isArray(admins) && admins.indexOf(email) >= 0;
+      } catch(e) { return false; }
+    }
+  }
+  return false;
+}
+
+// ─── DELETE LOG ──────────────────────────────────────────────────────────────
+function logDeletion(type, name, details, deletedBy) {
+  var sheet = getOrCreateSheet("DeleteLog", ["date", "type", "name", "details", "deletedBy"]);
+  var now = new Date();
+  var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
+  sheet.appendRow([dateStr, type, name, details, deletedBy]);
+  sendSlack("🗑️ " + type + " deleted: " + name + " (by " + deletedBy + ")");
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -76,18 +99,13 @@ function sheetToJson(sheet) {
     const obj = {};
     headers.forEach((h, i) => {
       let val = row[i];
-      // Parse usedBy as JSON array
       if (h === "usedBy" && typeof val === "string") {
         try { val = JSON.parse(val); } catch(e) { val = []; }
       }
-      // Parse numeric fields
       if (["qty", "minQty", "itemId"].includes(h) && val !== "") {
         val = Number(val);
       }
-      // Keep id as string to avoid precision loss
-      if (h === "id") {
-        val = String(val);
-      }
+      if (h === "id") { val = String(val); }
       obj[h] = val;
     });
     return obj;
@@ -102,7 +120,6 @@ function appendRow(sheetName, obj, headers) {
     return val !== undefined ? val : "";
   });
   sheet.appendRow(row);
-  // Force ID column to text format to avoid precision loss with large numbers
   const lastRow = sheet.getLastRow();
   const idCol = headers.indexOf("id");
   if (idCol >= 0) {
@@ -116,21 +133,16 @@ function jsonResponse(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Helper to compare IDs robustly (handles large number precision issues)
 function idsMatch(sheetVal, targetId) {
   var a = String(sheetVal).trim();
   var b = String(targetId).trim();
   if (a === b) return true;
-  // Try numeric comparison for large numbers that may lose precision
-  try {
-    if (Number(a) === Number(b) && !isNaN(Number(a))) return true;
-  } catch(e) {}
-  // Try trimming trailing zeros or decimal points from sheet formatting
+  try { if (Number(a) === Number(b) && !isNaN(Number(a))) return true; } catch(e) {}
   if (a.replace(/\.0+$/, "") === b.replace(/\.0+$/, "")) return true;
   return false;
 }
 
-// ─── GET (fetch all data) ────────────────────────────────────────────────────
+// ─── GET ─────────────────────────────────────────────────────────────────────
 function doGet(e) {
   try {
     const token = (e && e.parameter && e.parameter.token) || "";
@@ -139,7 +151,6 @@ function doGet(e) {
       return jsonResponse({ error: "Unauthorized", detail: "Token verification failed" });
     }
 
-    // Read settings
     var settings = {};
     var settingsSheet = getSheet("Settings");
     if (settingsSheet) {
@@ -155,13 +166,14 @@ function doGet(e) {
       checkouts: sheetToJson(getSheet("Checkouts")),
       orders: sheetToJson(getSheet("Orders")),
       settings: settings,
+      userRole: isAdmin(user.email) ? "admin" : "member",
     });
   } catch (err) {
     return jsonResponse({ error: "Server error", detail: err.message });
   }
 }
 
-// ─── POST (mutations) ────────────────────────────────────────────────────────
+// ─── POST ────────────────────────────────────────────────────────────────────
 function doPost(e) {
   try {
   const body = JSON.parse(e.postData.contents);
@@ -171,6 +183,9 @@ function doPost(e) {
   }
 
   const action = body.action;
+  const userEmail = user.email || "";
+  const userName = user.name || userEmail;
+  const admin = isAdmin(userEmail);
 
   // ── Add Item ──────────────────────────────────────────────────────────────
   if (action === "addItem") {
@@ -178,7 +193,7 @@ function doPost(e) {
     appendRow("Items", it, [
       "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial"
     ]);
-    sendSlack("📦 New item added: " + it.name);
+    sendSlack("📦 New item added: " + it.name + " (by " + userName + ")");
     return jsonResponse({ ok: true });
   }
 
@@ -205,21 +220,26 @@ function doPost(e) {
     return jsonResponse({ error: "Item not found", detail: "No item with id " + it.id });
   }
 
-  // ── Delete Item ───────────────────────────────────────────────────────────
+  // ── Delete Item (admin only) ──────────────────────────────────────────────
   if (action === "deleteItem") {
+    if (!admin) {
+      return jsonResponse({ error: "Forbidden", detail: "Only admins can delete items" });
+    }
     const itemId = body.itemId;
     const sheet = getSheet("Items");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
-    const nameCol = headers.indexOf("name");
-    var deletedName = "";
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], itemId)) {
-        deletedName = data[i][nameCol] || "Unknown";
+        // Build details string from the row
+        var rowObj = {};
+        headers.forEach(function(h, ci) { rowObj[h] = data[i][ci]; });
+        var itemName = rowObj.name || "Unknown";
+        var details = "cat:" + (rowObj.cat||"") + " qty:" + (rowObj.qty||"") + " loc:" + (rowObj.loc||"") + " serial:" + (rowObj.serial||"");
+        logDeletion("Item", itemName, details, userName);
         sheet.deleteRow(i + 1);
-        sendSlack("🗑️ Item deleted: " + deletedName);
         return jsonResponse({ ok: true });
       }
     }
@@ -232,7 +252,7 @@ function doPost(e) {
     appendRow("Deliveries", d, [
       "id", "item", "qty", "unit", "from", "receivedBy", "date", "tracking", "status"
     ]);
-    sendSlack("🚚 Delivery received: " + d.qty + " " + d.unit + " of " + d.item);
+    sendSlack("🚚 Delivery received: " + d.qty + " " + d.unit + " of " + d.item + " (by " + userName + ")");
     return jsonResponse({ ok: true });
   }
 
@@ -242,7 +262,6 @@ function doPost(e) {
     appendRow("Checkouts", c, [
       "id", "itemId", "item", "user", "out", "ret", "status"
     ]);
-    // Update item status in Items sheet
     updateItemStatus(c.item, "In Use", c.user, "add");
     sendSlack("🔑 " + c.user + " checked out " + c.item);
     return jsonResponse({ ok: true });
@@ -263,9 +282,9 @@ function doPost(e) {
       if (idsMatch(data[i][idCol], coId)) {
         sheet.getRange(i + 1, statusCol + 1).setValue("Returned");
         const itemName = data[i][itemCol];
-        const userName = data[i][userCol];
-        updateItemStatus(itemName, "Available", userName, "remove");
-        sendSlack("✅ " + itemName + " returned");
+        const returnedUser = data[i][userCol];
+        updateItemStatus(itemName, "Available", returnedUser, "remove");
+        sendSlack("✅ " + itemName + " returned by " + returnedUser);
         break;
       }
     }
@@ -278,7 +297,7 @@ function doPost(e) {
     appendRow("Orders", o, [
       "id", "item", "qty", "unit", "requestedBy", "reason", "urgency", "date", "status", "price", "link", "cat"
     ]);
-    sendSlack("🛒 New order request: " + o.qty + " " + o.unit + " of " + o.item + " (" + o.urgency + ")");
+    sendSlack("🛒 New order request: " + o.qty + " " + o.unit + " of " + o.item + " (" + o.urgency + ") by " + userName);
     return jsonResponse({ ok: true });
   }
 
@@ -296,26 +315,30 @@ function doPost(e) {
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], orderId)) {
         sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
-        if (newStatus === "Received") {
-          var itemName = data[i][itemCol] || "";
-          sendSlack("✅ Order received: " + itemName);
-        }
+        var orderItem = data[i][itemCol] || "";
+        sendSlack("📋 Order \"" + orderItem + "\" → " + newStatus + " (by " + userName + ")");
         return jsonResponse({ ok: true });
       }
     }
     return jsonResponse({ error: "Order not found", detail: "No order with id " + orderId });
   }
 
-  // ── Delete Order ──────────────────────────────────────────────────────────
+  // ── Delete Order (admin only) ─────────────────────────────────────────────
   if (action === "deleteOrder") {
+    if (!admin) {
+      return jsonResponse({ error: "Forbidden", detail: "Only admins can delete orders" });
+    }
     const orderId = body.orderId;
     const sheet = getSheet("Orders");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
+    const itemCol = headers.indexOf("item");
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], orderId)) {
+        var orderName = data[i][itemCol] || "Unknown";
+        logDeletion("Order", orderName, "id:" + orderId, userName);
         sheet.deleteRow(i + 1);
         return jsonResponse({ ok: true });
       }
@@ -323,8 +346,11 @@ function doPost(e) {
     return jsonResponse({ error: "Order not found", detail: "No order with id " + orderId });
   }
 
-  // ── Save Settings ─────────────────────────────────────────────────────────
+  // ── Save Settings (admin only) ────────────────────────────────────────────
   if (action === "saveSettings") {
+    if (!admin) {
+      return jsonResponse({ error: "Forbidden", detail: "Only admins can change settings" });
+    }
     const key = body.key;
     const value = body.value;
     var sheet = getOrCreateSheet("Settings", ["key", "value"]);

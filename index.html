@@ -489,7 +489,7 @@ const AddItemModal = ({onClose,onAdd,categories}) => {
 };
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
-const EditItemModal = ({item,onClose,onSave,onDelete,categories}) => {
+const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
   const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status,serial:item.serial||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const [confirmDel,setConfirmDel]=useState(false);
@@ -509,7 +509,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
         <div>
-          {!confirmDel ? (
+          {isAdmin && (!confirmDel ? (
             <Btn v="danger" onClick={()=>setConfirmDel(true)}><Ico n="trash" s={14} col="var(--red)"/>Delete Item</Btn>
           ) : (
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -517,7 +517,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories}) => {
               <Btn v="danger" sm onClick={()=>{onDelete(item.id);onClose();}}>Yes, delete</Btn>
               <Btn v="ghost" sm onClick={()=>setConfirmDel(false)}>Cancel</Btn>
             </div>
-          )}
+          ))}
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
@@ -802,6 +802,7 @@ function LabInventory(){
   const [toasts,setToasts] = useState([]);
   const [confirm,setConfirm] = useState(null);
   const [dataLoaded,setDataLoaded] = useState(false);
+  const [userRole, setUserRole] = useState("member");
   const [page, setPage] = useState(0);
   const [sortBy, setSortBy] = useState("name-az");
   const tid = useRef(0);
@@ -864,6 +865,7 @@ function LabInventory(){
             }
           } catch {}
         }
+        if (data.userRole) setUserRole(data.userRole);
       }
       setDataLoaded(true);
       setFetchingData(false);
@@ -974,9 +976,19 @@ function LabInventory(){
   };
 
   const handleDeleteItem = async (itemId) => {
+    if (userRole !== "admin") {
+      addToast("error", "Only admins can delete items. Contact a lab admin.");
+      return;
+    }
+    const deletedItem = items.find(i=>i.id===itemId);
     setItems(p=>p.filter(i=>i.id!==itemId));
     addToast("success","Item deleted");
-    await postAction("deleteItem", {itemId});
+    const result = await postAction("deleteItem", {itemId});
+    if (result && result.error === "Forbidden") {
+      // Re-add item if server rejected
+      if (deletedItem) setItems(p=>[deletedItem,...p]);
+      addToast("error", "Server rejected: " + (result.detail||"Not authorized"));
+    }
   };
 
   const handleEditItem = (item) => { setEditItem(item); };
@@ -994,6 +1006,10 @@ function LabInventory(){
   };
 
   const handleDeleteOrder = async (orderId) => {
+    if (userRole !== "admin") {
+      addToast("error", "Only admins can delete orders.");
+      return;
+    }
     setOrders(p=>p.filter(o=>o.id!==orderId));
     addToast("success","Order request removed");
     await postAction("deleteOrder", {orderId});
@@ -1084,6 +1100,7 @@ function LabInventory(){
               <img src={user.picture} alt="" style={{width:28,height:28,borderRadius:"50%",border:"2px solid var(--border-hi)"}} onError={e=>{e.target.style.display='none';}}/>
             ) : (<MemberAvatar name={user.name} sz={28}/>)}
             <span style={{color:"var(--sub)",fontSize:12,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span>
+            {userRole==="admin"&&<span style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62340",borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.05em"}}>ADMIN</span>}
             <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}><Ico n="logout" s={14}/></button>
           </div>
         </div>
@@ -1499,7 +1516,7 @@ function LabInventory(){
       {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories}/>}
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAdd={handleAddOrder} userName={user?.name||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
-      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories}/>}
+      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
