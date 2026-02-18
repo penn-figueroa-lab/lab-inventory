@@ -19,28 +19,79 @@ const ALLOWED_DOMAIN = "seas.upenn.edu";
 const SLACK_WEBHOOK_URL = "YOUR_SLACK_WEBHOOK_URL_HERE";
 
 // ─── SLACK HELPER ────────────────────────────────────────────────────────────
-function sendSlack(emoji, title, details, fields) {
+// slack_mode in Settings tab: "all" | "important" | "digest" | "off"
+// "important" = only deletions, urgent/high orders, overdue returns
+// "digest" = queues to SlackQueue tab, sent by daily trigger (sendDailyDigest)
+function getSlackMode() {
+  try {
+    var s = getSheet("Settings");
+    if (!s) return "all";
+    var d = s.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][0]) === "slack_mode") return String(d[i][1]).trim() || "all";
+    }
+  } catch(e) {}
+  return "all";
+}
+
+function sendSlack(emoji, title, details, fields, priority) {
   if (!SLACK_WEBHOOK_URL || SLACK_WEBHOOK_URL === "YOUR_SLACK_WEBHOOK_URL_HERE" || SLACK_WEBHOOK_URL === "") return;
+  var mode = getSlackMode();
+  if (mode === "off") return;
+  // priority: "high" for deletions, urgent orders, overdue; "normal" for everything else
+  var isHigh = (priority === "high");
+  if (mode === "important" && !isHigh) return;
+  if (mode === "digest") {
+    // Queue it instead of sending immediately (high-priority still sends now)
+    var queue = getOrCreateSheet("SlackQueue", ["time", "emoji", "title", "details", "fields"]);
+    queue.appendRow([new Date().toISOString(), emoji, title, details || "", JSON.stringify(fields || [])]);
+    if (!isHigh) return; // high-priority also sends immediately
+  }
   try {
     var blocks = [
       { type: "section", text: { type: "mrkdwn", text: emoji + " *" + title + "*" } }
     ];
-    if (details) {
-      blocks.push({ type: "section", text: { type: "mrkdwn", text: details } });
-    }
+    if (details) blocks.push({ type: "section", text: { type: "mrkdwn", text: details } });
     if (fields && fields.length > 0) {
       blocks.push({ type: "section", fields: fields.map(function(f) { return { type: "mrkdwn", text: f }; }) });
     }
     blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "LabTrack · " + new Date().toLocaleString() }] });
     UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
-      method: "post",
-      contentType: "application/json",
+      method: "post", contentType: "application/json",
       payload: JSON.stringify({ text: emoji + " " + title, blocks: blocks }),
       muteHttpExceptions: true,
     });
   } catch (e) {
     console.log("Slack error (non-fatal): " + e.message);
   }
+}
+
+// ─── DAILY DIGEST (set up as daily trigger: Triggers → Add → sendDailyDigest → Day timer) ─
+function sendDailyDigest() {
+  if (!SLACK_WEBHOOK_URL || SLACK_WEBHOOK_URL === "YOUR_SLACK_WEBHOOK_URL_HERE") return;
+  var queue = getSheet("SlackQueue");
+  if (!queue) return;
+  var data = queue.getDataRange().getValues();
+  if (data.length < 2) return;
+  var entries = data.slice(1);
+  if (entries.length === 0) return;
+  // Build summary
+  var summary = entries.map(function(r) { return r[1] + " " + r[2]; }).join("\n");
+  var blocks = [
+    { type: "section", text: { type: "mrkdwn", text: "📊 *LabTrack Daily Summary* — " + entries.length + " activities" } },
+    { type: "divider" },
+    { type: "section", text: { type: "mrkdwn", text: summary.slice(0, 2900) } },
+    { type: "context", elements: [{ type: "mrkdwn", text: "Summary for " + new Date().toLocaleDateString() }] }
+  ];
+  try {
+    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
+      method: "post", contentType: "application/json",
+      payload: JSON.stringify({ text: "📊 LabTrack Daily Summary: " + entries.length + " activities", blocks: blocks }),
+      muteHttpExceptions: true,
+    });
+  } catch(e) {}
+  // Clear queue (keep header)
+  if (data.length > 1) queue.deleteRows(2, data.length - 1);
 }
 
 // ─── TOKEN VERIFICATION ──────────────────────────────────────────────────────
@@ -80,7 +131,7 @@ function logDeletion(type, name, details, deletedBy) {
   var now = new Date();
   var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
   sheet.appendRow([dateStr, type, name, details, deletedBy]);
-  sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details]);
+  sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details], "high");
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -218,12 +269,13 @@ function doPost(e) {
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], it.id)) {
+        // Batch update: build full row and write once instead of cell-by-cell
+        var row = data[i].slice();
         fields.forEach(f => {
           const col = headers.indexOf(f);
-          if (col >= 0 && it[f] !== undefined) {
-            sheet.getRange(i + 1, col + 1).setValue(it[f]);
-          }
+          if (col >= 0 && it[f] !== undefined) row[col] = it[f];
         });
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
         return jsonResponse({ ok: true });
       }
     }
@@ -307,7 +359,7 @@ function doPost(e) {
     appendRow("Orders", o, [
       "id", "item", "qty", "unit", "requestedBy", "reason", "urgency", "date", "status", "price", "link", "cat"
     ]);
-    sendSlack("🛒", "New Order Request: " + o.item, (o.link ? "<" + o.link + "|Purchase Link>" : null), ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName]);
+    sendSlack("🛒", "New Order Request: " + o.item, (o.link ? "<" + o.link + "|Purchase Link>" : null), ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName], (o.urgency==="Urgent"||o.urgency==="High")?"high":"normal");
     return jsonResponse({ ok: true });
   }
 
@@ -396,17 +448,16 @@ function updateItemStatus(itemName, newStatus, userName, mode) {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][nameCol] === itemName) {
-      sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
+      var row = data[i].slice();
+      row[statusCol] = newStatus;
       if (usedByCol >= 0) {
         let usedBy = [];
         try { usedBy = JSON.parse(data[i][usedByCol]) || []; } catch(e) {}
-        if (mode === "add" && !usedBy.includes(userName)) {
-          usedBy.push(userName);
-        } else if (mode === "remove") {
-          usedBy = usedBy.filter(u => u !== userName);
-        }
-        sheet.getRange(i + 1, usedByCol + 1).setValue(JSON.stringify(usedBy));
+        if (mode === "add" && !usedBy.includes(userName)) usedBy.push(userName);
+        else if (mode === "remove") usedBy = usedBy.filter(u => u !== userName);
+        row[usedByCol] = JSON.stringify(usedBy);
       }
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
       break;
     }
   }
