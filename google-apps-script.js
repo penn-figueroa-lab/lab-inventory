@@ -19,13 +19,23 @@ const ALLOWED_DOMAIN = "seas.upenn.edu";
 const SLACK_WEBHOOK_URL = "YOUR_SLACK_WEBHOOK_URL_HERE";
 
 // ─── SLACK HELPER ────────────────────────────────────────────────────────────
-function sendSlack(text) {
+function sendSlack(emoji, title, details, fields) {
   if (!SLACK_WEBHOOK_URL || SLACK_WEBHOOK_URL === "YOUR_SLACK_WEBHOOK_URL_HERE" || SLACK_WEBHOOK_URL === "") return;
   try {
+    var blocks = [
+      { type: "section", text: { type: "mrkdwn", text: emoji + " *" + title + "*" } }
+    ];
+    if (details) {
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: details } });
+    }
+    if (fields && fields.length > 0) {
+      blocks.push({ type: "section", fields: fields.map(function(f) { return { type: "mrkdwn", text: f }; }) });
+    }
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "LabTrack · " + new Date().toLocaleString() }] });
     UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
       method: "post",
       contentType: "application/json",
-      payload: JSON.stringify({ text: text }),
+      payload: JSON.stringify({ text: emoji + " " + title, blocks: blocks }),
       muteHttpExceptions: true,
     });
   } catch (e) {
@@ -70,7 +80,7 @@ function logDeletion(type, name, details, deletedBy) {
   var now = new Date();
   var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
   sheet.appendRow([dateStr, type, name, details, deletedBy]);
-  sendSlack("🗑️ " + type + " deleted: " + name + " (by " + deletedBy + ")");
+  sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details]);
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -193,7 +203,7 @@ function doPost(e) {
     appendRow("Items", it, [
       "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial"
     ]);
-    sendSlack("📦 New item added: " + it.name + " (by " + userName + ")");
+    sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
     return jsonResponse({ ok: true });
   }
 
@@ -252,7 +262,7 @@ function doPost(e) {
     appendRow("Deliveries", d, [
       "id", "item", "qty", "unit", "from", "receivedBy", "date", "tracking", "status"
     ]);
-    sendSlack("🚚 Delivery received: " + d.qty + " " + d.unit + " of " + d.item + " (by " + userName + ")");
+    sendSlack("🚚", "Delivery Received: " + d.item, null, ["*Qty*\n" + d.qty + " " + d.unit, "*Supplier*\n" + (d.from||"—"), "*Received by*\n" + (d.receivedBy||userName), "*Tracking*\n" + (d.tracking||"—")]);
     return jsonResponse({ ok: true });
   }
 
@@ -263,7 +273,7 @@ function doPost(e) {
       "id", "itemId", "item", "user", "out", "ret", "status"
     ]);
     updateItemStatus(c.item, "In Use", c.user, "add");
-    sendSlack("🔑 " + c.user + " checked out " + c.item);
+    sendSlack("🔑", "Item Checked Out: " + c.item, null, ["*Person*\n" + c.user, "*Date*\n" + (c.out||"—"), "*Return by*\n" + (c.ret||"—")]);
     return jsonResponse({ ok: true });
   }
 
@@ -284,7 +294,7 @@ function doPost(e) {
         const itemName = data[i][itemCol];
         const returnedUser = data[i][userCol];
         updateItemStatus(itemName, "Available", returnedUser, "remove");
-        sendSlack("✅ " + itemName + " returned by " + returnedUser);
+        sendSlack("✅", "Item Returned: " + itemName, null, ["*Returned by*\n" + returnedUser]);
         break;
       }
     }
@@ -297,7 +307,7 @@ function doPost(e) {
     appendRow("Orders", o, [
       "id", "item", "qty", "unit", "requestedBy", "reason", "urgency", "date", "status", "price", "link", "cat"
     ]);
-    sendSlack("🛒 New order request: " + o.qty + " " + o.unit + " of " + o.item + " (" + o.urgency + ") by " + userName);
+    sendSlack("🛒", "New Order Request: " + o.item, (o.link ? "<" + o.link + "|Purchase Link>" : null), ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName]);
     return jsonResponse({ ok: true });
   }
 
@@ -316,7 +326,7 @@ function doPost(e) {
       if (idsMatch(data[i][idCol], orderId)) {
         sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
         var orderItem = data[i][itemCol] || "";
-        sendSlack("📋 Order \"" + orderItem + "\" → " + newStatus + " (by " + userName + ")");
+        sendSlack("📋", "Order Status Updated: " + orderItem, null, ["*New Status*\n" + newStatus, "*Updated by*\n" + userName]);
         return jsonResponse({ ok: true });
       }
     }

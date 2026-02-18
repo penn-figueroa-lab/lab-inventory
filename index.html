@@ -878,6 +878,24 @@ function LabInventory(){
     localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts, orders}));
   },[items, deliveries, checkouts, orders, dataLoaded]);
 
+  // Auto-refresh: poll every 30s for changes from other users
+  useEffect(()=>{
+    if (!user || !dataLoaded || !APP_CONFIG.apps_script_url || user.token === "local") return;
+    const interval = setInterval(async ()=>{
+      try {
+        const data = await API.fetchAll(user.token);
+        if (data && !data.error && data.items) {
+          setItems(data.items);
+          setDeliv(data.deliveries || []);
+          setCheckouts(data.checkouts || []);
+          setOrders(data.orders || []);
+          if (data.userRole) setUserRole(data.userRole);
+        }
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  },[user, dataLoaded]);
+
   // Reset page when filters change
   useEffect(()=>{ setPage(0); },[search, catF]);
 
