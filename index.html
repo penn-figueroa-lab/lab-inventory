@@ -47,6 +47,22 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.5);}
 .item-sel-row:hover{background:var(--cyan-d)!important;}
 .overdue-pulse{animation:pulse 2s infinite;}
 .sticky-th{position:sticky;top:0;background:var(--bg2);z-index:1;}
+/* ── Light mode ── */
+html.light{
+  --bg0:#f5f7fa;--bg1:#ffffff;--bg2:#edf2f7;--bg3:#e2e8f0;--bg4:#cbd5e0;
+  --border:#c5d0db;--border-hi:#a0b4c8;
+  --text:#1a202c;--sub:#4a5568;--dim:#94a3b8;
+  --cyan-d:#e6fffd;--amber-d:#fffbeb;--red-d:#fff5f5;
+  --green-d:#f0fff4;--blue-d:#ebf8ff;--purple-d:#faf5ff;--orange-d:#fff5f0;
+}
+html.light body{background:var(--bg0);color:var(--text);}
+html.light ::-webkit-scrollbar-track{background:var(--bg1);}
+html.light ::-webkit-scrollbar-thumb{background:var(--border-hi);}
+html.light select option{background:var(--bg2);}
+html.light input[type=date]::-webkit-calendar-picker-indicator{filter:none;}
+html.light .card-item:hover{box-shadow:0 8px 24px rgba(0,0,0,.12),0 0 0 1px rgba(0,212,200,.25);}
+html.light .sticky-th{background:var(--bg2);}
+html.light .row-hover:hover{background:var(--bg3)!important;}
 </style>
 </head>
 <body>
@@ -139,6 +155,9 @@ const P = {
   sort:'<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
   chevL:'<polyline points="15 18 9 12 15 6"/>',
   chevR:'<polyline points="9 18 15 12 9 6"/>',
+  moon:'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
+  sun:'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  bell2:'<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/><line x1="12" y1="2" x2="12" y2="8"/>',
 };
 const Ico = ({n,s=16,col="currentColor"}) => (
   React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:col,
@@ -528,26 +547,107 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
   );
 };
 
-// ─── ORDER REQUEST MODAL ─────────────────────────────────────────────────────
-const OrderModal = ({onClose,onAdd,userName="",categories}) => {
-  const [f,setF]=useState({item:"",qty:"",unit:"units",reason:"",urgency:"Normal",date:getToday(),price:"",link:"",cat:categories[0]||"Other"});
-  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+// ─── ORDER REQUEST MODAL (multi-item) ────────────────────────────────────────
+const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
+  const UNITS = ["units","pcs","boxes","bottles","sets","rolls","kg","L","m"];
+  const [store,setStore]       = useState("");
+  const [link,setLink]         = useState("");
+  const [urgency,setUrgency]   = useState("Normal");
+  const [dateNeeded,setDate]   = useState(getToday());
+  const [reason,setReason]     = useState("");
+  const [items,setItems]       = useState([{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:""}]);
+
+  const addItem = () => setItems(p=>[...p,{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:""}]);
+  const removeItem = i => setItems(p=>p.filter((_,j)=>j!==i));
+  const upd = (i,field,val) => setItems(p=>p.map((it,j)=>j===i?{...it,[field]:val}:it));
+
+  const validItems = items.filter(it=>it.name.trim()&&it.qty);
+  const canSubmit  = store.trim() && link.trim() && validItems.length>0;
+
+  const submit = () => {
+    if(!canSubmit) return;
+    const ts = Date.now();
+    onAddMany(validItems.map((it,i)=>({
+      id: ts+i, item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
+      store:store.trim(), link:link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
+      requestedBy:userName, status:"Pending"
+    })));
+    onClose();
+  };
+
+  const urgColors={Urgent:"var(--red)",High:"var(--amber)",Normal:"var(--blue)",Low:"var(--sub)"};
+
   return(
-    <Modal onClose={onClose} title="Request Order">
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item / Supply Name"><Inp placeholder="e.g. Dynamixel XM430-W350" value={f.item} onChange={s("item")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
-        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Urgency"><Sel value={f.urgency} onChange={s("urgency")}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></Sel></Fld>
-        <Fld label="Date Needed By"><Inp type="date" value={f.date} onChange={s("date")}/></Fld>
-        <Fld label="Est. Price"><Inp placeholder="e.g. $49.99 or ~$200" value={f.price} onChange={s("price")}/></Fld>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Purchase Link (optional)"><Inp placeholder="https://..." value={f.link} onChange={s("link")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp placeholder="Why do we need this? For which experiment?" value={f.reason} onChange={s("reason")}/></Fld></div>
+    <Modal onClose={onClose} title="🛒 Request Order" mw={680}>
+      {/* ── Store + Link (required) ── */}
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",marginBottom:14}}>
+        <div style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:10}}>Store Info</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fld label="Store / Supplier *">
+            <Inp placeholder="Amazon, McMaster, DigiKey…" value={store} onChange={e=>setStore(e.target.value)}
+              style={{borderColor:store.trim()?"var(--border)":"var(--amber)"}}/>
+          </Fld>
+          <Fld label="Purchase Link *" hint="Link to the cart or product page">
+            <Inp placeholder="https://…" value={link} onChange={e=>setLink(e.target.value)}
+              style={{borderColor:link.trim()?"var(--border)":"var(--amber)"}}/>
+          </Fld>
+          <Fld label="Urgency">
+            <Sel value={urgency} onChange={e=>setUrgency(e.target.value)}>
+              {["Low","Normal","High","Urgent"].map(u=><option key={u}>{u}</option>)}
+            </Sel>
+          </Fld>
+          <Fld label="Date Needed By"><Inp type="date" value={dateNeeded} onChange={e=>setDate(e.target.value)}/></Fld>
+          <div style={{gridColumn:"1/-1"}}>
+            <Fld label="Reason / Notes"><Inp placeholder="Why do we need this? Which project/experiment?" value={reason} onChange={e=>setReason(e.target.value)}/></Fld>
+          </div>
+        </div>
       </div>
-      <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,requestedBy:userName,status:"Pending"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="cart" s={14} col="#000"/>Submit Request</Btn>
+
+      {/* ── Item List ── */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>
+            Items * <span style={{color:"var(--dim)",fontWeight:400,textTransform:"none",letterSpacing:0}}>({validItems.length} valid)</span>
+          </span>
+          <Btn sm v="ghost" onClick={addItem}><Ico n="plus" s={12}/>Add Item</Btn>
+        </div>
+        {items.map((it,i)=>(
+          <div key={i} style={{background:"var(--bg2)",border:`1px solid ${it.name.trim()&&it.qty?"var(--border)":"var(--border)"}`,borderRadius:10,padding:"10px 12px",marginBottom:8,animation:"fadeIn .2s ease"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+              <div style={{flex:3,minWidth:0}}>
+                <Inp placeholder={`Item name / part # ${i===0?"(required)":"(optional)"}`} value={it.name} onChange={e=>upd(i,"name",e.target.value)}/>
+              </div>
+              <div style={{width:72}}>
+                <Inp type="number" placeholder="Qty" value={it.qty} onChange={e=>upd(i,"qty",e.target.value)} style={{textAlign:"center"}}/>
+              </div>
+              <div style={{width:88}}>
+                <Sel value={it.unit} onChange={e=>upd(i,"unit",e.target.value)} style={{padding:"9px 6px",fontSize:12}}>
+                  {UNITS.map(u=><option key={u}>{u}</option>)}
+                </Sel>
+              </div>
+              {items.length>1&&(
+                <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}><Ico n="x" s={14}/></button>
+              )}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <Sel value={it.cat} onChange={e=>upd(i,"cat",e.target.value)} style={{padding:"7px 8px",fontSize:12}}>
+                {categories.map(c=><option key={c}>{c}</option>)}
+              </Sel>
+              <Inp placeholder="Est. price (e.g. $49.99)" value={it.price} onChange={e=>upd(i,"price",e.target.value)}/>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{background:urgColors[urgency]+"22",color:urgColors[urgency],border:`1px solid ${urgColors[urgency]}44`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}}>{urgency}</span>
+          <span style={{color:"var(--dim)",fontSize:12}}>{validItems.length} item{validItems.length!==1?"s":""} · {store||"no store yet"}</span>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={submit} disabled={!canSubmit}><Ico n="cart" s={14} col="#000"/>Submit {validItems.length>1?`${validItems.length} Requests`:"Request"}</Btn>
+        </div>
       </div>
     </Modal>
   );
@@ -805,18 +905,31 @@ function LabInventory(){
   const [userRole, setUserRole] = useState("member");
   const [page, setPage] = useState(0);
   const [sortBy, setSortBy] = useState("name-az");
+  const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
 
-  // Restore session
+  // Restore session + theme
   useEffect(()=>{
     try {
       const saved = localStorage.getItem("labtrack_user");
       if (saved) setUser(JSON.parse(saved));
       const savedCats = localStorage.getItem("labtrack_categories");
       if (savedCats) setCategories(JSON.parse(savedCats));
+      const dark = localStorage.getItem("labtrack_dark");
+      if (dark !== null) {
+        const isDark = dark !== "false";
+        setDarkMode(isDark);
+        document.documentElement.classList.toggle("light", !isDark);
+      }
     } catch {}
     setLoading(false);
   },[]);
+
+  // Apply dark/light mode
+  useEffect(()=>{
+    document.documentElement.classList.toggle("light", !darkMode);
+    localStorage.setItem("labtrack_dark", String(darkMode));
+  },[darkMode]);
 
   // Fetch data from backend when signed in
   useEffect(()=>{
@@ -1017,6 +1130,21 @@ function LabInventory(){
     await postAction("addOrder", {order});
   };
 
+  const handleAddOrderMany = async (orders) => {
+    setOrders(p=>[...orders,...p]);
+    addToast("success",`${orders.length} order request${orders.length>1?"s":""} submitted`);
+    for (const order of orders) {
+      await postAction("addOrder", {order});
+    }
+  };
+
+  const handleSendDigest = async () => {
+    const tid2 = addToast("info", "Sending digest to Slack…");
+    const result = await postAction("sendDigest", {});
+    if (result && result.ok) addToast("success", "Slack digest sent! Check your channel.");
+    else if (!result || result.error) addToast("error", "Digest failed — check webhook config.");
+  };
+
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     setOrders(p=>p.map(o=>o.id===orderId?{...o,status:newStatus}:o));
     addToast("success",`Order marked as ${newStatus}`);
@@ -1072,7 +1200,7 @@ function LabInventory(){
 
   const TABS=[
     {id:"inventory",l:"Inventory",n:"grid",count:items.length},
-    {id:"procurement",l:"Procurement",n:"cart",count:activeOrders.length},
+    {id:"orders",l:"Order Requests",n:"cart",count:activeOrders.length},
     {id:"usage",l:"Usage",n:"users",count:activeOut.length},
     {id:"calendar",l:"Calendar",n:"calendar",count:0},
   ];
@@ -1112,6 +1240,19 @@ function LabInventory(){
             <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--amber-d)",border:"1px solid #f5a62344",borderRadius:20,padding:"5px 12px",fontSize:12,color:"var(--amber)"}}>
               <Ico n="alert" s={13} col="var(--amber)"/>{lowStock.length} low stock
             </div>
+          )}
+          {/* Theme toggle */}
+          <button onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Switch to Light Mode":"Switch to Dark Mode"}
+            style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:"var(--sub)",transition:"all .15s"}}
+            className="ibtn">
+            <Ico n={darkMode?"sun":"moon"} s={14}/>
+          </button>
+          {/* Admin: Send Digest Now */}
+          {userRole==="admin"&&APP_CONFIG.apps_script_url&&(
+            <button onClick={handleSendDigest} title="Send Slack digest now (admin)"
+              style={{background:"var(--purple-d)",border:"1px solid #b47dff33",borderRadius:8,padding:"6px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,color:"var(--purple)",fontSize:12,fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>
+              <Ico n="bell2" s={13} col="var(--purple)"/>Digest
+            </button>
           )}
           <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"5px 12px 5px 6px"}}>
             {user.picture ? (
@@ -1300,13 +1441,13 @@ function LabInventory(){
           </div>
         )}
 
-        {/* ════════ PROCUREMENT TAB (Orders + Deliveries) ════════ */}
-        {tab==="procurement"&&(
+        {/* ════════ ORDER REQUESTS TAB ════════ */}
+        {tab==="orders"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
               <div>
-                <h2 style={{margin:"0 0 3px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Procurement</h2>
-                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOrders.length} active orders · {deliveries.length} deliveries logged</p>
+                <h2 style={{margin:"0 0 3px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Order Requests</h2>
+                <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOrders.length} active · {pendingOrders} pending approval · {deliveries.length} deliveries</p>
               </div>
               <div style={{display:"flex",gap:8}}>
                 <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
@@ -1346,11 +1487,12 @@ function LabInventory(){
                             <div style={{color:"var(--sub)",fontSize:12,marginBottom:4}}>
                               <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{o.qty} {o.unit}</span>
                               {o.price&&<span> · {o.price}</span>}
+                              {o.store&&<span> · <strong style={{color:"var(--text)"}}>{o.store}</strong></span>}
                               {o.requestedBy&&<span> · by <strong>{o.requestedBy}</strong></span>}
                               {o.date&&<span> · need by {o.date}</span>}
                             </div>
-                            {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic"}}>{o.reason}</div>}
-                            {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4,marginTop:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
+                            {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic",marginBottom:4}}>{o.reason}</div>}
+                            {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
                           </div>
                           <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
                             {ns&&(
@@ -1532,7 +1674,7 @@ function LabInventory(){
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} categories={categories}/>}
       {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories}/>}
-      {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAdd={handleAddOrder} userName={user?.name||""} categories={categories}/>}
+      {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
