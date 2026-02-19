@@ -701,8 +701,13 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
                 {categories.map(c=><option key={c}>{c}</option>)}
               </Sel>
               <Inp placeholder="Unit price (e.g. 12.99)" value={it.price} onChange={e=>upd(i,"price",e.target.value)} title="Enter the price per unit, not total"/>
-              <Inp placeholder="Purchase link (required) https://…" value={it.link} onChange={e=>upd(i,"link",e.target.value)}
-                style={{borderColor:it.link.trim()?"var(--border)":"var(--amber)"}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:3,flex:1}}>
+                <Inp placeholder="Purchase link (required) https://…" value={it.link} onChange={e=>upd(i,"link",e.target.value)}
+                  style={{borderColor:it.link.trim()?"var(--border)":"var(--amber)"}}/>
+                {it.link.includes("amazon.com")&&it.link.length>60&&(
+                  <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4}}>💡 Amazon tip: use <strong>Share → Copy link</strong> on the product page for a short URL like <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>a.co/d/…</span> instead of the full address bar URL.</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
