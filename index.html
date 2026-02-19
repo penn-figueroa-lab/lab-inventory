@@ -305,38 +305,26 @@ const ImageUpload = ({value, onChange}) => {
 const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const [cats, setCats] = useState([...categories]);
   const [prefixes, setPrefixes] = useState(()=>{try{return JSON.parse(localStorage.getItem("labtrack_catprefixes")||"{}");}catch{return {};}});
-  const [domains, setDomains] = useState(()=>{try{return JSON.parse(localStorage.getItem("labtrack_catdomains")||"{}");}catch{return {};}});
   const [newCat, setNewCat] = useState("");
   const autoP = c => {const words=c.split(/[\s&\/\-_]+/).filter(Boolean);return(words.length===1?words[0].slice(0,4):words.map(w=>w[0]).join("")).toUpperCase()||"GEN";};
   const addCat = () => {const t=newCat.trim();if(t&&!cats.includes(t)){setCats([...cats,t]);setNewCat("");}};
   const removeCat = (c) => setCats(cats.filter(x=>x!==c));
-  const saveAll = () => {
-    localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));
-    localStorage.setItem("labtrack_catdomains",JSON.stringify(domains));
-    onSave(cats);onClose();
-  };
-  const previewId = c => {
-    const d = domains[c]||"";
-    const p = prefixes[c]||autoP(c);
-    return d ? `${d}-${p}-001` : `${p}-001`;
-  };
+  const saveAll = () => {localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onSave(cats);onClose();};
   return (
-    <Modal onClose={onClose} title="Manage Categories" mw={520}>
-      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Set a domain code (1–2 letters) and category prefix per category — used for label IDs like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>E-COMP-001</span>. Common domains: <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>E</span>=Electronics, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>S</span>=Sensors, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>R</span>=Robots, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>T</span>=Tools</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto auto",alignItems:"center",gap:6,marginBottom:6,padding:"0 4px"}}>
+    <Modal onClose={onClose} title="Manage Categories" mw={460}>
+      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Optionally set a custom prefix per category — auto-generated from initials if left blank. Label IDs look like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>RM-00001</span>, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>SV-00042</span>.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",alignItems:"center",gap:6,marginBottom:6,padding:"0 4px"}}>
         <span style={{color:"var(--dim)",fontSize:11,fontWeight:600}}>CATEGORY</span>
-        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:44}}>DOMAIN</span>
-        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:68}}>PREFIX</span>
-        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:90}}>PREVIEW</span>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:72}}>PREFIX</span>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:80}}>PREVIEW</span>
         <span style={{width:20}}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflow:"auto"}}>
         {cats.map(c=>(
-          <div key={c} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto auto",alignItems:"center",gap:6,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
+          <div key={c} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",alignItems:"center",gap:6,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
             <span style={{fontSize:14,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
-            <input value={domains[c]||""} placeholder="E" title="Domain code (e.g. E, S, R, T)" onChange={e=>setDomains(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,2)}))} style={{width:44,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--purple)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
-            <input value={prefixes[c]||""} placeholder={autoP(c)} title="Category prefix (2–5 letters)" onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:68,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
-            <span style={{color:"var(--sub)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",width:90,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{previewId(c)}</span>
+            <input value={prefixes[c]||""} placeholder={autoP(c)} title="Custom prefix (letters only). Leave blank to auto-generate." onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:72,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
+            <span style={{color:"var(--sub)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",width:80,textAlign:"center"}}>{(prefixes[c]||autoP(c))+"-00001"}</span>
             <button onClick={()=>removeCat(c)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={14}/></button>
           </div>
         ))}
@@ -976,21 +964,15 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
 function catPrefix(cat) {
   // Use stored custom prefix if available
   try { const m=JSON.parse(localStorage.getItem("labtrack_catprefixes")||"{}"); if(m[cat]) return m[cat]; } catch {}
-  // Auto: initials of each word, e.g. "Cable & Connector"→"CC", "Robotics"→"ROB"
+  // Auto: initials of each word, e.g. "Robots & Motors"→"RM", "Other"→"OTHE"
   const words=(cat||"GEN").split(/[\s&\/\-_]+/).filter(Boolean);
   return (words.length===1 ? words[0].slice(0,4) : words.map(w=>w[0]).join("")).toUpperCase()||"GEN";
 }
-function catDomain(cat) {
-  try { const m=JSON.parse(localStorage.getItem("labtrack_catdomains")||"{}"); return m[cat]||""; } catch {}
-  return "";
-}
 function genDisplayId(cat, allItems) {
   const prefix = catPrefix(cat);
-  const domain = catDomain(cat);
-  // Global counter: max number across ALL items with displayIds + 1
+  // Global sequential counter (5 digits, up to 99,999 items)
   const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d+)$/);return m?parseInt(m[1]):0;}));
-  const num = String(maxNum+1).padStart(3,"0");
-  return domain ? `${domain}-${prefix}-${num}` : `${prefix}-${num}`;
+  return `${prefix}-${String(maxNum+1).padStart(5,"0")}`;
 }
 
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
