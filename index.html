@@ -305,20 +305,38 @@ const ImageUpload = ({value, onChange}) => {
 const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const [cats, setCats] = useState([...categories]);
   const [prefixes, setPrefixes] = useState(()=>{try{return JSON.parse(localStorage.getItem("labtrack_catprefixes")||"{}");}catch{return {};}});
+  const [domains, setDomains] = useState(()=>{try{return JSON.parse(localStorage.getItem("labtrack_catdomains")||"{}");}catch{return {};}});
   const [newCat, setNewCat] = useState("");
   const autoP = c => {const words=c.split(/[\s&\/\-_]+/).filter(Boolean);return(words.length===1?words[0].slice(0,4):words.map(w=>w[0]).join("")).toUpperCase()||"GEN";};
   const addCat = () => {const t=newCat.trim();if(t&&!cats.includes(t)){setCats([...cats,t]);setNewCat("");}};
   const removeCat = (c) => setCats(cats.filter(x=>x!==c));
-  const saveAll = () => {localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onSave(cats);onClose();};
+  const saveAll = () => {
+    localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));
+    localStorage.setItem("labtrack_catdomains",JSON.stringify(domains));
+    onSave(cats);onClose();
+  };
+  const previewId = c => {
+    const d = domains[c]||"";
+    const p = prefixes[c]||autoP(c);
+    return d ? `${d}-${p}-001` : `${p}-001`;
+  };
   return (
-    <Modal onClose={onClose} title="Manage Categories" mw={460}>
-      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Set a short prefix (2–5 letters) per category — used for label IDs like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>ROB-001</span></div>
+    <Modal onClose={onClose} title="Manage Categories" mw={520}>
+      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Set a domain code (1–2 letters) and category prefix per category — used for label IDs like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>E-COMP-001</span>. Common domains: <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>E</span>=Electronics, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>S</span>=Sensors, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>R</span>=Robots, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>T</span>=Tools</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto auto",alignItems:"center",gap:6,marginBottom:6,padding:"0 4px"}}>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600}}>CATEGORY</span>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:44}}>DOMAIN</span>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:68}}>PREFIX</span>
+        <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:90}}>PREVIEW</span>
+        <span style={{width:20}}/>
+      </div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflow:"auto"}}>
         {cats.map(c=>(
-          <div key={c} style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
-            <span style={{fontSize:14,color:"var(--text)",flex:1}}>{c}</span>
-            <input value={prefixes[c]||""} placeholder={autoP(c)} title="Label prefix" onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:64,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
-            <span style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>-001</span>
+          <div key={c} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto auto",alignItems:"center",gap:6,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
+            <span style={{fontSize:14,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
+            <input value={domains[c]||""} placeholder="E" title="Domain code (e.g. E, S, R, T)" onChange={e=>setDomains(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,2)}))} style={{width:44,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--purple)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
+            <input value={prefixes[c]||""} placeholder={autoP(c)} title="Category prefix (2–5 letters)" onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:68,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
+            <span style={{color:"var(--sub)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",width:90,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{previewId(c)}</span>
             <button onClick={()=>removeCat(c)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={14}/></button>
           </div>
         ))}
@@ -446,7 +464,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) 
           <Fld label={`Quantity ${selected?`(max ${maxQty})`:""}`}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <button onClick={()=>setF(p=>({...p,qty:Math.max(1,p.qty-1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>-</button>
-              <div style={{flex:1,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)"}}>{f.qty}</div>
+              <input type="number" min={1} max={maxQty} value={f.qty} onChange={e=>setF(p=>({...p,qty:Math.min(maxQty,Math.max(1,parseInt(e.target.value)||1))}))} style={{flex:1,background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)",outline:"none",MozAppearance:"textfield",WebkitAppearance:"none"}}/>
               <button onClick={()=>setF(p=>({...p,qty:Math.min(maxQty,p.qty+1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>+</button>
             </div>
           </Fld>
@@ -962,11 +980,17 @@ function catPrefix(cat) {
   const words=(cat||"GEN").split(/[\s&\/\-_]+/).filter(Boolean);
   return (words.length===1 ? words[0].slice(0,4) : words.map(w=>w[0]).join("")).toUpperCase()||"GEN";
 }
+function catDomain(cat) {
+  try { const m=JSON.parse(localStorage.getItem("labtrack_catdomains")||"{}"); return m[cat]||""; } catch {}
+  return "";
+}
 function genDisplayId(cat, allItems) {
   const prefix = catPrefix(cat);
+  const domain = catDomain(cat);
   // Global counter: max number across ALL items with displayIds + 1
   const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d+)$/);return m?parseInt(m[1]):0;}));
-  return `${prefix}-${String(maxNum+1).padStart(3,"0")}`;
+  const num = String(maxNum+1).padStart(3,"0");
+  return domain ? `${domain}-${prefix}-${num}` : `${prefix}-${num}`;
 }
 
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
@@ -1030,6 +1054,7 @@ function LabInventory(){
   const tid = useRef(0);
   const refreshTimer = useRef(null);
   const deletedItemIds = useRef(new Set());
+  const lastModified = useRef({items:0, orders:0, checkouts:0, deliveries:0});
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
@@ -1125,10 +1150,12 @@ function LabInventory(){
       try {
         const data = await API.fetchAll(user.token);
         if (data && !data.error && data.items) {
-          setItems(data.items.filter(i=>!deletedItemIds.current.has(String(i.id))));
-          setDeliv(data.deliveries || []);
-          setCheckouts(data.checkouts || []);
-          setOrders(data.orders || []);
+          const now = Date.now(); const GRACE = 60000;
+          const lm = lastModified.current;
+          if (now - lm.items     > GRACE) setItems(data.items.filter(i=>!deletedItemIds.current.has(String(i.id))));
+          if (now - lm.deliveries > GRACE) setDeliv(data.deliveries || []);
+          if (now - lm.checkouts  > GRACE) setCheckouts(data.checkouts || []);
+          if (now - lm.orders     > GRACE) setOrders(data.orders || []);
           if (data.userRole) setUserRole(data.userRole);
         }
       } catch {}
@@ -1190,6 +1217,12 @@ function LabInventory(){
 
   // handlers
   const postAction = async (action, payload) => {
+    // Mark data type as locally modified → suppress poll override for 60s
+    const now = Date.now();
+    if (/item/i.test(action)) lastModified.current.items = now;
+    if (/checkout|return/i.test(action)) { lastModified.current.checkouts = now; lastModified.current.items = now; }
+    if (/order/i.test(action)) lastModified.current.orders = now;
+    if (/delivery/i.test(action)) lastModified.current.deliveries = now;
     if (APP_CONFIG.apps_script_url && user?.token !== "local") {
       const result = await API.post(user.token, action, payload);
       if (result && result.error === "Unauthorized") {
