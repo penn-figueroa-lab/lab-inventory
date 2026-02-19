@@ -928,22 +928,6 @@ function generateEmailText(orders) {
   return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}`;
 }
 
-function copyText(text, onOk, onFail) {
-  const run = () => {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    try { document.execCommand("copy"); onOk(); } catch(e) { onFail(e); }
-    document.body.removeChild(ta);
-  };
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(onOk).catch(run);
-    } else { run(); }
-  } catch(e) { run(); }
-}
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 function LabInventory(){
@@ -1535,8 +1519,17 @@ function LabInventory(){
                 )}
                 {selectedOrders.size>0&&(
                   <Btn v="amber" onClick={()=>{
-                    const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
-                    copyText(text,()=>addToast("success",`Copied (${selectedOrders.size} item${selectedOrders.size>1?"s":""}) — Ctrl+V to paste.`),()=>addToast("error","Copy failed — try again."));
+                    try {
+                      const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
+                      const ta=document.createElement("textarea");
+                      ta.value=text; ta.setAttribute("readonly","");
+                      ta.style.cssText="position:absolute;left:-9999px;top:0";
+                      document.body.appendChild(ta); ta.select();
+                      const ok=document.execCommand("copy");
+                      document.body.removeChild(ta);
+                      if(ok) addToast("success","Copied! Ctrl+V to paste.");
+                      else window.prompt("Copy this text (Ctrl+A then Ctrl+C):",text);
+                    } catch(e){ addToast("error","Error: "+e.message); }
                   }}>
                     <Ico n="copy" s={14} col="var(--amber)"/>Copy Email ({selectedOrders.size})
                   </Btn>
