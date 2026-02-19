@@ -681,7 +681,7 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
               <Sel value={it.cat} onChange={e=>upd(i,"cat",e.target.value)} style={{padding:"7px 8px",fontSize:12}}>
                 {categories.map(c=><option key={c}>{c}</option>)}
               </Sel>
-              <Inp placeholder="Est. price" value={it.price} onChange={e=>upd(i,"price",e.target.value)}/>
+              <Inp placeholder="Unit price (e.g. 12.99)" value={it.price} onChange={e=>upd(i,"price",e.target.value)} title="Enter the price per unit, not total"/>
               <Inp placeholder="Purchase link (required) https://…" value={it.link} onChange={e=>upd(i,"link",e.target.value)}
                 style={{borderColor:it.link.trim()?"var(--border)":"var(--amber)"}}/>
             </div>
@@ -944,7 +944,7 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
         <Fld label="Qty"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{UNITS.map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Category"><Sel value={f.cat||categories[0]} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Est. Price"><Inp value={f.price||""} onChange={s("price")}/></Fld>
+        <Fld label="Unit Price" hint="Per unit, not total"><Inp placeholder="e.g. 12.99" value={f.price||""} onChange={s("price")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Purchase Link *"><Inp value={f.link||""} onChange={s("link")}/></Fld></div>
         <Fld label="Date Needed By"><Inp type="date" value={f.date||""} onChange={s("date")}/></Fld>
         {isAdmin&&<Fld label="Status (Admin only)"><Sel value={f.status} onChange={s("status")}>{STATUSES.map(st=><option key={st}>{st}</option>)}</Sel></Fld>}
@@ -1041,6 +1041,11 @@ function LabInventory(){
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("All");
+  const [ordersPage, setOrdersPage] = useState(0);
+  const lastSelOrder = useRef(null);
+  const lastSelCheckout = useRef(null);
 
   // Restore session + theme
   useEffect(()=>{
@@ -1371,6 +1376,16 @@ function LabInventory(){
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
   const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
   const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
+  const ORDERS_PER_PAGE = 15;
+  const filteredActiveOrders = activeOrders.filter(o=>{
+    const q = orderSearch.toLowerCase();
+    const matchText = !q || o.item?.toLowerCase().includes(q) || o.store?.toLowerCase().includes(q) || o.requestedBy?.toLowerCase().includes(q) || o.reason?.toLowerCase().includes(q);
+    const matchStatus = orderStatusFilter==="All" || o.status===orderStatusFilter;
+    const matchDate = true; // date filter handled via orderStatusFilter "Today" below
+    return matchText && matchStatus;
+  });
+  const ordersPageCount = Math.ceil(filteredActiveOrders.length/ORDERS_PER_PAGE);
+  const pagedActiveOrders = filteredActiveOrders.slice(ordersPage*ORDERS_PER_PAGE, (ordersPage+1)*ORDERS_PER_PAGE);
 
   const TABS=[
     {id:"inventory",l:"Inventory",n:"grid",count:items.length},
@@ -1670,9 +1685,24 @@ function LabInventory(){
               </div>
             </div>
 
+            {/* Filter bar */}
+            <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{position:"relative",flex:1,minWidth:180}}>
+                <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={13} col="var(--dim)"/></span>
+                <input placeholder="Search item, store, person…" value={orderSearch} onChange={e=>{setOrderSearch(e.target.value);setOrdersPage(0);}} style={{width:"100%",background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"7px 10px 7px 28px",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
+              </div>
+              {["All","Pending","Approved","Ordered"].map(s=>(
+                <button key={s} onClick={()=>{setOrderStatusFilter(s);setOrdersPage(0);}} style={{background:orderStatusFilter===s?"var(--cyan-d)":"var(--bg2)",color:orderStatusFilter===s?"var(--cyan)":"var(--sub)",border:`1px solid ${orderStatusFilter===s?"var(--cyan-m)":"var(--border)"}`,borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>{s}</button>
+              ))}
+              {(orderSearch||orderStatusFilter!=="All")&&<button onClick={()=>{setOrderSearch("");setOrderStatusFilter("All");setOrdersPage(0);}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:12}}>Clear</button>}
+            </div>
+
             {/* Active Orders */}
             <div style={{marginBottom:28}}>
-              <h3 style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,marginBottom:12,color:"var(--text)"}}>Active Orders</h3>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,color:"var(--text)",margin:0}}>Active Orders <span style={{color:"var(--dim)",fontSize:12,fontWeight:400}}>({filteredActiveOrders.length}{filteredActiveOrders.length!==activeOrders.length?` of ${activeOrders.length}`:""})</span></h3>
+                <span style={{color:"var(--dim)",fontSize:11}}>Shift+click to select range</span>
+              </div>
               {activeOrders.length===0?(
                 <div style={{textAlign:"center",padding:"40px 20px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>
                   <Ico n="cart" s={40} col="var(--bg4)"/>
@@ -1680,9 +1710,11 @@ function LabInventory(){
                   <div style={{fontSize:12,marginTop:4}}>Request supplies or equipment your lab needs</div>
                   <Btn style={{marginTop:12}} onClick={()=>setModal("order")}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
                 </div>
+              ):filteredActiveOrders.length===0?(
+                <div style={{textAlign:"center",padding:"24px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>No orders match the filter</div>
               ):(
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {activeOrders.map((o,idx)=>{
+                  {pagedActiveOrders.map((o,idx)=>{
                     const urgColors={Urgent:{bg:"var(--red-d)",col:"var(--red)"},High:{bg:"var(--amber-d)",col:"var(--amber)"},Normal:{bg:"var(--blue-d)",col:"var(--blue)"},Low:{bg:"var(--bg3)",col:"var(--dim)"}};
                     const uc=urgColors[o.urgency]||urgColors.Normal;
                     const statusColors={Pending:{bg:"var(--amber-d)",col:"var(--amber)"},Approved:{bg:"var(--blue-d)",col:"var(--blue)"},Ordered:{bg:"var(--purple-d)",col:"var(--purple)"}};
@@ -1690,11 +1722,25 @@ function LabInventory(){
                     const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
                     const ns=nextStatus[o.status];
                     const isSel=selectedOrders.has(String(o.id));
+                    const handleOrderClick=(e)=>{
+                      const id=String(o.id);
+                      if(e.shiftKey&&lastSelOrder.current!=null){
+                        const ids=pagedActiveOrders.map(x=>String(x.id));
+                        const a=ids.indexOf(lastSelOrder.current),b=ids.indexOf(id);
+                        const [lo,hi]=[Math.min(a,b),Math.max(a,b)];
+                        const sel=new Set(selectedOrders);
+                        ids.slice(lo,hi+1).forEach(x=>sel.add(x));
+                        setSelectedOrders(sel);
+                      } else {
+                        const sel=new Set(selectedOrders);sel.has(id)?sel.delete(id):sel.add(id);setSelectedOrders(sel);
+                        lastSelOrder.current=id;
+                      }
+                    };
                     return(
-                      <div key={o.id} onClick={()=>{const sel=new Set(selectedOrders);sel.has(String(o.id))?sel.delete(String(o.id)):sel.add(String(o.id));setSelectedOrders(sel);}} style={{background:isSel?"var(--cyan-d)":"var(--bg1)",border:`1px solid ${isSel?"var(--cyan)":"var(--border)"}`,borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`,cursor:"pointer",transition:"background .15s,border-color .15s"}}>
+                      <div key={o.id} onClick={handleOrderClick} style={{background:isSel?"var(--cyan-d)":"var(--bg1)",border:`1px solid ${isSel?"var(--cyan)":"var(--border)"}`,borderRadius:12,padding:"14px 18px",cursor:"pointer",transition:"background .15s,border-color .15s",userSelect:"none"}}>
                         <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
                           <div style={{paddingTop:2,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                            <input type="checkbox" checked={isSel} onChange={()=>{const sel=new Set(selectedOrders);sel.has(String(o.id))?sel.delete(String(o.id)):sel.add(String(o.id));setSelectedOrders(sel);}} style={{width:16,height:16,cursor:"pointer",accentColor:"var(--cyan)"}}/>
+                            <input type="checkbox" checked={isSel} onChange={handleOrderClick} style={{width:16,height:16,cursor:"pointer",accentColor:"var(--cyan)"}}/>
                           </div>
                           <div style={{flex:1,minWidth:200}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
@@ -1729,6 +1775,15 @@ function LabInventory(){
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {ordersPageCount>1&&(
+                <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginTop:16}}>
+                  <button onClick={()=>setOrdersPage(p=>Math.max(0,p-1))} disabled={ordersPage===0} style={{background:"var(--bg2)",border:"1px solid var(--border)",color:ordersPage===0?"var(--dim)":"var(--text)",borderRadius:8,padding:"5px 12px",cursor:ordersPage===0?"default":"pointer",fontSize:13}}>‹</button>
+                  {Array.from({length:ordersPageCount},(_,i)=>(
+                    <button key={i} onClick={()=>setOrdersPage(i)} style={{background:ordersPage===i?"var(--cyan-d)":"var(--bg2)",color:ordersPage===i?"var(--cyan)":"var(--sub)",border:`1px solid ${ordersPage===i?"var(--cyan-m)":"var(--border)"}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:12,fontWeight:600,minWidth:32}}>{i+1}</button>
+                  ))}
+                  <button onClick={()=>setOrdersPage(p=>Math.min(ordersPageCount-1,p+1))} disabled={ordersPage===ordersPageCount-1} style={{background:"var(--bg2)",border:"1px solid var(--border)",color:ordersPage===ordersPageCount-1?"var(--dim)":"var(--text)",borderRadius:8,padding:"5px 12px",cursor:ordersPage===ordersPageCount-1?"default":"pointer",fontSize:13}}>›</button>
                 </div>
               )}
             </div>
@@ -1846,7 +1901,7 @@ function LabInventory(){
             <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
               <div style={{padding:"13px 18px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <span style={{fontWeight:700,fontFamily:"'Roboto',sans-serif",fontSize:15}}>All Records</span>
-                {selected.size>0&&<span style={{color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.size} selected</span>}
+                <span style={{color:"var(--dim)",fontSize:11}}>{selected.size>0?<span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>{selected.size} selected · </span>:""}Shift+click to select range</span>
               </div>
               <div style={{overflow:"auto",maxHeight:"65vh"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -1858,15 +1913,28 @@ function LabInventory(){
                   </tr></thead>
                   <tbody>{checkouts.map((c,i)=>{
                     const od=isOverdue(c);const isSel=selected.has(c.id);
+                    const activeCheckouts=checkouts.filter(x=>x.status==="Active");
+                    const handleCoClick=(e)=>{
+                      if(c.status!=="Active")return;
+                      if(e.shiftKey&&lastSelCheckout.current!=null){
+                        const ids=activeCheckouts.map(x=>x.id);
+                        const a=ids.indexOf(lastSelCheckout.current),b=ids.indexOf(c.id);
+                        const [lo,hi]=[Math.min(a,b),Math.max(a,b)];
+                        const ns=new Set(selected);ids.slice(lo,hi+1).forEach(x=>ns.add(x));setSelected(ns);
+                      } else {
+                        const ns=new Set(selected);ns.has(c.id)?ns.delete(c.id):ns.add(c.id);setSelected(ns);
+                        lastSelCheckout.current=c.id;
+                      }
+                    };
                     return(
-                      <tr key={c.id} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined}}>
-                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<input type="checkbox" checked={isSel} onChange={e=>{const ns=new Set(selected);e.target.checked?ns.add(c.id):ns.delete(c.id);setSelected(ns);}} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>}</td>
+                      <tr key={c.id} onClick={handleCoClick} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined,cursor:c.status==="Active"?"pointer":"default",userSelect:"none"}}>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<input type="checkbox" checked={isSel} onChange={handleCoClick} onClick={e=>e.stopPropagation()} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>}</td>
                         <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{c.item}</td>
                         <td style={{padding:"10px 16px"}}><div style={{display:"flex",alignItems:"center",gap:8}}><MemberAvatar name={c.user} sz={26}/><span style={{color:"var(--sub)"}}>{c.user}</span></div></td>
                         <td style={{padding:"10px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{c.out}</td>
                         <td style={{padding:"10px 16px",color:od?"var(--red)":"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:od?700:400}}>{c.ret||"—"}{od&&" !"}</td>
                         <td style={{padding:"10px 16px"}}><Badge status={od?"Overdue":c.status}/></td>
-                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}><Ico n="undo" s={12}/>Return</Btn>}</td>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<Btn v="ghost" sm onClick={e=>{e.stopPropagation();setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)});}}><Ico n="undo" s={12}/>Return</Btn>}</td>
                       </tr>
                     );
                   })}</tbody>
