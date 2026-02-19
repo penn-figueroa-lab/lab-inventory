@@ -1047,8 +1047,7 @@ function LabInventory(){
     try {
       const saved = localStorage.getItem("labtrack_user");
       if (saved) setUser(JSON.parse(saved));
-      const savedCats = localStorage.getItem("labtrack_categories");
-      if (savedCats) setCategories(JSON.parse(savedCats));
+      localStorage.removeItem("labtrack_categories"); // no longer cached; server is source of truth
       const dark = localStorage.getItem("labtrack_dark");
       if (dark !== null) {
         const isDark = dark !== "false";
@@ -1108,7 +1107,6 @@ function LabInventory(){
             const serverCats = JSON.parse(data.settings.categories);
             if (Array.isArray(serverCats) && serverCats.length > 0) {
               setCategories(serverCats);
-              localStorage.setItem("labtrack_categories", JSON.stringify(serverCats));
             }
           } catch {}
         }
@@ -1142,7 +1140,7 @@ function LabInventory(){
           if (data.settings && data.settings.categories) {
             try {
               const sc = JSON.parse(data.settings.categories);
-              if (Array.isArray(sc) && sc.length > 0) { setCategories(sc); localStorage.setItem("labtrack_categories", JSON.stringify(sc)); }
+              if (Array.isArray(sc) && sc.length > 0) { setCategories(sc); }
             } catch {}
           }
         }
@@ -1178,7 +1176,6 @@ function LabInventory(){
 
   const handleSaveCategories = async (newCats) => {
     setCategories(newCats);
-    localStorage.setItem("labtrack_categories", JSON.stringify(newCats));
     if (APP_CONFIG.apps_script_url && user?.token !== "local") {
       await API.post(user.token, "saveSettings", { key: "categories", value: JSON.stringify(newCats) });
     }
