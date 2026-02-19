@@ -957,7 +957,6 @@ function LabInventory(){
   const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
   const [selectedOrders, setSelectedOrders] = useState(new Set());
-  const [showEmailModal, setShowEmailModal] = useState(false);
   const [editOrder, setEditOrder] = useState(null);
 
   // Restore session + theme
@@ -1518,8 +1517,11 @@ function LabInventory(){
                   </Btn>
                 )}
                 {selectedOrders.size>0&&(
-                  <Btn v="amber" onClick={()=>setShowEmailModal(true)}>
-                    <Ico n="mail" s={14} col="var(--amber)"/>Generate Email ({selectedOrders.size})
+                  <Btn v="amber" onClick={()=>{
+                    const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
+                    navigator.clipboard.writeText(text).then(()=>addToast("success",`Email text copied! (${selectedOrders.size} item${selectedOrders.size>1?"s":""}) — Ctrl+V to paste.`)).catch(()=>addToast("error","Copy failed — try again."));
+                  }}>
+                    <Ico n="copy" s={14} col="var(--amber)"/>Copy Email ({selectedOrders.size})
                   </Btn>
                 )}
                 <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
@@ -1757,41 +1759,6 @@ function LabInventory(){
       {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={userRole==="admin"} categories={categories}/>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
-
-      {showEmailModal&&(()=>{
-        const selected2 = activeOrders.filter(o=>selectedOrders.has(o.id));
-        const text = generateEmailText(selected2);
-        return(
-          <div onClick={()=>setShowEmailModal(false)} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:760,maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
-                <div>
-                  <h2 style={{margin:"0 0 4px",color:"var(--text)",fontSize:17,fontFamily:"'Roboto',sans-serif",fontWeight:700}}>Email Purchase Request</h2>
-                  <p style={{margin:0,color:"var(--sub)",fontSize:12}}>{selected2.length} item{selected2.length!==1?"s":""} selected · Copy and paste into your purchasing email</p>
-                </div>
-                <button onClick={()=>setShowEmailModal(false)} style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",marginLeft:12}}><Ico n="x" s={14}/></button>
-              </div>
-              <div style={{padding:24,overflow:"auto",flex:1}}>
-                <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"4px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
-                  <Ico n="bell" s={13} col="var(--amber)"/>
-                  <span style={{color:"var(--sub)",fontSize:12}}>Column order: <strong style={{color:"var(--text)"}}>Store · Item · Purchase Link · Qty · Price/Item</strong></span>
-                </div>
-                <textarea readOnly value={text}
-                  style={{width:"100%",minHeight:240,background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"14px 16px",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",resize:"vertical",outline:"none",lineHeight:1.8,display:"block"}}
-                  onClick={e=>e.target.select()}
-                />
-                <p style={{color:"var(--dim)",fontSize:11,marginTop:8}}>Click the text area to select all, or use the button below to copy.</p>
-                <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
-                  <Btn v="ghost" onClick={()=>setShowEmailModal(false)}>Close</Btn>
-                  <Btn v="amber" onClick={()=>{navigator.clipboard.writeText(text).then(()=>addToast("success","Copied to clipboard!")).catch(()=>addToast("error","Copy failed — select and copy manually."));}}>
-                    <Ico n="copy" s={14} col="var(--amber)"/>Copy to Clipboard
-                  </Btn>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
     </div>
