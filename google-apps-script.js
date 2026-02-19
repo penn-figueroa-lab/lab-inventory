@@ -5,13 +5,14 @@
  *   Extensions → Apps Script → paste this code → Deploy → Web App
  *   Execute as: Me | Who has access: Anyone
  *
- * Google Sheet must have 6 tabs:
- *   Items      — id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial
+ * Google Sheet must have these tabs (column order matters for write operations):
+ *   Items      — id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial | displayId | shared | consumable
  *   Deliveries — id | item | qty | unit | from | receivedBy | date | tracking | status
  *   Checkouts  — id | itemId | item | user | out | ret | status
- *   Orders     — id | item | qty | unit | requestedBy | reason | urgency | date | status | price | link | cat | store
+ *   Orders     — id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status
  *   Settings   — key | value
  *   DeleteLog  — date | type | name | details | deletedBy
+ *   SlackQueue — time | emoji | title | details | fields  (auto-created; used by digest mode)
  *
  * TRIGGERS to set up (Extensions → Apps Script → Triggers):
  *   sendDailyDigest   → Time-driven → Day timer → 5pm–6pm (set script timezone to America/New_York)
