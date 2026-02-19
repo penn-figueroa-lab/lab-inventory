@@ -928,6 +928,23 @@ function generateEmailText(orders) {
   return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}`;
 }
 
+function copyText(text, onOk, onFail) {
+  const run = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand("copy"); onOk(); } catch(e) { onFail(e); }
+    document.body.removeChild(ta);
+  };
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onOk).catch(run);
+    } else { run(); }
+  } catch(e) { run(); }
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 function LabInventory(){
   const [user, setUser] = useState(null);
@@ -1519,7 +1536,7 @@ function LabInventory(){
                 {selectedOrders.size>0&&(
                   <Btn v="amber" onClick={()=>{
                     const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
-                    navigator.clipboard.writeText(text).then(()=>addToast("success",`Email text copied! (${selectedOrders.size} item${selectedOrders.size>1?"s":""}) — Ctrl+V to paste.`)).catch(()=>addToast("error","Copy failed — try again."));
+                    copyText(text,()=>addToast("success",`Copied (${selectedOrders.size} item${selectedOrders.size>1?"s":""}) — Ctrl+V to paste.`),()=>addToast("error","Copy failed — try again."));
                   }}>
                     <Ico n="copy" s={14} col="var(--amber)"/>Copy Email ({selectedOrders.size})
                   </Btn>
