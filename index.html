@@ -960,6 +960,7 @@ function LabInventory(){
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Restore session + theme
   useEffect(()=>{
@@ -1072,7 +1073,7 @@ function LabInventory(){
     return id;
   },[]);
 
-  const handleSignIn = (u) => { setUser(u); localStorage.setItem("labtrack_user", JSON.stringify(u)); };
+  const handleSignIn = (u) => { setUser(u); setSessionExpired(false); setDataLoaded(false); localStorage.setItem("labtrack_user", JSON.stringify(u)); };
   const handleSignOut = () => { setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
 
   const handleSaveCategories = async (newCats) => {
@@ -1107,8 +1108,7 @@ function LabInventory(){
     if (APP_CONFIG.apps_script_url && user?.token !== "local") {
       const result = await API.post(user.token, action, payload);
       if (result && result.error === "Unauthorized") {
-        addToast("error", "Session expired — signing you out. Please sign in again.");
-        handleSignOut();
+        setSessionExpired(true);
       }
       if (result && result.error && result.error !== "Unauthorized") {
         addToast("error", `Error: ${result.error} — ${result.detail || ""}`);
@@ -1335,6 +1335,17 @@ function LabInventory(){
         ))}
       </nav>
 
+      {/* Session expired banner */}
+      {sessionExpired&&(
+        <div style={{background:"#7c2d12",borderBottom:"1px solid #dc262660",padding:"10px 24px",display:"flex",alignItems:"center",gap:10,justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Ico n="alert" s={16} col="#fca5a5"/>
+            <span style={{color:"#fca5a5",fontSize:13,fontWeight:600}}>Session expired — your data is saved. Please sign in again to sync changes.</span>
+          </div>
+          <button onClick={()=>{try{google.accounts.id.prompt();}catch(e){handleSignOut();}}} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Sign In Again</button>
+        </div>
+      )}
+
       {/* Loading overlay */}
       {fetchingData && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",flexDirection:"column",gap:16}}>
@@ -1519,7 +1530,7 @@ function LabInventory(){
                   </Btn>
                 )}
                 {selectedOrders.size>0&&(
-                  <Btn v="amber" onClick={()=>setEmailText(generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id))))}>
+                  <Btn v="amber" onClick={()=>{setEmailText(generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id))));setModal("emailText");}}>
                     <Ico n="mail" s={14} col="var(--amber)"/>Email Text ({selectedOrders.size})
                   </Btn>
                 )}
@@ -1756,11 +1767,11 @@ function LabInventory(){
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
       {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={userRole==="admin"} categories={categories}/>}
-      {emailText&&<Modal onClose={()=>setEmailText("")} title="📧 Purchase Request Email Text" mw={700}>
+      {modal==="emailText"&&<Modal onClose={()=>{setModal(null);setEmailText("");}} title="📧 Purchase Request Email Text" mw={700}>
         <p style={{color:"var(--sub)",fontSize:13,marginBottom:10}}>Select all and copy (Ctrl+A → Ctrl+C), then paste into your email.</p>
         <textarea readOnly value={emailText} onClick={e=>e.target.select()} style={{width:"100%",height:260,background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"12px 14px",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",resize:"vertical",outline:"none",lineHeight:1.8,display:"block"}}/>
         <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}>
-          <Btn onClick={()=>setEmailText("")}>Done</Btn>
+          <Btn onClick={()=>{setModal(null);setEmailText("");}}>Done</Btn>
         </div>
       </Modal>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
