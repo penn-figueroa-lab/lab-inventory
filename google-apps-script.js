@@ -367,7 +367,7 @@ function doPost(e) {
   if (action === "addItem") {
     const it = body.item;
     appendRow("Items", it, [
-      "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial"
+      "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial", "displayId", "shared", "consumable"
     ]);
     sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
     return jsonResponse({ ok: true });
@@ -380,7 +380,7 @@ function doPost(e) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
-    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial"];
+    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial", "displayId", "shared", "consumable"];
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], it.id)) {
@@ -593,10 +593,12 @@ function updateItemStatus(itemName, newStatus, userName, mode) {
   const statusCol = headers.indexOf("status");
   const usedByCol = headers.indexOf("usedBy");
 
+  const sharedCol = headers.indexOf("shared");
   for (let i = 1; i < data.length; i++) {
     if (data[i][nameCol] === itemName) {
       var row = data[i].slice();
-      row[statusCol] = newStatus;
+      const isShared = sharedCol >= 0 && (data[i][sharedCol] === true || String(data[i][sharedCol]).toLowerCase() === "true");
+      if (!(newStatus === "In Use" && isShared)) row[statusCol] = newStatus;
       if (usedByCol >= 0) {
         let usedBy = [];
         try { usedBy = JSON.parse(data[i][usedByCol]) || []; } catch(e) {}

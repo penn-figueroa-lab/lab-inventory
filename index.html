@@ -304,21 +304,21 @@ const ImageUpload = ({value, onChange}) => {
 // ─── MANAGE CATEGORIES MODAL ─────────────────────────────────────────────────
 const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const [cats, setCats] = useState([...categories]);
+  const [prefixes, setPrefixes] = useState(()=>{try{return JSON.parse(localStorage.getItem("labtrack_catprefixes")||"{}");}catch{return {};}});
   const [newCat, setNewCat] = useState("");
-  const addCat = () => {
-    const trimmed = newCat.trim();
-    if (trimmed && !cats.includes(trimmed)) {
-      setCats([...cats, trimmed]);
-      setNewCat("");
-    }
-  };
+  const autoP = c => {const words=c.split(/[\s&\/\-_]+/).filter(Boolean);return(words.length===1?words[0].slice(0,4):words.map(w=>w[0]).join("")).toUpperCase()||"GEN";};
+  const addCat = () => {const t=newCat.trim();if(t&&!cats.includes(t)){setCats([...cats,t]);setNewCat("");}};
   const removeCat = (c) => setCats(cats.filter(x=>x!==c));
+  const saveAll = () => {localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onSave(cats);onClose();};
   return (
-    <Modal onClose={onClose} title="Manage Categories" mw={420}>
+    <Modal onClose={onClose} title="Manage Categories" mw={460}>
+      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Set a short prefix (2–5 letters) per category — used for label IDs like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>ROB-001</span></div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:300,overflow:"auto"}}>
         {cats.map(c=>(
-          <div key={c} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px"}}>
-            <span style={{fontSize:14,color:"var(--text)"}}>{c}</span>
+          <div key={c} style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
+            <span style={{fontSize:14,color:"var(--text)",flex:1}}>{c}</span>
+            <input value={prefixes[c]||""} placeholder={autoP(c)} title="Label prefix" onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:64,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
+            <span style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>-001</span>
             <button onClick={()=>removeCat(c)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={14}/></button>
           </div>
         ))}
@@ -330,7 +330,7 @@ const ManageCategoriesModal = ({categories, onSave, onClose}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{onSave(cats);onClose();}}><Ico n="check" s={14} col="#000"/>Save</Btn>
+        <Btn onClick={saveAll}><Ico n="check" s={14} col="#000"/>Save</Btn>
       </div>
     </Modal>
   );
@@ -344,7 +344,8 @@ const ItemPicker = ({items, value, onChange, categories}) => {
   const ref = useRef(null);
   const inputRef = useRef(null);
   const selected = items.find(i=>i.name===value);
-  const avail = items.filter(i=>i.status!=="Maintenance");
+  // Exclude: consumables (use "Use" button), broken/maintenance, and "In Use" non-shared items
+  const avail = items.filter(i=>!i.consumable && i.status!=="Maintenance" && i.status!=="Broken" && !(i.status==="In Use"&&!i.shared));
   const filtered = avail.filter(i=>{
     const match = i.name.toLowerCase().includes(q.toLowerCase()) || i.loc?.toLowerCase().includes(q.toLowerCase()) || i.desc?.toLowerCase().includes(q.toLowerCase());
     return match && (cat==="All" || i.cat===cat);
@@ -954,10 +955,18 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
 };
 
 // ─── PHYSICAL LABEL ID ───────────────────────────────────────────────────────
+function catPrefix(cat) {
+  // Use stored custom prefix if available
+  try { const m=JSON.parse(localStorage.getItem("labtrack_catprefixes")||"{}"); if(m[cat]) return m[cat]; } catch {}
+  // Auto: initials of each word, e.g. "Cable & Connector"→"CC", "Robotics"→"ROB"
+  const words=(cat||"GEN").split(/[\s&\/\-_]+/).filter(Boolean);
+  return (words.length===1 ? words[0].slice(0,4) : words.map(w=>w[0]).join("")).toUpperCase()||"GEN";
+}
 function genDisplayId(cat, allItems) {
-  const prefix = (cat||"GEN").replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,3)||"GEN";
-  const count = (allItems||[]).filter(i=>(i.cat||"")===(cat||"")).length+1;
-  return `${prefix}-${String(count).padStart(3,"0")}`;
+  const prefix = catPrefix(cat);
+  // Global counter: max number across ALL items with displayIds + 1
+  const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d+)$/);return m?parseInt(m[1]):0;}));
+  return `${prefix}-${String(maxNum+1).padStart(3,"0")}`;
 }
 
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
@@ -1020,6 +1029,7 @@ function LabInventory(){
   const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
   const refreshTimer = useRef(null);
+  const deletedItemIds = useRef(new Set());
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
@@ -1115,7 +1125,7 @@ function LabInventory(){
       try {
         const data = await API.fetchAll(user.token);
         if (data && !data.error && data.items) {
-          setItems(data.items);
+          setItems(data.items.filter(i=>!deletedItemIds.current.has(String(i.id))));
           setDeliv(data.deliveries || []);
           setCheckouts(data.checkouts || []);
           setOrders(data.orders || []);
@@ -1250,11 +1260,12 @@ function LabInventory(){
       return;
     }
     const deletedItem = items.find(i=>i.id===itemId);
+    deletedItemIds.current.add(String(itemId));
     setItems(p=>p.filter(i=>i.id!==itemId));
     addToast("success","Item deleted");
     const result = await postAction("deleteItem", {itemId});
     if (result && result.error === "Forbidden") {
-      // Re-add item if server rejected
+      deletedItemIds.current.delete(String(itemId));
       if (deletedItem) setItems(p=>[deletedItem,...p]);
       addToast("error", "Server rejected: " + (result.detail||"Not authorized"));
     }
@@ -1305,12 +1316,12 @@ function LabInventory(){
     await postAction("deleteOrder", {orderId});
   };
 
-  // When order received: log delivery + update status, then prompt for inventory details
-  const handleOrderReceived = async (order) => {
+  // Show staging modal immediately; sync to sheet in background
+  const handleOrderReceived = (order) => {
+    setPendingItem(order); // instant — no waiting for API
     const delivery={id:Date.now(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
-    await handleDelivery(delivery);
-    await handleUpdateOrderStatus(order.id, "Received");
-    setPendingItem(order); // open staging modal to fill details before adding to inventory
+    handleDelivery(delivery);              // fire and forget
+    handleUpdateOrderStatus(order.id,"Received"); // fire and forget
   };
 
   const handleConfirmPendingItem = async (itemData) => {
