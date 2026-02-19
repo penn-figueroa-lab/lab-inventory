@@ -18,10 +18,15 @@ Sign in with your @seas.upenn.edu account.
 • Return items → Usage tab → check boxes → *Return selected*
 • Changes sync to everyone within ~30 seconds
 
-:warning: *A few things to know:*
-• Please use this system for all purchase requests going forward
+:pencil: *Action required — please do this:*
+• *Add your items to the inventory* — if you own or regularly use any lab equipment, add it so everyone can find it
+• *Label physical items* — once added, print the generated label ID (e.g. `RM-00001`) on a sticker and attach it to the item
+• *Use this for all purchase requests going forward* — no more emailing purchase lists separately
+• *Check out items when you take them* and return them when done — this is how we know where things are
+
+:warning: *Good to know:*
 • Only *admins* can delete items — contact a lab admin if needed
-• For Amazon links, use *Share → Copy link* on the product page for a short URL (e.g. `a.co/d/…`) instead of the full address bar URL — the app will remind you if you paste a long one
-• When submitting an order, enter the *purchase unit* (e.g. 1 box of 100 stickers), not the inventory unit — you'll set the inventory qty when the order arrives
+• For Amazon links, use *Share → Copy link* on the product page for a short URL (e.g. `a.co/d/…`) — the app will remind you if you paste a long one
+• When submitting an order, enter the *purchase unit* (e.g. 1 box), not the inventory unit (e.g. 100 stickers) — you'll adjust when the order arrives
 
 Questions or issues? Ping me! :raised_hands:
