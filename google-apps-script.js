@@ -159,12 +159,15 @@ function sendDailyDigest() {
     blocks.push({ type: "section", text: { type: "mrkdwn", text: "📦 *Low Stock (" + lowStock.length + ")*\n" + lsText } });
   }
 
-  // ── Today's queued activity (compact) ──
+  // ── Today's activity: count by type only (no listing individual events) ──
   if (queuedRows.length > 0) {
-    blocks.push({ type: "divider" });
-    var actText = queuedRows.slice(0,10).map(function(r){ return r[1] + " " + r[2]; }).join("\n");
-    if (queuedRows.length > 10) actText += "\n_…+" + (queuedRows.length-10) + " more_";
-    blocks.push({ type: "section", text: { type: "mrkdwn", text: "📋 *Today's Activity (" + queuedRows.length + " events)*\n" + actText.slice(0,2000) } });
+    var counts = {};
+    queuedRows.forEach(function(r) {
+      var emoji = String(r[1]).trim();
+      counts[emoji] = (counts[emoji] || 0) + 1;
+    });
+    var countLine = Object.keys(counts).map(function(e){ return e + " ×" + counts[e]; }).join("  ·  ");
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "Today's activity: " + countLine + "  (" + queuedRows.length + " total)" }] });
   }
 
   blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "LabTrack · Auto-digest · " + now.toLocaleString("en-US",{timeZone:"America/New_York"}) + " ET" }] });
@@ -234,7 +237,7 @@ function logDeletion(type, name, details, deletedBy) {
   var now = new Date();
   var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
   sheet.appendRow([dateStr, type, name, details, deletedBy]);
-  sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details], "high");
+  sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details], "normal");
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
