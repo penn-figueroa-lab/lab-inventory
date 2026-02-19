@@ -12,7 +12,7 @@
 
 The backend uses a Google Sheet with these tabs:
 
-**Items** — `id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial`
+**Items** — `id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial | displayId | shared | consumable`
 
 **Deliveries** — `id | item | qty | unit | from | receivedBy | date | tracking | status`
 
@@ -26,7 +26,7 @@ The backend uses a Google Sheet with these tabs:
 
 | key | value |
 |-----|-------|
-| `categories` | `["Robot","Sensor","Actuator","Controller","Cable & Connector","Tool","Consumable","Safety","Computer & Electronics","Other"]` |
+| `categories` | `["Robots & Motors","Sensors & Vision","Compute & Electronics","Wiring & Networking","Tools & Hardware","Consumables & Supplies","Safety & Facility","Other"]` |
 | `admins` | `["admin@seas.upenn.edu"]` |
 | `slack_mode` | `all` or `important` or `digest` or `off` |
 
@@ -102,9 +102,9 @@ All deletions are logged in the DeleteLog tab with timestamp, details, and who d
 
 ## Features
 
-- **Inventory**: Add/edit items with serial numbers, image upload (camera/file/URL), customizable categories
-- **Order Requests**: Submit and edit orders (store, item, link, qty, price, etc.); admins can change status (Pending/Approved/Ordered/Received/Rejected); auto-adds to inventory when marked "Received"; generate copy-pasteable email text for purchasing
-- **Usage Tracking**: Check out/return items, overdue alerts, bulk return
+- **Inventory**: Add/edit items with serial numbers, label IDs (`PREFIX-NNNNN`), image upload (camera/file/URL), customizable categories; mark items as Shared (multi-user checkout) or Consumable (qty deduction without checkout)
+- **Order Requests**: Submit and edit orders (store, item, link, qty, price, etc.); admins can change status (Pending/Approved/Ordered/Received/Rejected); "Mark Received" opens a staging form to set location/label/serial before adding to inventory; generate copy-pasteable email text with per-item totals and grand total
+- **Usage Tracking**: Check out/return items, overdue alerts, bulk return; consumables use a "Use" button instead of checkout
 - **Calendar**: Visual calendar of deliveries, checkouts, and return dates
 - **Live Sync**: Auto-polls every 30s so all users see changes without refreshing
 - **Pagination & Sort**: 24 items/page with sort by name, date, quantity
@@ -152,5 +152,6 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 | Delete not working | Check you're in the `admins` list in Settings tab |
 | Digest not sending | Verify trigger is set; check script timezone = America/New_York |
 | Orders not saving correctly | Ensure Orders sheet column order matches: `id \| store \| item \| link \| qty \| unit \| price \| cat \| requestedBy \| reason \| urgency \| date \| status` |
+| `displayId`/`shared`/`consumable` not saving | Ensure Items sheet has these 3 columns after `serial`: `displayId \| shared \| consumable` |
 | Slow updates | Inherent to Apps Script (~1-3s); UI updates instantly |
 | Images not showing | Images are compressed to <50KB base64; check cell size limit |
