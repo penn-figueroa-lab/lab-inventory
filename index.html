@@ -99,6 +99,7 @@ const STATUS_C = {
   "Available":  {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
   "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
   "Maintenance":{bg:"var(--amber-d)", t:"var(--amber)",  b:"#f5a62328"},
+  "Broken":     {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
   "Low Stock":  {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
   "Logged":     {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
   "Active":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
@@ -485,25 +486,31 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
 };
 
 // ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────
-const AddItemModal = ({onClose,onAdd,categories}) => {
-  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:"",serial:""});
+const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
+  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:"",serial:"",shared:false,consumable:false});
+  const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
+  const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
+  const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
   return(
     <Modal onClose={onClose} title="Add Item">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" placeholder="1" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[],serial:f.serial});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
+        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[],displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
       </div>
     </Modal>
   );
@@ -511,21 +518,25 @@ const AddItemModal = ({onClose,onAdd,categories}) => {
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
 const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
-  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status,serial:item.serial||""});
+  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const [confirmDel,setConfirmDel]=useState(false);
+  const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
   return(
     <Modal onClose={onClose} title="Edit Item" mw={560}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
+        <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
-        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
+        <Fld label="Label ID" hint="ID on physical sticker"><Inp value={f.displayId} onChange={s("displayId")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
@@ -542,8 +553,41 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
+          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1,shared:f.shared,consumable:f.consumable,displayId:f.displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
         </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── PENDING ITEM STAGING MODAL (delivery → inventory) ───────────────────────
+const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
+  const [f,setF]=useState({name:order.item||"",cat:order.cat||categories[0]||"Other",qty:String(order.qty||""),unit:order.unit||"units",loc:"",desc:"",minQty:"1",serial:"",shared:false,consumable:false,img:""});
+  const [displayId,setDisplayId]=useState(()=>genDisplayId(order.cat||categories[0]||"Other",allItems));
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
+  const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
+  return(
+    <Modal onClose={onClose} title="📦 Add Received Item to Inventory" mw={560}>
+      <p style={{color:"var(--sub)",fontSize:13,marginBottom:14}}>Order received! Fill in the missing details before it goes into inventory.</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
+        <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
+        <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp value={f.serial} onChange={s("serial")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Notes"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f.shared} onChange={chk("shared")} style={{accentColor:"var(--cyan)"}}/>Shared resource</label>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f.consumable} onChange={chk("consumable")} style={{accentColor:"var(--cyan)"}}/>Consumable</label>
+        </div>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",marginTop:16,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Skip (add later)</Btn>
+        <Btn onClick={()=>{if(f.name){onConfirm({...f,displayId});onClose();}}} disabled={!f.name}><Ico n="plus" s={14} col="#000"/>Add to Inventory</Btn>
       </div>
     </Modal>
   );
@@ -909,23 +953,40 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
   );
 };
 
+// ─── PHYSICAL LABEL ID ───────────────────────────────────────────────────────
+function genDisplayId(cat, allItems) {
+  const prefix = (cat||"GEN").replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,3)||"GEN";
+  const count = (allItems||[]).filter(i=>(i.cat||"")===(cat||"")).length+1;
+  return `${prefix}-${String(count).padStart(3,"0")}`;
+}
+
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
 function generateEmailText(orders) {
   const dateStr = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
-  const cols = ["Store","Item","Purchase Link","Qty","Price/Item"];
-  const rows = orders.map(o=>[
-    String(o.store||"—"),
-    String(o.item||"—"),
-    String(o.link||"(no link)"),
-    `${o.qty||""} ${o.unit||""}`.trim()||"—",
-    String(o.price||"—"),
-  ]);
+  const fmtP = p => {
+    if(!p && p!==0) return "—";
+    const n = typeof p==="number" ? p : parseFloat(String(p).replace(/[^0-9.]/g,""));
+    return isNaN(n) ? String(p) : "$"+n.toFixed(2);
+  };
+  const calcTotal = (price,qty) => {
+    const p = typeof price==="number" ? price : parseFloat(String(price||"").replace(/[^0-9.]/g,""));
+    const q = parseFloat(qty)||0;
+    return (!isNaN(p)&&q) ? p*q : null;
+  };
+  const cols = ["Store","Item","Purchase Link","Qty","Unit Price","Total"];
+  const rows = orders.map(o=>{
+    const tot=calcTotal(o.price,o.qty);
+    return [String(o.store||"—"),String(o.item||"—"),String(o.link||"(no link)"),
+      `${o.qty||""} ${o.unit||""}`.trim()||"—",fmtP(o.price),tot!==null?"$"+tot.toFixed(2):"—"];
+  });
+  const grand = orders.reduce((a,o)=>{const t=calcTotal(o.price,o.qty);return t!==null?a+t:a;},0);
   const widths = cols.map((c,i)=>Math.max(c.length,...rows.map(r=>r[i].length))+2);
-  const pad = (s,w)=>s.padEnd(w);
-  const sep = widths.map(w=>"-".repeat(w)).join("+");
-  const header = widths.map((w,i)=>pad(cols[i],w)).join("|");
-  const dataRows = rows.map(r=>widths.map((w,i)=>pad(r[i],w)).join("|")).join("\n");
-  return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}`;
+  const pad=(s,w)=>s.padEnd(w);
+  const sep=widths.map(w=>"-".repeat(w)).join("+");
+  const header=widths.map((w,i)=>pad(cols[i],w)).join("|");
+  const dataRows=rows.map(r=>widths.map((w,i)=>pad(r[i],w)).join("|")).join("\n");
+  const footer=grand>0?`\n\nGrand Total: $${grand.toFixed(2)}`:"";
+  return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}${footer}`;
 }
 
 
@@ -945,6 +1006,7 @@ function LabInventory(){
   const [preItem,setPreItem] = useState("");
   const [detail,setDetail] = useState(null);
   const [editItem,setEditItem] = useState(null);
+  const [pendingItem,setPendingItem] = useState(null);
   const [search,setSearch] = useState("");
   const [catF,setCatF] = useState("All");
   const [view,setView] = useState("grid");
@@ -1138,11 +1200,19 @@ function LabInventory(){
   };
 
   const handleCheckout=async(c)=>{
-    const updated=items.map(i=>i.name===c.item?{...i,status:"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i);
+    const updated=items.map(i=>i.name===c.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i);
     setItems(updated);
     setCheckouts(p=>[c,...p]);
     addToast("success",`${c.item} → ${c.user}`);
     await postAction("addCheckout", {checkout: c});
+  };
+
+  const handleUseConsumable = async (itemId, qty) => {
+    const item = items.find(i=>i.id===itemId); if(!item) return;
+    const updated = {...item, qty: Math.max(0, item.qty - qty)};
+    setItems(p=>p.map(i=>i.id===itemId?updated:i));
+    addToast("success",`Used ${qty} ${item.unit} of ${item.name}`);
+    await postAction("updateItem", {item: updated});
   };
 
   const handleReturn=async(coId)=>{
@@ -1235,18 +1305,19 @@ function LabInventory(){
     await postAction("deleteOrder", {orderId});
   };
 
-  // Auto-add to inventory when order received
+  // When order received: log delivery + update status, then prompt for inventory details
   const handleOrderReceived = async (order) => {
-    // Create delivery
     const delivery={id:Date.now(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
     await handleDelivery(delivery);
-    // Update order status
     await handleUpdateOrderStatus(order.id, "Received");
-    // Auto-add inventory item
-    const newItem = {id:Date.now()+1, name:order.item, cat:order.cat||"Other", qty:order.qty, unit:order.unit, loc:"", minQty:1, img:"", desc:"Auto-added from order #"+order.id, status:"Available", usedBy:[], serial:""};
+    setPendingItem(order); // open staging modal to fill details before adding to inventory
+  };
+
+  const handleConfirmPendingItem = async (itemData) => {
+    const newItem = {id:Date.now(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:+itemData.minQty||1};
     setItems(p=>[newItem,...p]);
+    addToast("success",`"${newItem.name}" added to inventory!`);
     await postAction("addItem", {item: newItem});
-    addToast("info", `"${order.item}" added to inventory! Click to fill in details.`, ()=>{setEditItem(newItem);});
   };
 
   // filtered & sorted inventory
@@ -1334,6 +1405,7 @@ function LabInventory(){
             ) : (<MemberAvatar name={user.name} sz={28}/>)}
             <span style={{color:"var(--sub)",fontSize:12,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span>
             {userRole==="admin"&&<span style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62340",borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.05em"}}>ADMIN</span>}
+            <button onClick={()=>setModal("help")} title="Help & Onboarding" style={{background:"none",border:"1px solid var(--border)",color:"var(--dim)",cursor:"pointer",padding:"3px 8px",borderRadius:8,fontSize:12,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}}>?</button>
             <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}><Ico n="logout" s={14}/></button>
           </div>
         </div>
@@ -1481,15 +1553,22 @@ function LabInventory(){
                       </div>
                       <div style={{padding:"11px 14px 13px"}}>
                         <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {item.displayId&&<span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"0px 5px",color:"var(--cyan)",letterSpacing:"0.05em"}}>{item.displayId}</span>}
+                          {item.shared&&<span style={{color:"var(--purple)",fontSize:10}}>SHARED</span>}
+                          {item.consumable&&<span style={{color:"var(--amber)",fontSize:10}}>CONSUMABLE</span>}
+                        </div>
                         <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}{item.serial?` · S/N: ${item.serial}`:""}</div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
                             <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Roboto',sans-serif",fontSize:24,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
                             <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
                           </div>
-                          {item.usedBy?.length>0&&(
+                          {item.consumable?(
+                            <button onClick={e=>{e.stopPropagation();const n=parseInt(window.prompt(`How many ${item.unit} used?`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,n);}} style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Use</button>
+                          ):item.usedBy?.length>0?(
                             <div style={{display:"flex"}}>{item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
-                          )}
+                          ):null}
                         </div>
                       </div>
                     </div>
@@ -1785,7 +1864,7 @@ function LabInventory(){
       {/* MODALS */}
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} categories={categories}/>}
-      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories}/>}
+      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items}/>}
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
@@ -1795,6 +1874,23 @@ function LabInventory(){
         <textarea readOnly value={emailText} onClick={e=>e.target.select()} style={{width:"100%",height:260,background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"12px 14px",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",resize:"vertical",outline:"none",lineHeight:1.8,display:"block"}}/>
         <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}>
           <Btn onClick={()=>{setModal(null);setEmailText("");}}>Done</Btn>
+        </div>
+      </Modal>}
+      {pendingItem && <PendingItemModal order={pendingItem} allItems={items} categories={categories} onClose={()=>setPendingItem(null)} onConfirm={handleConfirmPendingItem}/>}
+      {modal==="help" && <Modal onClose={()=>setModal(null)} title="LabTrack — Help & Guide" mw={640}>
+        <div style={{display:"flex",flexDirection:"column",gap:20,fontSize:13}}>
+          {[
+            {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set a Min Stock Alert to get a red Low Stock badge when running low.","Mark items as Shared (toolboxes, shared equipment — multiple users simultaneously) or Consumable (stickers, reagents — just deduct qty, no checkout).","Each item gets a Label ID (e.g. ROB-001). Print it on a sticker and stick it on the real item.","Click any item card to see details, checkout history, and quick actions."]},
+            {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable item to a person.","Consumable items: use the Use button on the card — just enter how many you used.","Mark items Returned when done. Overdue checkouts turn red."]},
+            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, and price.","Select multiple orders with checkboxes → Email Text generates a formatted purchase email.","Admins can Approve → Ordered → Mark Received. On receiving, a staging form opens to fill in location and label ID before it goes to inventory.","Session expires after ~1 hour but auto-renews silently. If you see a red banner, click Sign In Again."]},
+            {icon:"truck",title:"Deliveries",color:"var(--green)",items:["Log incoming packages via Log Delivery in the Orders tab.","Received orders auto-log a delivery and open the inventory staging form."]},
+            {icon:"layers",title:"Item Statuses",color:"var(--sub)",items:["🟢 Available — ready to use","🔵 In Use — checked out (blue)","🟡 Maintenance — temporarily unavailable","🔴 Broken — out of service","🔴 Low Stock — qty ≤ min stock threshold"]},
+          ].map(s=>(
+            <div key={s.title}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><Ico n={s.icon} s={16} col={s.color}/><strong style={{color:s.color,fontFamily:"'Roboto',sans-serif"}}>{s.title}</strong></div>
+              <ul style={{margin:0,paddingLeft:20,color:"var(--sub)",lineHeight:1.9}}>{s.items.map((it,i)=><li key={i}>{it}</li>)}</ul>
+            </div>
+          ))}
         </div>
       </Modal>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
