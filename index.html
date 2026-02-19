@@ -427,42 +427,56 @@ const ItemPicker = ({items, value, onChange, categories}) => {
   );
 };
 
-// ─── CHECKOUT MODAL ──────────────────────────────────────────────────────────
+// ─── CHECKOUT MODAL (multi-item) ─────────────────────────────────────────────
 const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) => {
-  const [f,setF]=useState({item:preItem,user:userName,out:getToday(),ret:"",qty:1,notes:""});
-  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const selected=items.find(i=>i.name===f.item);
-  const maxQty=selected?.qty||1;
+  const [coUser,setCoUser]=useState(userName);
+  const [out,setOut]=useState(getToday());
+  const [ret,setRet]=useState("");
+  const [notes,setNotes]=useState("");
+  const [slots,setSlots]=useState([{item:preItem,qty:1}]);
+  const addSlot=()=>setSlots(p=>[...p,{item:"",qty:1}]);
+  const removeSlot=i=>setSlots(p=>p.filter((_,j)=>j!==i));
+  const updSlot=(i,k,v)=>setSlots(p=>p.map((s,j)=>j===i?{...s,[k]:v}:s));
+  const valid=slots.filter(s=>s.item);
+  const canSubmit=coUser.trim()&&valid.length>0;
+  const submit=()=>{
+    if(!canSubmit)return;
+    const ts=Date.now();
+    valid.forEach((sl,i)=>{
+      const sel=items.find(it=>it.name===sl.item);
+      onAdd({id:ts+i,item:sl.item,user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,status:"Active"});
+    });
+    onClose();
+  };
   return(
-    <Modal onClose={onClose} title="Check Out Item" mw={620}>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <Fld label="Select Item"><ItemPicker items={items} value={f.item} onChange={v=>setF(p=>({...p,item:v,qty:1}))} categories={categories}/></Fld>
-        {selected&&(
-          <div style={{background:"var(--bg2)",border:`1px solid ${getCatAccent(selected.cat,categories)}30`,borderRadius:10,padding:"12px 14px",display:"flex",gap:14,alignItems:"flex-start",animation:"fadeIn .2s ease"}}>
-            <img src={selected.img||`https://placehold.co/64x48/141b24/3d5068?text=${encodeURIComponent(selected.cat)}`} alt={selected.name} style={{width:64,height:48,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)",flexShrink:0}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2}}>{selected.name}</div>
-              <div style={{color:"var(--dim)",fontSize:12,marginBottom:6,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.loc} · {selected.cat}</div>
-              <span style={{color:"var(--sub)",fontSize:12}}>Available: <strong style={{color:selected.qty<=selected.minQty?"var(--red)":"var(--green)",fontFamily:"'IBM Plex Mono',monospace"}}>{selected.qty} {selected.unit}</strong></span>
-            </div>
-          </div>
-        )}
+    <Modal onClose={onClose} title="Check Out Items" mw={660}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fld label="Person"><Inp placeholder="Your name" value={f.user} onChange={s("user")}/></Fld>
-          <Fld label={`Quantity ${selected?`(max ${maxQty})`:""}`}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={()=>setF(p=>({...p,qty:Math.max(1,p.qty-1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>-</button>
-              <input type="number" min={1} max={maxQty} value={f.qty} onChange={e=>setF(p=>({...p,qty:Math.min(maxQty,Math.max(1,parseInt(e.target.value)||1))}))} style={{flex:1,background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 12px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:16,color:"var(--text)",outline:"none",MozAppearance:"textfield",WebkitAppearance:"none"}}/>
-              <button onClick={()=>setF(p=>({...p,qty:Math.min(maxQty,p.qty+1)}))} style={{background:"var(--bg4)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:16,lineHeight:1}}>+</button>
-            </div>
-          </Fld>
-          <Fld label="Checkout Date"><Inp type="date" value={f.out} onChange={s("out")}/></Fld>
-          <Fld label="Return By"><Inp type="date" value={f.ret} onChange={s("ret")}/></Fld>
+          <Fld label="Person *"><Inp placeholder="Your name" value={coUser} onChange={e=>setCoUser(e.target.value)}/></Fld>
+          <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose…" value={notes} onChange={e=>setNotes(e.target.value)}/></Fld>
+          <Fld label="Checkout Date"><Inp type="date" value={out} onChange={e=>setOut(e.target.value)}/></Fld>
+          <Fld label="Return By"><Inp type="date" value={ret} onChange={e=>setRet(e.target.value)}/></Fld>
         </div>
-        <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose, any notes..." value={f.notes} onChange={s("notes")}/></Fld>
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>Items to Check Out ({valid.length})</span>
+            <Btn sm v="ghost" onClick={addSlot}><Ico n="plus" s={12}/>Add Another</Btn>
+          </div>
+          {slots.map((sl,i)=>{
+            const sel=items.find(it=>it.name===sl.item);
+            const maxQ=sel?.qty||1;
+            return(
+              <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                <div style={{flex:1}}><ItemPicker items={items} value={sl.item} onChange={v=>updSlot(i,"item",v)} categories={categories}/></div>
+                <input type="number" min={1} max={maxQ} value={sl.qty} title={`Max ${maxQ}`} onChange={e=>updSlot(i,"qty",Math.min(maxQ,Math.max(1,parseInt(e.target.value)||1)))} style={{width:60,background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 8px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,color:"var(--text)",outline:"none"}}/>
+                {slots.length>1&&<button onClick={()=>removeSlot(i)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}><Ico n="x" s={14}/></button>}
+              </div>
+            );
+          })}
+        </div>
         <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.item&&f.user){onAdd({id:Date.now(),...f,status:"Active"});onClose();}}} disabled={!f.item||!f.user}><Ico n="check" s={14} col="#000"/>Confirm Checkout</Btn>
+          <Btn onClick={submit} disabled={!canSubmit}><Ico n="check" s={14} col="#000"/>Confirm Checkout{valid.length>1?` (${valid.length} items)`:""}</Btn>
         </div>
       </div>
     </Modal>
@@ -1042,6 +1056,8 @@ function LabInventory(){
   const refreshTimer = useRef(null);
   const deletedItemIds = useRef(new Set());
   const lastModified = useRef({items:0, orders:0, checkouts:0, deliveries:0});
+  const apiQueue = useRef([]);
+  const apiRunning = useRef(false);
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
@@ -1211,24 +1227,34 @@ function LabInventory(){
   const overdues = checkouts.filter(c=>isOverdue(c));
 
   // handlers
-  const postAction = async (action, payload) => {
+  const postAction = (action, payload) => {
     // Mark data type as locally modified → suppress poll override for 60s
     const now = Date.now();
     if (/item/i.test(action)) lastModified.current.items = now;
     if (/checkout|return/i.test(action)) { lastModified.current.checkouts = now; lastModified.current.items = now; }
     if (/order/i.test(action)) lastModified.current.orders = now;
     if (/delivery/i.test(action)) lastModified.current.deliveries = now;
-    if (APP_CONFIG.apps_script_url && user?.token !== "local") {
-      const result = await API.post(user.token, action, payload);
-      if (result && result.error === "Unauthorized") {
-        setSessionExpired(true);
-        try { google.accounts.id.prompt(); } catch(e) {}
+    if (!APP_CONFIG.apps_script_url || user?.token === "local") return Promise.resolve(null);
+    // Queue requests so rapid edits don't race in GAS
+    const token = user.token;
+    return new Promise(resolve => {
+      apiQueue.current.push({action, payload, resolve, token});
+      if (!apiRunning.current) {
+        (async () => {
+          apiRunning.current = true;
+          while (apiQueue.current.length > 0) {
+            const req = apiQueue.current.shift();
+            try {
+              const result = await API.post(req.token, req.action, req.payload);
+              if (result?.error === "Unauthorized") { setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){} }
+              if (result?.error && result.error !== "Unauthorized") addToast("error", `Error: ${result.error} — ${result.detail||""}`);
+              req.resolve(result);
+            } catch(e) { req.resolve(null); }
+          }
+          apiRunning.current = false;
+        })();
       }
-      if (result && result.error && result.error !== "Unauthorized") {
-        addToast("error", `Error: ${result.error} — ${result.detail || ""}`);
-      }
-      return result;
-    }
+    });
   };
 
   const handleDelivery=async(d)=>{
@@ -1237,12 +1263,11 @@ function LabInventory(){
     await postAction("addDelivery", {delivery: d});
   };
 
-  const handleCheckout=async(c)=>{
-    const updated=items.map(i=>i.name===c.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i);
-    setItems(updated);
+  const handleCheckout=(c)=>{
+    setItems(prev=>prev.map(i=>i.name===c.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i));
     setCheckouts(p=>[c,...p]);
     addToast("success",`${c.item} → ${c.user}`);
-    await postAction("addCheckout", {checkout: c});
+    postAction("addCheckout", {checkout: c});
   };
 
   const handleUseConsumable = async (itemId, qty) => {
@@ -1261,11 +1286,18 @@ function LabInventory(){
     await postAction("returnItem", {checkoutId: coId});
   };
 
-  const handleBulkReturn=async()=>{
+  const handleBulkReturn=()=>{
     const ids=[...selected];
-    for(const id of ids)await handleReturn(id);
+    const coMap=Object.fromEntries(checkouts.filter(c=>ids.includes(c.id)).map(c=>[c.id,c]));
+    setCheckouts(prev=>prev.map(c=>ids.includes(c.id)?{...c,status:"Returned"}:c));
+    setItems(prev=>{
+      let s=[...prev];
+      ids.forEach(id=>{const co=coMap[id];if(!co)return;s=s.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i);});
+      return s;
+    });
     setSelected(new Set());
     addToast("success",`${ids.length} item${ids.length>1?"s":""} returned`);
+    ids.forEach(id=>postAction("returnItem",{checkoutId:id}));
   };
 
   const handleQuickCheckout=(itemName)=>{ setPreItem(itemName); setModal("checkout"); };

@@ -1,33 +1,24 @@
-:robot_face: **Introducing LabTrack — Our Lab Inventory System**
+:robot_face: *LabTrack is live — Figueroa Lab Inventory System*
+:point_right: https://penn-figueroa-lab.github.io/lab-inventory/
+Sign in with your @seas.upenn.edu account.
 
-Hey everyone! We now have a shared inventory system for the Figueroa Lab. It's live and ready to use:
+*What you can do:*
+:package: *Inventory* — Browse all lab equipment by category, search by name/location/serial, view photos and label IDs
+:label: *Check Out / Return* — Track who's using what; check out multiple items at once; overdue alerts turn red
+:shopping_trolley: *Order Requests* — Submit purchase requests with price, urgency, and purchase link; generate a formatted email table for purchasing
+:truck: *Deliveries* — Orders auto-log a delivery and open a staging form to set location and label ID before going to inventory
+:calendar_spiral: *Calendar* — Visual monthly view of all lab activity
 
-:point_right: **https://penn-figueroa-lab.github.io/lab-inventory/**
+*Quick start:*
+• Check out an item → Click its card → *Quick Check Out*, or go to Usage tab → *New Checkout* (supports multiple items at once)
+• Request something → Order Requests tab → *New Request*
+• Return items → Usage tab → check boxes → *Return selected*
+• Everything syncs to a shared Google Sheet within ~30 seconds
 
-Sign in with your `@seas.upenn.edu` Google account.
-
----
-
-**What you can do:**
-
-:package: **Inventory** — Browse all lab equipment, search by name/location/serial number, upload photos
-:label: **Check Out / Return** — Track who's using what, get overdue reminders
-:shopping_cart: **Order Requests** — Request new equipment with price, urgency, and purchase links
-:truck: **Log Deliveries** — Record incoming packages with tracking info
-:calendar: **Calendar** — See all activity at a glance
-
-**How it works:**
-
-1. Open the link and sign in
-2. To check out an item → click it → "Quick Check Out"
-3. To request new equipment → Procurement tab → "New Request"
-4. To log a delivery → Procurement tab → "Log Delivery"
-
-Everything syncs to a shared Google Sheet, so changes show up for everyone within ~30 seconds.
-
-**Good to know:**
-- Only admins can delete items (to prevent accidents)
-- All deletions are logged with who did it and when
-- Slack notifications will come to this channel for important updates
+:warning: *Important:*
+• Only *admins* can delete items — contact a lab admin if something needs to be removed
+• All deletions are permanently logged (who, when, what)
+• When submitting an order, enter the *purchase unit* (e.g. 1 box), not the inventory unit (e.g. 100 stickers) — you'll set inventory qty when the order arrives
+• Categories, label ID prefixes, and admin list are managed under Settings (admins only)
 
 Questions? Ping me! :raised_hands:
