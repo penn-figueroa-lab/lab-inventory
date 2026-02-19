@@ -472,7 +472,7 @@ function doPost(e) {
   if (action === "addOrder") {
     const o = body.order;
     appendRow("Orders", o, [
-      "id", "item", "qty", "unit", "requestedBy", "reason", "urgency", "date", "status", "price", "link", "cat", "store"
+      "id", "store", "item", "link", "qty", "unit", "price", "cat", "requestedBy", "reason", "urgency", "date", "status"
     ]);
     var linkText = o.link ? " | <" + o.link + "|Purchase Link>" : "";
     sendSlack("🛒", "New Order Request: " + o.item,
@@ -480,6 +480,25 @@ function doPost(e) {
       ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName],
       (o.urgency==="Urgent"||o.urgency==="High")?"high":"normal");
     return jsonResponse({ ok: true });
+  }
+
+  // ── Update Order ──────────────────────────────────────────────────────────
+  if (action === "updateOrder") {
+    const o = body.order;
+    const sheet = getSheet("Orders");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+    const fields = ["store","item","link","qty","unit","price","cat","requestedBy","reason","urgency","date","status"];
+    for (let i = 1; i < data.length; i++) {
+      if (idsMatch(data[i][idCol], o.id)) {
+        var row = data[i].slice();
+        fields.forEach(f => { const col = headers.indexOf(f); if (col >= 0 && o[f] !== undefined) row[col] = o[f]; });
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        return jsonResponse({ ok: true });
+      }
+    }
+    return jsonResponse({ error: "Order not found" });
   }
 
   // ── Send Digest (admin only) ───────────────────────────────────────────────

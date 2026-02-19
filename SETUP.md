@@ -18,9 +18,9 @@ The backend uses a Google Sheet with these tabs:
 
 **Checkouts** — `id | itemId | item | user | out | ret | status`
 
-**Orders** — `id | item | qty | unit | requestedBy | reason | urgency | date | status | price | link | cat | store`
+**Orders** — `id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status`
 
-> ⚠️ If upgrading from a previous version, add a **`store`** column to your Orders sheet header row.
+> ⚠️ Column order matters for new rows written by the script. If upgrading, reorder your Orders sheet header row to match the above.
 
 **Settings** — `key | value`
 
@@ -93,8 +93,8 @@ Add emails to the `admins` list in the Settings tab to grant admin access:
 ["admin1@seas.upenn.edu","admin2@seas.upenn.edu"]
 ```
 
-**Admins can**: delete items, delete orders, manage categories, change settings, send digest manually
-**All users can**: add items, edit items, check out/return, log deliveries, submit order requests
+**Admins can**: delete items/orders, manage categories, change settings, send digest manually, change order status (Approve/Reject/etc.)
+**All users can**: add/edit items, check out/return, log deliveries, submit and edit order requests
 
 All deletions are logged in the DeleteLog tab with timestamp, details, and who deleted.
 
@@ -103,7 +103,7 @@ All deletions are logged in the DeleteLog tab with timestamp, details, and who d
 ## Features
 
 - **Inventory**: Add/edit items with serial numbers, image upload (camera/file/URL), customizable categories
-- **Order Requests**: Submit orders with store name + purchase link (both required); add multiple items from the same store in one request; auto-adds to inventory when marked "Received"
+- **Order Requests**: Submit and edit orders (store, item, link, qty, price, etc.); admins can change status (Pending/Approved/Ordered/Received/Rejected); auto-adds to inventory when marked "Received"; generate copy-pasteable email text for purchasing
 - **Usage Tracking**: Check out/return items, overdue alerts, bulk return
 - **Calendar**: Visual calendar of deliveries, checkouts, and return dates
 - **Live Sync**: Auto-polls every 30s so all users see changes without refreshing
@@ -151,6 +151,6 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 | Data not syncing | Check Apps Script URL; redeploy as new version |
 | Delete not working | Check you're in the `admins` list in Settings tab |
 | Digest not sending | Verify trigger is set; check script timezone = America/New_York |
-| Order store field missing | Add `store` column to Orders sheet header row |
+| Orders not saving correctly | Ensure Orders sheet column order matches: `id \| store \| item \| link \| qty \| unit \| price \| cat \| requestedBy \| reason \| urgency \| date \| status` |
 | Slow updates | Inherent to Apps Script (~1-3s); UI updates instantly |
 | Images not showing | Images are compressed to <50KB base64; check cell size limit |

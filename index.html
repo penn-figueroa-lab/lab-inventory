@@ -158,6 +158,8 @@ const P = {
   moon:'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
   sun:'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
   bell2:'<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/><line x1="12" y1="2" x2="12" y2="8"/>',
+  mail:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
 };
 const Ico = ({n,s=16,col="currentColor"}) => (
   React.createElement('svg', {width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:col,
@@ -876,6 +878,56 @@ const LoginPage = ({onSignIn}) => {
   );
 };
 
+// ─── EDIT ORDER MODAL ────────────────────────────────────────────────────────
+const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
+  const UNITS=["units","pcs","boxes","bottles","sets","rolls","kg","L","m"];
+  const STATUSES=["Pending","Approved","Ordered","Received","Rejected"];
+  const [f,setF]=useState({...order});
+  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  return(
+    <Modal onClose={onClose} title="✏️ Edit Order Request" mw={640}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Fld label="Store / Supplier *"><Inp value={f.store||""} onChange={s("store")}/></Fld>
+        <Fld label="Urgency"><Sel value={f.urgency} onChange={s("urgency")}>{["Low","Normal","High","Urgent"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name *"><Inp value={f.item||""} onChange={s("item")}/></Fld></div>
+        <Fld label="Qty"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{UNITS.map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Category"><Sel value={f.cat||categories[0]} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Est. Price"><Inp value={f.price||""} onChange={s("price")}/></Fld>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Purchase Link *"><Inp value={f.link||""} onChange={s("link")}/></Fld></div>
+        <Fld label="Date Needed By"><Inp type="date" value={f.date||""} onChange={s("date")}/></Fld>
+        {isAdmin&&<Fld label="Status (Admin only)"><Sel value={f.status} onChange={s("status")}>{STATUSES.map(st=><option key={st}>{st}</option>)}</Sel></Fld>}
+        <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp value={f.reason||""} onChange={s("reason")}/></Fld></div>
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",paddingTop:14,marginTop:4,display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{onSave({...f,qty:+f.qty});onClose();}} disabled={!(f.store||"").trim()||(!(f.item||"").trim())||(!(f.link||"").trim())}>
+          <Ico n="check" s={14} col="#000"/>Save Changes
+        </Btn>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
+function generateEmailText(orders) {
+  const dateStr = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const cols = ["Store","Item","Purchase Link","Qty","Price/Item"];
+  const rows = orders.map(o=>[
+    o.store||"—",
+    o.item||"—",
+    o.link||"(no link)",
+    `${o.qty} ${o.unit}`,
+    o.price||"—",
+  ]);
+  const widths = cols.map((c,i)=>Math.max(c.length,...rows.map(r=>(r[i]||"").length))+2);
+  const pad = (s,w)=>(s||"").padEnd(w);
+  const sep = widths.map(w=>"-".repeat(w)).join("+");
+  const header = widths.map((w,i)=>pad(cols[i],w)).join("|");
+  const dataRows = rows.map(r=>widths.map((w,i)=>pad(r[i],w)).join("|")).join("\n");
+  return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}`;
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 function LabInventory(){
   const [user, setUser] = useState(null);
@@ -904,6 +956,9 @@ function LabInventory(){
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
+  const [selectedOrders, setSelectedOrders] = useState(new Set());
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [editOrder, setEditOrder] = useState(null);
 
   // Restore session + theme
   useEffect(()=>{
@@ -1051,7 +1106,8 @@ function LabInventory(){
     if (APP_CONFIG.apps_script_url && user?.token !== "local") {
       const result = await API.post(user.token, action, payload);
       if (result && result.error === "Unauthorized") {
-        addToast("error", "Session expired — please sign out and sign in again.");
+        addToast("error", "Session expired — signing you out. Please sign in again.");
+        handleSignOut();
       }
       if (result && result.error && result.error !== "Unauthorized") {
         addToast("error", `Error: ${result.error} — ${result.detail || ""}`);
@@ -1146,6 +1202,12 @@ function LabInventory(){
     setOrders(p=>p.map(o=>o.id===orderId?{...o,status:newStatus}:o));
     addToast("success",`Order marked as ${newStatus}`);
     await postAction("updateOrderStatus", {orderId, status: newStatus});
+  };
+
+  const handleUpdateOrder = async (order) => {
+    setOrders(p=>p.map(o=>o.id===order.id?order:o));
+    addToast("success","Order updated");
+    await postAction("updateOrder", {order});
   };
 
   const handleDeleteOrder = async (orderId) => {
@@ -1446,7 +1508,20 @@ function LabInventory(){
                 <h2 style={{margin:"0 0 3px",fontFamily:"'Roboto',sans-serif",fontSize:18,fontWeight:700}}>Order Requests</h2>
                 <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOrders.length} active · {pendingOrders} pending approval · {deliveries.length} deliveries</p>
               </div>
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {activeOrders.length>0&&(
+                  <Btn v="ghost" sm onClick={()=>{
+                    if(selectedOrders.size===activeOrders.length){setSelectedOrders(new Set());}
+                    else{setSelectedOrders(new Set(activeOrders.map(o=>o.id)));}
+                  }}>
+                    {selectedOrders.size===activeOrders.length?"Deselect All":"Select All"}
+                  </Btn>
+                )}
+                {selectedOrders.size>0&&(
+                  <Btn v="amber" onClick={()=>setShowEmailModal(true)}>
+                    <Ico n="mail" s={14} col="var(--amber)"/>Generate Email ({selectedOrders.size})
+                  </Btn>
+                )}
                 <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
                 <Btn onClick={()=>setModal("order")}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
               </div>
@@ -1471,9 +1546,13 @@ function LabInventory(){
                     const sc=statusColors[o.status]||statusColors.Pending;
                     const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
                     const ns=nextStatus[o.status];
+                    const isSel=selectedOrders.has(o.id);
                     return(
-                      <div key={o.id} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`}}>
+                      <div key={o.id} onClick={()=>{const sel=new Set(selectedOrders);sel.has(o.id)?sel.delete(o.id):sel.add(o.id);setSelectedOrders(sel);}} style={{background:isSel?"var(--cyan-d)":"var(--bg1)",border:`1px solid ${isSel?"var(--cyan)":"var(--border)"}`,borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`,cursor:"pointer",transition:"background .15s,border-color .15s"}}>
                         <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+                          <div style={{paddingTop:2,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                            <input type="checkbox" checked={isSel} onChange={()=>{const sel=new Set(selectedOrders);sel.has(o.id)?sel.delete(o.id):sel.add(o.id);setSelectedOrders(sel);}} style={{width:16,height:16,cursor:"pointer",accentColor:"var(--cyan)"}}/>
+                          </div>
                           <div style={{flex:1,minWidth:200}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
                               <span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Roboto',sans-serif"}}>{o.item}</span>
@@ -1491,8 +1570,9 @@ function LabInventory(){
                             {o.reason&&<div style={{color:"var(--dim)",fontSize:12,fontStyle:"italic",marginBottom:4}}>{o.reason}</div>}
                             {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
                           </div>
-                          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
-                            {ns&&(
+                          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
+                            <Btn sm v="ghost" onClick={()=>setEditOrder(o)}><Ico n="edit" s={12}/>Edit</Btn>
+                            {userRole==="admin"&&ns&&(
                               <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
                                 if(ns==="Received"){ handleOrderReceived(o); }
                                 else { handleUpdateOrderStatus(o.id,ns); }
@@ -1500,7 +1580,7 @@ function LabInventory(){
                                 {ns==="Received"?<><Ico n="check" s={12} col="var(--green)"/>Mark Received</>:<>{ns} →</>}
                               </Btn>
                             )}
-                            {o.status==="Pending"&&<Btn sm v="danger" onClick={()=>handleUpdateOrderStatus(o.id,"Rejected")}>Reject</Btn>}
+                            {userRole==="admin"&&o.status==="Pending"&&<Btn sm v="danger" onClick={()=>handleUpdateOrderStatus(o.id,"Rejected")}>Reject</Btn>}
                           </div>
                         </div>
                       </div>
@@ -1674,8 +1754,44 @@ function LabInventory(){
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
+      {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={userRole==="admin"} categories={categories}/>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
+
+      {showEmailModal&&(()=>{
+        const selected2 = activeOrders.filter(o=>selectedOrders.has(o.id));
+        const text = generateEmailText(selected2);
+        return(
+          <div onClick={()=>setShowEmailModal(false)} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:760,maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+                <div>
+                  <h2 style={{margin:"0 0 4px",color:"var(--text)",fontSize:17,fontFamily:"'Roboto',sans-serif",fontWeight:700}}>Email Purchase Request</h2>
+                  <p style={{margin:0,color:"var(--sub)",fontSize:12}}>{selected2.length} item{selected2.length!==1?"s":""} selected · Copy and paste into your purchasing email</p>
+                </div>
+                <button onClick={()=>setShowEmailModal(false)} style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",marginLeft:12}}><Ico n="x" s={14}/></button>
+              </div>
+              <div style={{padding:24,overflow:"auto",flex:1}}>
+                <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"4px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                  <Ico n="bell" s={13} col="var(--amber)"/>
+                  <span style={{color:"var(--sub)",fontSize:12}}>Column order: <strong style={{color:"var(--text)"}}>Store · Item · Purchase Link · Qty · Price/Item</strong></span>
+                </div>
+                <textarea readOnly value={text}
+                  style={{width:"100%",minHeight:240,background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"14px 16px",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",resize:"vertical",outline:"none",lineHeight:1.8,display:"block"}}
+                  onClick={e=>e.target.select()}
+                />
+                <p style={{color:"var(--dim)",fontSize:11,marginTop:8}}>Click the text area to select all, or use the button below to copy.</p>
+                <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+                  <Btn v="ghost" onClick={()=>setShowEmailModal(false)}>Close</Btn>
+                  <Btn v="amber" onClick={()=>{navigator.clipboard.writeText(text).then(()=>addToast("success","Copied to clipboard!")).catch(()=>addToast("error","Copy failed — select and copy manually."));}}>
+                    <Ico n="copy" s={14} col="var(--amber)"/>Copy to Clipboard
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
     </div>
