@@ -121,7 +121,12 @@ function sendDailyDigest() {
   var urgentOrders = pending.filter(function(o){ return o.urgency==="Urgent"||o.urgency==="High"; });
   if (urgentOrders.length > 0) {
     var urgText = urgentOrders.map(function(o){
-      return "• *" + o.item + "* — " + o.qty + " " + o.unit + " | " + (o.store||o.link||"?") + " | " + (o.price||"—") + " | *" + o.urgency + "*" + (o.link ? " | <"+o.link+"|link>" : "");
+      var parts = ["• *" + o.item + "* — " + o.qty + " " + o.unit];
+      if (o.store) parts.push(o.store);
+      if (o.price) parts.push(o.price);
+      parts.push("*" + o.urgency + "*");
+      if (o.link) parts.push("<" + o.link + "|link>");
+      return parts.join(" | ");
     }).join("\n");
     blocks.push({ type: "section", text: { type: "mrkdwn", text: "🚨 *Urgent/High Orders Pending (" + urgentOrders.length + ")*\n" + urgText } });
   }
@@ -130,7 +135,11 @@ function sendDailyDigest() {
   var normalPending = pending.filter(function(o){ return o.urgency!=="Urgent"&&o.urgency!=="High"; });
   if (normalPending.length > 0) {
     var normText = normalPending.slice(0,8).map(function(o){
-      return "• *" + o.item + "* — " + o.qty + " " + o.unit + " | " + (o.store||"?") + " | " + (o.status);
+      var parts = ["• *" + o.item + "* — " + o.qty + " " + o.unit];
+      if (o.store) parts.push(o.store);
+      parts.push(o.status);
+      if (o.link) parts.push("<" + o.link + "|link>");
+      return parts.join(" | ");
     }).join("\n");
     if (normalPending.length > 8) normText += "\n_…and " + (normalPending.length-8) + " more_";
     blocks.push({ type: "section", text: { type: "mrkdwn", text: "🛒 *Pending Orders (" + normalPending.length + ")*\n" + normText } });
