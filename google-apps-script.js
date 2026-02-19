@@ -200,6 +200,33 @@ function sendDailyDigest() {
 // Admin can trigger manually (via UI button → doPost "sendDigest")
 function sendManualDigest() { sendDailyDigest(); }
 
+// ─── SETUP TRIGGERS (run once from the Apps Script editor) ───────────────────
+// Run this function manually from the editor to create both time-based triggers.
+// Requires: Project Settings → Time zone = America/New_York
+// After running, verify in Triggers tab (clock icon on left sidebar).
+function createTriggers() {
+  // Remove any existing triggers for these functions to avoid duplicates
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var fn = t.getHandlerFunction();
+    if (fn === "sendDailyDigest" || fn === "checkOverduesAndAlert") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  // Daily digest at 5pm (script timezone must be America/New_York)
+  ScriptApp.newTrigger("sendDailyDigest")
+    .timeBased()
+    .atHour(17)
+    .everyDays(1)
+    .create();
+  // Overdue alert at 8am
+  ScriptApp.newTrigger("checkOverduesAndAlert")
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .create();
+  Logger.log("✅ Triggers created. Verify: Apps Script → Triggers (clock icon). Make sure Project Settings → Time zone = America/New_York.");
+}
+
 // ─── OVERDUE ALERT (Trigger: checkOverduesAndAlert → Day timer → 8am–9am) ────
 function checkOverduesAndAlert() {
   var overdues = getOverdueCheckouts_();
