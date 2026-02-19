@@ -8,8 +8,8 @@
  * Google Sheet must have these tabs (column order matters for write operations):
  *   Items      — id | name | cat | qty | unit | loc | minQty | img | desc | status | usedBy | serial | displayId | shared | consumable
  *   Deliveries — id | item | qty | unit | from | receivedBy | date | tracking | status
- *   Checkouts  — id | itemId | item | user | out | ret | status
- *   Orders     — id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status
+ *   Checkouts  — id | itemId | item | user | out | ret | status | checkedOutByEmail | groupEmails
+ *   Orders     — id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status | requestedByEmail
  *   Settings   — key | value
  *   DeleteLog  — date | type | name | details | deletedBy
  *   SlackQueue — time | emoji | title | details | fields  (auto-created; used by digest mode)

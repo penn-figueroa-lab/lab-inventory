@@ -20,7 +20,10 @@ The backend uses a Google Sheet with these tabs:
 
 **Orders** — `id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status | requestedByEmail`
 
-> ⚠️ Column order matters for new rows written by the script. If upgrading, reorder your Orders sheet header row to match the above.
+> ⚠️ Column order matters for new rows written by the script. If upgrading an existing sheet:
+> - **Orders**: add `requestedByEmail` as the last column (column 14)
+> - **Checkouts**: add `checkedOutByEmail` and `groupEmails` as the last two columns
+> - Existing rows without these columns remain fully functional (permissions fall back gracefully)
 
 **Settings** — `key | value`
 
@@ -93,8 +96,13 @@ Add emails to the `admins` list in the Settings tab to grant admin access:
 ["admin1@seas.upenn.edu","admin2@seas.upenn.edu"]
 ```
 
-**Admins can**: delete items/orders, manage categories, change settings, send digest manually, change order status (Approve/Reject/etc.)
-**All users can**: add/edit items, check out/return, log deliveries, submit and edit order requests
+**Admins can**: delete items/orders, manage categories, change settings, send digest manually, change order status (Approve/Reject/etc.), edit any order request, return any checked-out item
+
+**All users can**: add/edit items, check out items, log deliveries, submit order requests
+
+**Requester only** (or admin): edit their own order request
+
+**Checkout owner + group members** (or admin): return a checked-out item. Group members are listed at checkout time as comma-separated emails.
 
 All deletions are logged in the DeleteLog tab with timestamp, details, and who deleted.
 
@@ -102,15 +110,16 @@ All deletions are logged in the DeleteLog tab with timestamp, details, and who d
 
 ## Features
 
-- **Inventory**: Add/edit items with serial numbers, label IDs (`PREFIX-NNNNN`), image upload (camera/file/URL), customizable categories; mark items as Shared (multi-user checkout) or Consumable (qty deduction without checkout)
-- **Order Requests**: Submit and edit orders (store, item, link, qty, price, etc.); admins can change status (Pending/Approved/Ordered/Received/Rejected); "Mark Received" opens a staging form to set location/label/serial before adding to inventory; generate copy-pasteable email text with per-item totals and grand total
-- **Usage Tracking**: Check out/return items, overdue alerts, bulk return; consumables use a "Use" button instead of checkout
+- **Inventory**: Add/edit items with serial numbers, label IDs (`PREFIX-NNNNN`), image upload (camera/file/URL), customizable categories (admin only); mark items as Shared (multi-user checkout) or Consumable (qty deduction without checkout)
+- **Order Requests**: Submit orders (store, item, link, qty, price, etc.); only the requester or an admin can edit; admins can change status (Pending/Approved/Ordered/Received/Rejected); "Mark Received" opens a staging form to set location/label/serial before adding to inventory; generate copy-pasteable email text with per-item totals and grand total
+- **Usage Tracking**: Check out/return items with overdue alerts and bulk return; only the checkout creator, listed group members, or admins can return an item; consumables use a "Use" button instead of checkout
+- **Group Checkout**: When checking out, optionally list teammates' emails as group members — they can then return the item too
 - **Calendar**: Visual calendar of deliveries, checkouts, and return dates
 - **Live Sync**: Auto-polls every 30s so all users see changes without refreshing
-- **Pagination & Sort**: 24 items/page with sort by name, date, quantity
+- **Pagination & Sort**: 24 items/page with sort by name, date, quantity; Order Requests tab has search/filter/pagination (15/page) with shift-click range select
 - **Slack**: Rich Block Kit notifications; daily 5pm ET digest with compact PI-friendly summary; `important` mode for urgent orders + overdues only
 - **Dark/Light Mode**: Toggle with the ☀/🌙 button in the header; preference saved per browser
-- **Admin Permissions**: Role-based deletion and settings control; manual digest trigger
+- **Access Control**: Server-side RBAC — admins control categories/deletion/settings; order editing restricted to requester; returns restricted to checkout owner + group members; all enforced in Apps Script, not just UI
 - **Delete Audit Log**: Full record of all deletions
 
 ---
@@ -139,9 +148,15 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 
 ## Security
 
-- Google Sign-In restricted to `@seas.upenn.edu` domain (client + server verified)
+- Google Sign-In restricted to `@seas.upenn.edu` domain (client + server verified via Google tokeninfo API)
 - Slack webhook stored only in Apps Script (server-side), never in client code
 - No secrets in HTML — only the OAuth Client ID (designed to be public) and Apps Script URL
+- **Server-side RBAC**: every sensitive action is verified in Apps Script regardless of client state:
+  - Category changes → admin only
+  - Order edits → requester (`requestedByEmail`) or admin only
+  - Item returns → checkout creator (`checkedOutByEmail`), group members, or admin only
+  - Deletions → admin only
+- Legacy rows without `requestedByEmail`/`checkedOutByEmail` are not restricted (backward compatible)
 
 ## Troubleshooting
 
@@ -153,5 +168,7 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 | Digest not sending | Verify trigger is set; check script timezone = America/New_York |
 | Orders not saving correctly | Ensure Orders sheet column order matches: `id \| store \| item \| link \| qty \| unit \| price \| cat \| requestedBy \| reason \| urgency \| date \| status \| requestedByEmail` |
 | `displayId`/`shared`/`consumable` not saving | Ensure Items sheet has these 3 columns after `serial`: `displayId \| shared \| consumable` |
+| Can't return item / "Forbidden" error | Ensure Checkouts sheet has `checkedOutByEmail` and `groupEmails` columns (add them if upgrading); old rows without these columns are returnable by anyone |
+| Can't edit order / "Forbidden" error | Ensure Orders sheet has `requestedByEmail` column (add it if upgrading); only the requester or an admin can edit |
 | Slow updates | Inherent to Apps Script (~1-3s); UI updates instantly |
 | Images not showing | Images are compressed to <50KB base64; check cell size limit |
