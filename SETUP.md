@@ -16,9 +16,9 @@ The backend uses a Google Sheet with these tabs:
 
 **Deliveries** — `id | item | qty | unit | from | receivedBy | date | tracking | status`
 
-**Checkouts** — `id | itemId | item | user | out | ret | status`
+**Checkouts** — `id | itemId | item | user | out | ret | status | checkedOutByEmail | groupEmails`
 
-**Orders** — `id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status`
+**Orders** — `id | store | item | link | qty | unit | price | cat | requestedBy | reason | urgency | date | status | requestedByEmail`
 
 > ⚠️ Column order matters for new rows written by the script. If upgrading, reorder your Orders sheet header row to match the above.
 
@@ -151,7 +151,7 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 | Data not syncing | Check Apps Script URL; redeploy as new version |
 | Delete not working | Check you're in the `admins` list in Settings tab |
 | Digest not sending | Verify trigger is set; check script timezone = America/New_York |
-| Orders not saving correctly | Ensure Orders sheet column order matches: `id \| store \| item \| link \| qty \| unit \| price \| cat \| requestedBy \| reason \| urgency \| date \| status` |
+| Orders not saving correctly | Ensure Orders sheet column order matches: `id \| store \| item \| link \| qty \| unit \| price \| cat \| requestedBy \| reason \| urgency \| date \| status \| requestedByEmail` |
 | `displayId`/`shared`/`consumable` not saving | Ensure Items sheet has these 3 columns after `serial`: `displayId \| shared \| consumable` |
 | Slow updates | Inherent to Apps Script (~1-3s); UI updates instantly |
 | Images not showing | Images are compressed to <50KB base64; check cell size limit |

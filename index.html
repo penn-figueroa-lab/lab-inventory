@@ -428,11 +428,12 @@ const ItemPicker = ({items, value, onChange, categories}) => {
 };
 
 // ─── CHECKOUT MODAL (multi-item) ─────────────────────────────────────────────
-const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) => {
+const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",categories}) => {
   const [coUser,setCoUser]=useState(userName);
   const [out,setOut]=useState(getToday());
   const [ret,setRet]=useState("");
   const [notes,setNotes]=useState("");
+  const [groupEmails,setGroupEmails]=useState("");
   const [slots,setSlots]=useState([{item:preItem,qty:1}]);
   const addSlot=()=>setSlots(p=>[...p,{item:"",qty:1}]);
   const removeSlot=i=>setSlots(p=>p.filter((_,j)=>j!==i));
@@ -444,7 +445,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) 
     const ts=Date.now();
     valid.forEach((sl,i)=>{
       const sel=items.find(it=>it.name===sl.item);
-      onAdd({id:ts+i,item:sl.item,user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,status:"Active"});
+      onAdd({id:ts+i,item:sl.item,user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,groupEmails:groupEmails.trim(),status:"Active"});
     });
     onClose();
   };
@@ -456,6 +457,11 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",categories}) 
           <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose…" value={notes} onChange={e=>setNotes(e.target.value)}/></Fld>
           <Fld label="Checkout Date"><Inp type="date" value={out} onChange={e=>setOut(e.target.value)}/></Fld>
           <Fld label="Return By"><Inp type="date" value={ret} onChange={e=>setRet(e.target.value)}/></Fld>
+          <div style={{gridColumn:"1/-1"}}>
+            <Fld label="Group members (optional)" hint="Others who can also return these items — comma-separated @seas.upenn.edu emails">
+              <Inp placeholder="alice@seas.upenn.edu, bob@seas.upenn.edu" value={groupEmails} onChange={e=>setGroupEmails(e.target.value)}/>
+            </Fld>
+          </div>
         </div>
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -619,7 +625,7 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
 };
 
 // ─── ORDER REQUEST MODAL (multi-item) ────────────────────────────────────────
-const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
+const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => {
   const UNITS = ["units","pcs","boxes","bottles","sets","rolls","kg","L","m"];
   const [store,setStore]       = useState("");
   const [urgency,setUrgency]   = useState("Normal");
@@ -640,7 +646,7 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
     onAddMany(validItems.map((it,i)=>({
       id: ts+i, item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
       store:store.trim(), link:it.link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
-      requestedBy:userName, status:"Pending"
+      requestedBy:userName, requestedByEmail:userEmail, status:"Pending"
     })));
     onClose();
   };
@@ -1269,10 +1275,11 @@ function LabInventory(){
   };
 
   const handleCheckout=(c)=>{
-    setItems(prev=>prev.map(i=>i.name===c.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),c.user]}:i));
-    setCheckouts(p=>[c,...p]);
-    addToast("success",`${c.item} → ${c.user}`);
-    postAction("addCheckout", {checkout: c});
+    const checkout={...c, checkedOutByEmail: user?.email||""};
+    setItems(prev=>prev.map(i=>i.name===checkout.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),checkout.user]}:i));
+    setCheckouts(p=>[checkout,...p]);
+    addToast("success",`${checkout.item} → ${checkout.user}`);
+    postAction("addCheckout", {checkout});
   };
 
   const handleUseConsumable = async (itemId, qty) => {
@@ -1289,6 +1296,14 @@ function LabInventory(){
     setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i));
     addToast("success",`${co.item} returned`);
     await postAction("returnItem", {checkoutId: coId});
+  };
+
+  const canReturn=(c)=>{
+    if(userRole==="admin")return true;
+    if(!c.checkedOutByEmail)return true; // legacy records without email
+    if(user?.email===c.checkedOutByEmail)return true;
+    const grp=(c.groupEmails||"").split(",").map(e=>e.trim()).filter(Boolean);
+    return grp.includes(user?.email||"");
   };
 
   const handleBulkReturn=()=>{
@@ -1583,9 +1598,9 @@ function LabInventory(){
                     </button>
                   );
                 })}
-                <button onClick={()=>setModal("manageCategories")} title="Manage Categories" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:20,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
+                {userRole==="admin"&&<button onClick={()=>setModal("manageCategories")} title="Manage Categories (admin only)" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:20,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
                   <Ico n="settings" s={13} col="var(--dim)"/>
-                </button>
+                </button>}
               </div>
 
               {/* Sort */}
@@ -1804,7 +1819,7 @@ function LabInventory(){
                             {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
                           </div>
                           <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
-                            <Btn sm v="ghost" onClick={()=>setEditOrder(o)}><Ico n="edit" s={12}/>Edit</Btn>
+                            {(userRole==="admin"||user?.email===o.requestedByEmail)&&<Btn sm v="ghost" onClick={()=>setEditOrder(o)}><Ico n="edit" s={12}/>Edit</Btn>}
                             {userRole==="admin"&&ns&&(
                               <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
                                 if(ns==="Received"){ handleOrderReceived(o); }
@@ -1933,7 +1948,7 @@ function LabInventory(){
                             <div style={{color:"var(--text)",fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.item}</div>
                             <div style={{color:od2?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace",marginTop:2}}>{od2?"OVERDUE":"Return"} {c.ret||"—"}</div>
                           </div>
-                          <Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}><Ico n="undo" s={11}/></Btn>
+                          {canReturn(c)&&<Btn v="ghost" sm onClick={()=>setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)})}><Ico n="undo" s={11}/></Btn>}
                         </div>
                       );
                     })}
@@ -1956,10 +1971,10 @@ function LabInventory(){
                     ))}
                   </tr></thead>
                   <tbody>{checkouts.map((c,i)=>{
-                    const od=isOverdue(c);const isSel=selected.has(c.id);
-                    const activeCheckouts=checkouts.filter(x=>x.status==="Active");
+                    const od=isOverdue(c);const isSel=selected.has(c.id);const canRet=canReturn(c);
+                    const activeCheckouts=checkouts.filter(x=>x.status==="Active"&&canReturn(x));
                     const handleCoClick=(e)=>{
-                      if(c.status!=="Active")return;
+                      if(c.status!=="Active"||!canRet)return;
                       if(e.shiftKey&&lastSelCheckout.current!=null){
                         const ids=activeCheckouts.map(x=>x.id);
                         const a=ids.indexOf(lastSelCheckout.current),b=ids.indexOf(c.id);
@@ -1971,14 +1986,14 @@ function LabInventory(){
                       }
                     };
                     return(
-                      <tr key={c.id} onClick={handleCoClick} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined,cursor:c.status==="Active"?"pointer":"default",userSelect:"none"}}>
-                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<input type="checkbox" checked={isSel} onChange={handleCoClick} onClick={e=>e.stopPropagation()} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>}</td>
+                      <tr key={c.id} onClick={handleCoClick} className="row-hover" style={{borderBottom:i<checkouts.length-1?"1px solid var(--border)":"none",transition:"background .15s",background:od?"rgba(45,0,16,.4)":isSel?"var(--cyan-d)":undefined,cursor:(c.status==="Active"&&canRet)?"pointer":"default",userSelect:"none"}}>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&canRet&&<input type="checkbox" checked={isSel} onChange={handleCoClick} onClick={e=>e.stopPropagation()} style={{cursor:"pointer",accentColor:"var(--cyan)"}}/>}</td>
                         <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{c.item}</td>
                         <td style={{padding:"10px 16px"}}><div style={{display:"flex",alignItems:"center",gap:8}}><MemberAvatar name={c.user} sz={26}/><span style={{color:"var(--sub)"}}>{c.user}</span></div></td>
                         <td style={{padding:"10px 16px",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>{c.out}</td>
                         <td style={{padding:"10px 16px",color:od?"var(--red)":"var(--dim)",fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:od?700:400}}>{c.ret||"—"}{od&&" !"}</td>
                         <td style={{padding:"10px 16px"}}><Badge status={od?"Overdue":c.status}/></td>
-                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&<Btn v="ghost" sm onClick={e=>{e.stopPropagation();setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)});}}><Ico n="undo" s={12}/>Return</Btn>}</td>
+                        <td style={{padding:"10px 16px"}}>{c.status==="Active"&&canRet&&<Btn v="ghost" sm onClick={e=>{e.stopPropagation();setConfirm({msg:`Return "${c.item}" from ${c.user}?`,onConfirm:()=>handleReturn(c.id)});}}><Ico n="undo" s={12}/>Return</Btn>}</td>
                       </tr>
                     );
                   })}</tbody>
@@ -2004,9 +2019,9 @@ function LabInventory(){
 
       {/* MODALS */}
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
-      {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} categories={categories}/>}
+      {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
       {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items}/>}
-      {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} categories={categories}/>}
+      {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
       {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={userRole==="admin"} categories={categories}/>}
@@ -2022,8 +2037,8 @@ function LabInventory(){
         <div style={{display:"flex",flexDirection:"column",gap:20,fontSize:13}}>
           {[
             {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared items (e.g. toolboxes) stay Available when checked out — multiple people can use them simultaneously.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-00001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","Click any item card to see full details, checkout history, and quick actions."]},
-            {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable, non-shared item to a person. Enter qty, dates, and optional notes.","Shared items can be checked out by multiple people at the same time and remain Available.","Consumable items do not appear in the checkout list — use the Use button on the card instead.","Mark items Returned when done. Overdue checkouts are highlighted in red.","Bulk Return lets you return multiple items at once."]},
-            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Select multiple orders with checkboxes → Email Text generates a formatted purchase request table with per-item totals and a grand total — ready to paste into an email.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
+            {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable, non-shared item to a person. Enter qty, dates, and optional notes.","Shared items can be checked out by multiple people at the same time and remain Available.","Consumable items do not appear in the checkout list — use the Use button on the card instead.","Mark items Returned when done. Overdue checkouts are highlighted in red.","Only the person who created the checkout, listed group members, or admins can return an item.","Group members: when checking out, optionally add teammates' emails (comma-separated) so they can also return the item.","Bulk Return lets you return multiple items at once."]},
+            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Only the person who submitted an order (or an admin) can edit it.","Select multiple orders with checkboxes → Email Text generates a formatted purchase request table with per-item totals and a grand total — ready to paste into an email.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
             {icon:"calendar",title:"Calendar Tab",color:"var(--purple)",items:["Visual monthly calendar showing deliveries, active checkouts, and return due dates.","Color-coded: green = delivery, blue = checkout start, amber = return due.","Click any day to see all events on that date."]},
             {icon:"layers",title:"Item Statuses",color:"var(--sub)",items:["🟢 Available — ready to use","🔵 In Use — checked out by one or more people","🟡 Maintenance — temporarily out of service","🔴 Broken — damaged or needs repair","⚠️ Low Stock — qty is at or below the Min Stock threshold (shown as a badge)"]},
             {icon:"settings",title:"Settings (Admin only)",color:"var(--orange)",items:["Manage Categories — add, remove, or rename categories; set label ID prefix per category (e.g. RM for Robots & Motors).","Admins list — edit in the Settings tab of the Google Sheet (JSON array of emails).","Slack notifications — set slack_mode in Settings tab: all | important | digest | off.","Session expires after ~1 hour and auto-renews silently. If you see a red banner at the top, click Sign In Again."]},

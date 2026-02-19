@@ -438,7 +438,7 @@ function doPost(e) {
   if (action === "addCheckout") {
     const c = body.checkout;
     appendRow("Checkouts", c, [
-      "id", "itemId", "item", "user", "out", "ret", "status"
+      "id", "itemId", "item", "user", "out", "ret", "status", "checkedOutByEmail", "groupEmails"
     ]);
     updateItemStatus(c.item, "In Use", c.user, "add");
     sendSlack("🔑", "Item Checked Out: " + c.item, null, ["*Person*\n" + c.user, "*Date*\n" + (c.out||"—"), "*Return by*\n" + (c.ret||"—")]);
@@ -458,11 +458,19 @@ function doPost(e) {
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], coId)) {
+        const coEmailCol = headers.indexOf("checkedOutByEmail");
+        const groupEmailsCol = headers.indexOf("groupEmails");
+        const coEmail = coEmailCol >= 0 ? String(data[i][coEmailCol] || "") : "";
+        const groupEmailsStr = groupEmailsCol >= 0 ? String(data[i][groupEmailsCol] || "") : "";
+        const groupList = groupEmailsStr.split(",").map(e => e.trim()).filter(Boolean);
+        if (!admin && coEmail && userEmail !== coEmail && !groupList.includes(userEmail)) {
+          return jsonResponse({ error: "Forbidden", detail: "Only the person who checked out this item, group members, or an admin can return it." });
+        }
         sheet.getRange(i + 1, statusCol + 1).setValue("Returned");
         const itemName = data[i][itemCol];
         const returnedUser = data[i][userCol];
         updateItemStatus(itemName, "Available", returnedUser, "remove");
-        sendSlack("✅", "Item Returned: " + itemName, null, ["*Returned by*\n" + returnedUser]);
+        sendSlack("✅", "Item Returned: " + itemName, null, ["*Returned by*\n" + userName]);
         break;
       }
     }
@@ -473,7 +481,7 @@ function doPost(e) {
   if (action === "addOrder") {
     const o = body.order;
     appendRow("Orders", o, [
-      "id", "store", "item", "link", "qty", "unit", "price", "cat", "requestedBy", "reason", "urgency", "date", "status"
+      "id", "store", "item", "link", "qty", "unit", "price", "cat", "requestedBy", "reason", "urgency", "date", "status", "requestedByEmail"
     ]);
     var linkText = o.link ? " | <" + o.link + "|Purchase Link>" : "";
     sendSlack("🛒", "New Order Request: " + o.item,
@@ -493,6 +501,11 @@ function doPost(e) {
     const fields = ["store","item","link","qty","unit","price","cat","requestedBy","reason","urgency","date","status"];
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], o.id)) {
+        const reqEmailCol = headers.indexOf("requestedByEmail");
+        const reqEmail = reqEmailCol >= 0 ? String(data[i][reqEmailCol] || "") : "";
+        if (!admin && reqEmail && userEmail !== reqEmail) {
+          return jsonResponse({ error: "Forbidden", detail: "Only the person who submitted this order or an admin can edit it." });
+        }
         var row = data[i].slice();
         fields.forEach(f => { const col = headers.indexOf(f); if (col >= 0 && o[f] !== undefined) row[col] = o[f]; });
         sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
