@@ -241,6 +241,26 @@ function isAdmin(email) {
   return false;
 }
 
+// ─── MEMBER CHECK ────────────────────────────────────────────────────────────
+// If "members" key exists in Settings with a non-empty array, only those emails
+// can access the system. If the key is absent or empty, all @seas.upenn.edu
+// accounts are allowed (backward compatible).
+function isMember(email) {
+  var settingsSheet = getSheet("Settings");
+  if (!settingsSheet) return true;
+  var data = settingsSheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === "members") {
+      try {
+        var members = JSON.parse(data[i][1]);
+        if (!Array.isArray(members) || members.length === 0) return true;
+        return members.indexOf(email) >= 0;
+      } catch(e) { return true; }
+    }
+  }
+  return true; // key not set → allow all seas accounts
+}
+
 // ─── DELETE LOG ──────────────────────────────────────────────────────────────
 function logDeletion(type, name, details, deletedBy) {
   var sheet = getOrCreateSheet("DeleteLog", ["date", "type", "name", "details", "deletedBy"]);
@@ -327,6 +347,9 @@ function doGet(e) {
     if (!user) {
       return jsonResponse({ error: "Unauthorized", detail: "Token verification failed" });
     }
+    if (!isMember(user.email)) {
+      return jsonResponse({ error: "NotMember", detail: "Your account is not authorized to access this lab's system. Contact a lab admin." });
+    }
 
     var settings = {};
     var settingsSheet = getSheet("Settings");
@@ -357,6 +380,9 @@ function doPost(e) {
   const user = verifyToken(body.token);
   if (!user) {
     return jsonResponse({ error: "Unauthorized", detail: "Token verification failed for POST" });
+  }
+  if (!isMember(user.email)) {
+    return jsonResponse({ error: "NotMember", detail: "Your account is not authorized to access this lab's system." });
   }
 
   const action = body.action;

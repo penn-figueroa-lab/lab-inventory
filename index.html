@@ -1121,6 +1121,15 @@ function LabInventory(){
     setFetchingData(true);
     (async ()=>{
       const data = await API.fetchAll(user.token);
+      if (data && data.error === "NotMember") {
+        setUser(null);
+        localStorage.removeItem("labtrack_user");
+        setError("Your account (" + (user.email||"") + ") is not authorized to access this lab's system. Contact a lab admin to be added.");
+        setDataLoaded(true); setFetchingData(false); return;
+      }
+      if (data && data.error === "Unauthorized") {
+        setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){}
+      }
       if (data && data.error) {
         console.error("[LabTrack] Backend error:", data.error, data.detail);
         try {
@@ -1258,7 +1267,8 @@ function LabInventory(){
             try {
               const result = await API.post(req.token, req.action, req.payload);
               if (result?.error === "Unauthorized") { setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){} }
-              if (result?.error && result.error !== "Unauthorized") addToast("error", `Error: ${result.error} — ${result.detail||""}`);
+              if (result?.error === "NotMember") { setUser(null); localStorage.removeItem("labtrack_user"); setError("Your account is not authorized to access this lab's system."); }
+              if (result?.error && result.error !== "Unauthorized" && result.error !== "NotMember") addToast("error", `Error: ${result.error} — ${result.detail||""}`);
               req.resolve(result);
             } catch(e) { req.resolve(null); }
           }

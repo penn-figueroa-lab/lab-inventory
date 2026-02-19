@@ -31,6 +31,7 @@ The backend uses a Google Sheet with these tabs:
 |-----|-------|
 | `categories` | `["Robots & Motors","Sensors & Vision","Compute & Electronics","Wiring & Networking","Tools & Hardware","Consumables & Supplies","Safety & Facility","Other"]` |
 | `admins` | `["admin@seas.upenn.edu"]` |
+| `members` | `["user1@seas.upenn.edu","user2@seas.upenn.edu"]` — if present and non-empty, only these accounts can sign in; all other `@seas.upenn.edu` accounts are rejected. Omit the key (or leave it as `[]`) to allow all seas accounts. |
 | `slack_mode` | `all` or `important` or `digest` or `off` |
 
 **DeleteLog** (auto-created) — `date | type | name | details | deletedBy`
@@ -148,7 +149,7 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 
 ## Security
 
-- Google Sign-In restricted to `@seas.upenn.edu` domain (client + server verified via Google tokeninfo API)
+- Google Sign-In restricted to `@seas.upenn.edu` domain (client + server verified via Google tokeninfo API); optionally further restricted to a specific `members` list in the Settings tab
 - Slack webhook stored only in Apps Script (server-side), never in client code
 - No secrets in HTML — only the OAuth Client ID (designed to be public) and Apps Script URL
 - **Server-side RBAC**: every sensitive action is verified in Apps Script regardless of client state:
