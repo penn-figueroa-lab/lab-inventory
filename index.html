@@ -576,13 +576,17 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
   const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
   return(
     <Modal onClose={onClose} title="📦 Add Received Item to Inventory" mw={560}>
-      <p style={{color:"var(--sub)",fontSize:13,marginBottom:14}}>Order received! Fill in the missing details before it goes into inventory.</p>
+      <p style={{color:"var(--sub)",fontSize:13,marginBottom:10}}>Order received! Fill in the missing details before it goes into inventory.</p>
+      <div style={{background:"var(--amber-d)",border:"1px solid #f5a62330",borderRadius:8,padding:"9px 12px",marginBottom:14,fontSize:12,color:"var(--amber)"}}>
+        <strong>Order qty:</strong> {order.qty} {order.unit} — adjust Qty &amp; Unit below to reflect what's actually going into inventory.
+        <span style={{color:"var(--sub)",fontStyle:"italic"}}> e.g. ordered 1 box → inventory qty 100, unit pcs</span>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
-        <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
-        <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
+        <Fld label="Inventory Qty" hint="How many individual units are going in?"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Inventory Unit" hint="Unit for each individual item"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp value={f.serial} onChange={s("serial")}/></Fld></div>
@@ -653,12 +657,13 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
 
       {/* ── Item List ── */}
       <div style={{marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
           <span style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>
             Items * <span style={{color:"var(--dim)",fontWeight:400,textTransform:"none",letterSpacing:0}}>({validItems.length} valid)</span>
           </span>
           <Btn sm v="ghost" onClick={addItem}><Ico n="plus" s={12}/>Add Item</Btn>
         </div>
+        <div style={{color:"var(--dim)",fontSize:11,marginBottom:8}}>Enter <strong style={{color:"var(--sub)"}}>purchase qty &amp; unit</strong> — e.g. 2 boxes, not 200 stickers. You'll set inventory units when the order arrives.</div>
         {items.map((it,i)=>(
           <div key={i} style={{background:"var(--bg2)",border:`1px solid ${it.name.trim()&&it.qty?"var(--border)":"var(--border)"}`,borderRadius:10,padding:"10px 12px",marginBottom:8,animation:"fadeIn .2s ease"}}>
             <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
@@ -1658,12 +1663,14 @@ function LabInventory(){
                 <p style={{margin:0,color:"var(--sub)",fontSize:13}}>{activeOrders.length} active · {pendingOrders} pending approval · {deliveries.length} deliveries</p>
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {activeOrders.length>0&&(
+                {filteredActiveOrders.length>0&&(
                   <Btn v="ghost" sm onClick={()=>{
-                    if(selectedOrders.size===activeOrders.length){setSelectedOrders(new Set());}
-                    else{setSelectedOrders(new Set(activeOrders.map(o=>String(o.id))));}
+                    const filteredIds=new Set(filteredActiveOrders.map(o=>String(o.id)));
+                    const allFilteredSelected=[...filteredIds].every(id=>selectedOrders.has(id));
+                    if(allFilteredSelected){const s=new Set(selectedOrders);filteredIds.forEach(id=>s.delete(id));setSelectedOrders(s);}
+                    else{const s=new Set(selectedOrders);filteredIds.forEach(id=>s.add(id));setSelectedOrders(s);}
                   }}>
-                    {selectedOrders.size===activeOrders.length?"Deselect All":"Select All"}
+                    {[...new Set(filteredActiveOrders.map(o=>String(o.id)))].every(id=>selectedOrders.has(id))?"Deselect Filtered":"Select Filtered"}
                   </Btn>
                 )}
                 {selectedOrders.size>0&&(
