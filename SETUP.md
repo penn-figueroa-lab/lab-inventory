@@ -54,7 +54,7 @@ Set `slack_mode` in the Settings tab:
 | Mode | Behavior |
 |------|----------|
 | `all` | Every action sends a Slack notification |
-| `important` | Only urgent/high order requests + overdue checkouts + deletions |
+| `important` | Only urgent/high order requests + overdue checkouts |
 | `digest` | Queues events; sends compact daily summary at 5pm ET |
 | `off` | No notifications |
 
@@ -76,7 +76,9 @@ The digest is compact but informative — designed for your PI to quickly review
 - 🛒 **All pending orders** — item, store, status
 - 🔴 **Overdue checkouts** — item, person, due date
 - 📦 **Low stock items** — item, current/min qty
-- 📋 **Today's activity log** (deliveries, checkouts, returns)
+- One-line activity count: e.g. `🚚 ×3 · 🔑 ×5 · ✅ ×2` (no per-event listing)
+
+Deletions are **not** flagged as important — admins delete items during cleanup and it shouldn't flood the channel. Deletions are logged in the DeleteLog sheet and appear in digest mode only as a count.
 
 ### Admin: Manual Digest
 
