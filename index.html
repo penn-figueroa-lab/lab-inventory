@@ -1547,7 +1547,11 @@ function LabInventory(){
                   <Btn v="amber" onClick={()=>{
                     const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
                     const w=window.open('','_blank','width=720,height=520,resizable=yes,scrollbars=yes');
-                    if(w){w.document.write('<html><head><title>Purchase Request Email</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">📧 Purchase Request — select all and copy (Ctrl+A → Ctrl+C)</h3><pre style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#1a1a1a;padding:20px;border-radius:8px">'+text+'</pre></body></html>');w.document.close();}
+                    if(w){
+                      w.document.write('<html><head><title>Purchase Request Email</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">&#x1F4E7; Purchase Request &#x2014; select all and copy (Ctrl+A &#x2192; Ctrl+C)</h3><pre id="t" style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#1a1a1a;padding:20px;border-radius:8px"></pre></body></html>');
+                      w.document.close();
+                      w.document.getElementById('t').textContent=text;
+                    }
                     else{setEmailText(text);setModal("emailText");}
                   }}>
                     <Ico n="mail" s={14} col="var(--amber)"/>Email Text ({selectedOrders.size})
