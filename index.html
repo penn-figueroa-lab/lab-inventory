@@ -850,7 +850,7 @@ const LoginPage = ({onSignIn}) => {
             } catch(e) { setError("Failed to verify account. Please try again."); }
           },
           hd: "seas.upenn.edu",
-          auto_select: false,
+          auto_select: true,
         });
         google.accounts.id.renderButton(btnRef.current, { type: "standard", theme: "filled_black", size: "large", text: "signin_with", shape: "pill", width: 300 });
         setGsiReady(true);
@@ -957,6 +957,7 @@ function LabInventory(){
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
+  const refreshTimer = useRef(null);
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
@@ -1073,8 +1074,20 @@ function LabInventory(){
     return id;
   },[]);
 
-  const handleSignIn = (u) => { setUser(u); setSessionExpired(false); setDataLoaded(false); localStorage.setItem("labtrack_user", JSON.stringify(u)); };
-  const handleSignOut = () => { setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
+  const handleSignIn = (u) => {
+    setUser(u); setSessionExpired(false); setDataLoaded(false);
+    localStorage.setItem("labtrack_user", JSON.stringify(u));
+    // Schedule silent token refresh 5 minutes before the JWT expires
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    try {
+      const exp = JSON.parse(atob(u.token.split('.')[1])).exp;
+      const msUntilRefresh = (exp * 1000) - Date.now() - 5 * 60 * 1000;
+      if (msUntilRefresh > 0) {
+        refreshTimer.current = setTimeout(()=>{ try { google.accounts.id.prompt(); } catch(e){} }, msUntilRefresh);
+      }
+    } catch(e) {}
+  };
+  const handleSignOut = () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
 
   const handleSaveCategories = async (newCats) => {
     setCategories(newCats);
@@ -1109,6 +1122,7 @@ function LabInventory(){
       const result = await API.post(user.token, action, payload);
       if (result && result.error === "Unauthorized") {
         setSessionExpired(true);
+        try { google.accounts.id.prompt(); } catch(e) {}
       }
       if (result && result.error && result.error !== "Unauthorized") {
         addToast("error", `Error: ${result.error} — ${result.detail || ""}`);
@@ -1255,8 +1269,8 @@ function LabInventory(){
   const paginatedItems = filtered.slice(page * ITEMS_PER_PAGE, (page+1) * ITEMS_PER_PAGE);
 
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
-  const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected");
-  const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected");
+  const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
+  const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
 
   const TABS=[
     {id:"inventory",l:"Inventory",n:"grid",count:items.length},
@@ -1530,7 +1544,12 @@ function LabInventory(){
                   </Btn>
                 )}
                 {selectedOrders.size>0&&(
-                  <Btn v="amber" onClick={()=>{setEmailText(generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id))));setModal("emailText");}}>
+                  <Btn v="amber" onClick={()=>{
+                    const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
+                    const w=window.open('','_blank','width=720,height=520,resizable=yes,scrollbars=yes');
+                    if(w){w.document.write('<html><head><title>Purchase Request Email</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">📧 Purchase Request — select all and copy (Ctrl+A → Ctrl+C)</h3><pre style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#1a1a1a;padding:20px;border-radius:8px">'+text+'</pre></body></html>');w.document.close();}
+                    else{setEmailText(text);setModal("emailText");}
+                  }}>
                     <Ico n="mail" s={14} col="var(--amber)"/>Email Text ({selectedOrders.size})
                   </Btn>
                 )}
