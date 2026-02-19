@@ -914,14 +914,14 @@ function generateEmailText(orders) {
   const dateStr = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
   const cols = ["Store","Item","Purchase Link","Qty","Price/Item"];
   const rows = orders.map(o=>[
-    o.store||"—",
-    o.item||"—",
-    o.link||"(no link)",
-    `${o.qty} ${o.unit}`,
-    o.price||"—",
+    String(o.store||"—"),
+    String(o.item||"—"),
+    String(o.link||"(no link)"),
+    `${o.qty||""} ${o.unit||""}`.trim()||"—",
+    String(o.price||"—"),
   ]);
-  const widths = cols.map((c,i)=>Math.max(c.length,...rows.map(r=>(r[i]||"").length))+2);
-  const pad = (s,w)=>(s||"").padEnd(w);
+  const widths = cols.map((c,i)=>Math.max(c.length,...rows.map(r=>r[i].length))+2);
+  const pad = (s,w)=>s.padEnd(w);
   const sep = widths.map(w=>"-".repeat(w)).join("+");
   const header = widths.map((w,i)=>pad(cols[i],w)).join("|");
   const dataRows = rows.map(r=>widths.map((w,i)=>pad(r[i],w)).join("|")).join("\n");
@@ -1538,14 +1538,14 @@ function LabInventory(){
                 {activeOrders.length>0&&(
                   <Btn v="ghost" sm onClick={()=>{
                     if(selectedOrders.size===activeOrders.length){setSelectedOrders(new Set());}
-                    else{setSelectedOrders(new Set(activeOrders.map(o=>o.id)));}
+                    else{setSelectedOrders(new Set(activeOrders.map(o=>String(o.id))));}
                   }}>
                     {selectedOrders.size===activeOrders.length?"Deselect All":"Select All"}
                   </Btn>
                 )}
                 {selectedOrders.size>0&&(
                   <Btn v="amber" onClick={()=>{
-                    const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(o.id)));
+                    const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(String(o.id))));
                     const w=window.open('','_blank','width=720,height=520,resizable=yes,scrollbars=yes');
                     if(w){
                       w.document.write('<html><head><title>Purchase Request Email</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">&#x1F4E7; Purchase Request &#x2014; select all and copy (Ctrl+A &#x2192; Ctrl+C)</h3><pre id="t" style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#1a1a1a;padding:20px;border-radius:8px"></pre></body></html>');
@@ -1581,12 +1581,12 @@ function LabInventory(){
                     const sc=statusColors[o.status]||statusColors.Pending;
                     const nextStatus={Pending:"Approved",Approved:"Ordered",Ordered:"Received"};
                     const ns=nextStatus[o.status];
-                    const isSel=selectedOrders.has(o.id);
+                    const isSel=selectedOrders.has(String(o.id));
                     return(
-                      <div key={o.id} onClick={()=>{const sel=new Set(selectedOrders);sel.has(o.id)?sel.delete(o.id):sel.add(o.id);setSelectedOrders(sel);}} style={{background:isSel?"var(--cyan-d)":"var(--bg1)",border:`1px solid ${isSel?"var(--cyan)":"var(--border)"}`,borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`,cursor:"pointer",transition:"background .15s,border-color .15s"}}>
+                      <div key={o.id} onClick={()=>{const sel=new Set(selectedOrders);sel.has(String(o.id))?sel.delete(String(o.id)):sel.add(String(o.id));setSelectedOrders(sel);}} style={{background:isSel?"var(--cyan-d)":"var(--bg1)",border:`1px solid ${isSel?"var(--cyan)":"var(--border)"}`,borderRadius:12,padding:"16px 20px",animation:`fadeUp .3s ease ${idx*.04}s both`,cursor:"pointer",transition:"background .15s,border-color .15s"}}>
                         <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
                           <div style={{paddingTop:2,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                            <input type="checkbox" checked={isSel} onChange={()=>{const sel=new Set(selectedOrders);sel.has(o.id)?sel.delete(o.id):sel.add(o.id);setSelectedOrders(sel);}} style={{width:16,height:16,cursor:"pointer",accentColor:"var(--cyan)"}}/>
+                            <input type="checkbox" checked={isSel} onChange={()=>{const sel=new Set(selectedOrders);sel.has(String(o.id))?sel.delete(String(o.id)):sel.add(String(o.id));setSelectedOrders(sel);}} style={{width:16,height:16,cursor:"pointer",accentColor:"var(--cyan)"}}/>
                           </div>
                           <div style={{flex:1,minWidth:200}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
