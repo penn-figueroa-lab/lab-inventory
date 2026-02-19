@@ -551,25 +551,24 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
 const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
   const UNITS = ["units","pcs","boxes","bottles","sets","rolls","kg","L","m"];
   const [store,setStore]       = useState("");
-  const [link,setLink]         = useState("");
   const [urgency,setUrgency]   = useState("Normal");
   const [dateNeeded,setDate]   = useState(getToday());
   const [reason,setReason]     = useState("");
-  const [items,setItems]       = useState([{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:""}]);
+  const [items,setItems]       = useState([{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:""}]);
 
-  const addItem = () => setItems(p=>[...p,{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:""}]);
+  const addItem = () => setItems(p=>[...p,{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:""}]);
   const removeItem = i => setItems(p=>p.filter((_,j)=>j!==i));
   const upd = (i,field,val) => setItems(p=>p.map((it,j)=>j===i?{...it,[field]:val}:it));
 
-  const validItems = items.filter(it=>it.name.trim()&&it.qty);
-  const canSubmit  = store.trim() && link.trim() && validItems.length>0;
+  const validItems = items.filter(it=>it.name.trim()&&it.qty&&it.link.trim());
+  const canSubmit  = store.trim() && validItems.length>0;
 
   const submit = () => {
     if(!canSubmit) return;
     const ts = Date.now();
     onAddMany(validItems.map((it,i)=>({
       id: ts+i, item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
-      store:store.trim(), link:link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
+      store:store.trim(), link:it.link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
       requestedBy:userName, status:"Pending"
     })));
     onClose();
@@ -583,13 +582,9 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",marginBottom:14}}>
         <div style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:10}}>Store Info</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fld label="Store / Supplier *">
+          <Fld label="Store / Supplier *" hint="e.g. Amazon, McMaster, DigiKey">
             <Inp placeholder="Amazon, McMaster, DigiKey…" value={store} onChange={e=>setStore(e.target.value)}
               style={{borderColor:store.trim()?"var(--border)":"var(--amber)"}}/>
-          </Fld>
-          <Fld label="Purchase Link *" hint="Link to the cart or product page">
-            <Inp placeholder="https://…" value={link} onChange={e=>setLink(e.target.value)}
-              style={{borderColor:link.trim()?"var(--border)":"var(--amber)"}}/>
           </Fld>
           <Fld label="Urgency">
             <Sel value={urgency} onChange={e=>setUrgency(e.target.value)}>
@@ -629,11 +624,13 @@ const OrderModal = ({onClose,onAddMany,userName="",categories}) => {
                 <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}><Ico n="x" s={14}/></button>
               )}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr",gap:8}}>
               <Sel value={it.cat} onChange={e=>upd(i,"cat",e.target.value)} style={{padding:"7px 8px",fontSize:12}}>
                 {categories.map(c=><option key={c}>{c}</option>)}
               </Sel>
-              <Inp placeholder="Est. price (e.g. $49.99)" value={it.price} onChange={e=>upd(i,"price",e.target.value)}/>
+              <Inp placeholder="Est. price" value={it.price} onChange={e=>upd(i,"price",e.target.value)}/>
+              <Inp placeholder="Purchase link (required) https://…" value={it.link} onChange={e=>upd(i,"link",e.target.value)}
+                style={{borderColor:it.link.trim()?"var(--border)":"var(--amber)"}}/>
             </div>
           </div>
         ))}
