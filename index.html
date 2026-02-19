@@ -1139,6 +1139,12 @@ function LabInventory(){
           if (now - lm.checkouts  > GRACE) setCheckouts(data.checkouts || []);
           if (now - lm.orders     > GRACE) setOrders(data.orders || []);
           if (data.userRole) setUserRole(data.userRole);
+          if (data.settings && data.settings.categories) {
+            try {
+              const sc = JSON.parse(data.settings.categories);
+              if (Array.isArray(sc) && sc.length > 0) { setCategories(sc); localStorage.setItem("labtrack_categories", JSON.stringify(sc)); }
+            } catch {}
+          }
         }
       } catch {}
     }, 30000);
