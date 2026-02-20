@@ -91,7 +91,7 @@ function getLowStockItems_() {
   var sheet = getSheet("Items");
   if (!sheet) return [];
   var data = sheetToJson(sheet);
-  return data.filter(function(i){ return i.qty!==undefined && i.minQty!==undefined && Number(i.qty) <= Number(i.minQty); });
+  return data.filter(function(i){ return i.qty!==undefined && i.minQty!==undefined && Number(i.minQty) > 0 && Number(i.qty) <= Number(i.minQty); });
 }
 
 // ─── DAILY DIGEST (Trigger: sendDailyDigest → Day timer → 5pm–6pm, timezone: America/New_York) ─

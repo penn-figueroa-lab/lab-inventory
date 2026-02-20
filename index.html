@@ -372,7 +372,7 @@ const ItemPicker = ({items, value, onChange, categories}) => {
             <span style={{width:8,height:8,borderRadius:"50%",background:ac,flexShrink:0}}/>
             <span style={{fontWeight:600}}>{selected.name}</span>
             <span style={{color:"var(--dim)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{selected.loc}</span>
-            <Badge status={selected.qty<=selected.minQty?"Low Stock":selected.status}/>
+            <Badge status={selected.minQty>0&&selected.qty<=selected.minQty?"Low Stock":selected.status}/>
           </div>
         ):<span>Search or select an item...</span>}
         <span style={{color:"var(--dim)",fontSize:10,flexShrink:0}}>{open?"▲":"▼"}</span>
@@ -399,7 +399,7 @@ const ItemPicker = ({items, value, onChange, categories}) => {
             {filtered.length===0?(
               <div style={{padding:"24px 16px",textAlign:"center",color:"var(--dim)",fontSize:13}}>No items match "{q}"</div>
             ):filtered.map(item=>{
-              const itemAc=getCatAccent(item.cat,categories);const low=item.qty<=item.minQty;const isSel=item.name===value;
+              const itemAc=getCatAccent(item.cat,categories);const low=item.minQty>0&&item.qty<=item.minQty;const isSel=item.name===value;
               return(
                 <div key={item.id} onClick={()=>pick(item)} className={isSel?"item-sel-row":"row-hover"} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid var(--border)",transition:"background .12s"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:low?"var(--red)":itemAc,flexShrink:0}}/>
@@ -514,7 +514,7 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
 
 // ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────
 const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
-  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"1",img:"",serial:"",shared:false,consumable:false});
+  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",serial:"",shared:false,consumable:false});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
@@ -528,7 +528,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Min Stock Alert"><Inp type="number" placeholder="1" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
@@ -537,7 +537,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:+f.minQty||1,status:"Available",usedBy:[],displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
+        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[],displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
       </div>
     </Modal>
   );
@@ -545,7 +545,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
 const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
-  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty||1),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
+  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const [confirmDel,setConfirmDel]=useState(false);
@@ -558,7 +558,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
         <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
         <Fld label="Label ID" hint="ID on physical sticker"><Inp value={f.displayId} onChange={s("displayId")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
@@ -580,7 +580,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:+f.minQty||1,shared:f.shared,consumable:f.consumable,displayId:f.displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
+          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable,displayId:f.displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
         </div>
       </div>
     </Modal>
@@ -589,7 +589,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
 
 // ─── PENDING ITEM STAGING MODAL (delivery → inventory) ───────────────────────
 const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
-  const [f,setF]=useState({name:order.item||"",cat:order.cat||categories[0]||"Other",qty:String(order.qty||""),unit:order.unit||"units",loc:"",desc:"",minQty:"1",serial:"",shared:false,consumable:false,img:""});
+  const [f,setF]=useState({name:order.item||"",cat:order.cat||categories[0]||"Other",qty:String(order.qty||""),unit:order.unit||"units",loc:"",desc:"",minQty:"0",serial:"",shared:false,consumable:false,img:""});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(order.cat||categories[0]||"Other",allItems));
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
@@ -607,7 +607,7 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
         <Fld label="Inventory Qty" hint="How many individual units are going in?"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Inventory Unit" hint="Unit for each individual item"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Min Stock Alert"><Inp type="number" value={f.minQty} onChange={s("minQty")}/></Fld>
+        <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Notes"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
@@ -749,7 +749,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
   const [confirmId,setConfirmId]=useState(null);
   const hist=checkouts.filter(c=>c.item===item.name);
   const ac=getCatAccent(item.cat,categories);
-  const isLow=item.qty<=item.minQty;
+  const isLow=item.minQty>0&&item.qty<=item.minQty;
   return(
     <>
     <Modal onClose={onClose} title="" mw={640}>
@@ -1242,7 +1242,7 @@ function LabInventory(){
   },[user]);
 
   // computed
-  const lowStock = items.filter(i=>i.qty<=i.minQty);
+  const lowStock = items.filter(i=>i.minQty>0&&i.qty<=i.minQty);
   const activeOut = checkouts.filter(c=>c.status==="Active");
   const overdues = checkouts.filter(c=>isOverdue(c));
 
@@ -1415,7 +1415,7 @@ function LabInventory(){
   };
 
   const handleConfirmPendingItem = async (itemData) => {
-    const newItem = {id:Date.now(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:+itemData.minQty||1};
+    const newItem = {id:Date.now(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:isNaN(+itemData.minQty)?0:+itemData.minQty};
     setItems(p=>[newItem,...p]);
     addToast("success",`"${newItem.name}" added to inventory!`);
     await postAction("addItem", {item: newItem});
@@ -1651,7 +1651,7 @@ function LabInventory(){
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
                 {paginatedItems.map((item,idx)=>{
                   const ac=getCatAccent(item.cat,categories);
-                  const isLow=item.qty<=item.minQty;
+                  const isLow=item.minQty>0&&item.qty<=item.minQty;
                   return(
                     <div key={item.id} className="card-item" onClick={()=>setDetail(item)} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`}}>
                       <div style={{position:"relative"}}>
@@ -1700,10 +1700,10 @@ function LabInventory(){
                         <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
                           <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}</td>
                           <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
-                          <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
+                          <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.minQty>0&&item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
                           <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
                           <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.serial||"—"}</td>
-                          <td style={{padding:"10px 16px"}}><Badge status={item.qty<=item.minQty?"Low Stock":item.status}/></td>
+                          <td style={{padding:"10px 16px"}}><Badge status={item.minQty>0&&item.qty<=item.minQty?"Low Stock":item.status}/></td>
                           <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
                         </tr>
                       ))}
