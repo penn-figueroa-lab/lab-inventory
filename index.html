@@ -569,7 +569,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
         <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
         {!(splitUnits&&canSplit)&&(
-          <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
+          <div style={{gridColumn:"1/-1"}}><Fld label="S/N / P/N"><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         )}
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
@@ -589,8 +589,8 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:6}}>
                   {Array.from({length:n},(_,i)=>(
-                    <Fld key={i} label={`Serial — unit ${String(i+1).padStart(3,"0")}`}>
-                      <Inp placeholder="optional" value={serials[i]||""} onChange={e=>{const a=[...serials];a[i]=e.target.value;setSerials(a);}}/>
+                    <Fld key={i} label={`S/N / P/N — unit ${String(i+1).padStart(3,"0")}`}>
+                      <Inp placeholder="e.g. SN-001" value={serials[i]||""} onChange={e=>{const a=[...serials];a[i]=e.target.value;setSerials(a);}}/>
                     </Fld>
                   ))}
                 </div>
@@ -636,7 +636,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
         <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
         <Fld label="Label ID" hint="ID on physical sticker"><Inp value={f.displayId} onChange={s("displayId")}/></Fld>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="S/N / P/N"><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         {canSplit&&(
@@ -703,7 +703,7 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
         <Fld label="Inventory Unit" hint="Unit for each individual item"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp value={f.serial} onChange={s("serial")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="S/N / P/N"><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Notes"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>
           <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f.shared} onChange={chk("shared")} style={{accentColor:"var(--cyan)"}}/>Shared resource</label>
@@ -859,7 +859,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
           </div>
           <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 14px"}}>{item.desc||"No description."}</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Serial",item.serial||"—"]].map(([k,v])=>(
+            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["S/N / P/N",item.serial||"—"]].map(([k,v])=>(
               <div key={k}>
                 <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace"}}>{k}</div>
                 <div style={{color:"var(--text)",fontSize:13}}>{v}</div>
@@ -1689,7 +1689,7 @@ function LabInventory(){
             <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
               <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
-                <Inp placeholder="Search name, location, serial..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
+                <Inp placeholder="Search name, location, S/N..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
                 {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
               </div>
 
@@ -1788,7 +1788,7 @@ function LabInventory(){
                 <div style={{overflow:"auto",maxHeight:"65vh"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                     <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
-                      {["Item","Category","Stock","Location","Serial","Status","In Use By"].map(h=>(
+                      {["Item","Category","Stock","Location","S/N / P/N","Status","In Use By"].map(h=>(
                         <th key={h} className="sticky-th" style={{padding:"11px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
                       ))}
                     </tr></thead>
