@@ -645,6 +645,15 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   }
 
+  // ── Log Edit Unlock (non-admin members only) ──────────────────────────────
+  if (action === "logEditUnlock") {
+    var auditSheet = getOrCreateSheet("AuditLog", ["date", "user", "email", "action"]);
+    var now = new Date();
+    var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
+    auditSheet.appendRow([dateStr, body.user || "", body.email || "", "EditUnlock"]);
+    return jsonResponse({ ok: true });
+  }
+
   return jsonResponse({ error: "Unknown action: " + action });
   } catch (err) {
     return jsonResponse({ error: "Server error", detail: err.message });

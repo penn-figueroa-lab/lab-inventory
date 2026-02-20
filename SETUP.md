@@ -36,6 +36,8 @@ The backend uses a Google Sheet with these tabs:
 
 **DeleteLog** (auto-created) — `date | type | name | details | deletedBy`
 
+**AuditLog** (auto-created) — `date | user | email | action` — logs when a non-admin member unlocks editing mode
+
 **SlackQueue** (auto-created, used by digest mode) — `time | emoji | title | details | fields`
 
 ---

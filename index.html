@@ -1166,7 +1166,7 @@ function LabInventory(){
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
-  const [editLocked, setEditLocked] = useState(false);
+  const [editLocked, setEditLocked] = useState(true);
   const tid = useRef(0);
   const refreshTimer = useRef(null);
   const deletedItemIds = useRef(new Set());
@@ -1622,7 +1622,12 @@ function LabInventory(){
             <Ico n={darkMode?"sun":"moon"} s={14}/>
           </button>
           {/* Edit lock */}
-          <button onClick={()=>setEditLocked(l=>!l)} title={editLocked?"Unlock editing":"Lock editing to prevent accidental changes"}
+          <button onClick={()=>{
+            if(editLocked && userRole!=="admin"){
+              postAction("logEditUnlock",{user:user?.name||"",email:user?.email||""});
+            }
+            setEditLocked(l=>!l);
+          }} title={editLocked?"Unlock editing":"Lock editing to prevent accidental changes"}
             style={{background:editLocked?"var(--red-d)":"var(--bg2)",border:`1px solid ${editLocked?"#ff4d6a50":"var(--border)"}`,borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:editLocked?"var(--red)":"var(--sub)",transition:"all .15s"}}
             className="ibtn">
             <Ico n={editLocked?"lock":"unlock"} s={14}/>
@@ -1690,7 +1695,7 @@ function LabInventory(){
             <Ico n="lock" s={13} col="var(--red)"/>
             <span style={{color:"var(--red)",fontSize:12,fontWeight:600}}>Editing locked — inventory is in read-only mode</span>
           </div>
-          <button onClick={()=>setEditLocked(false)} style={{background:"none",border:"1px solid #ff4d6a40",color:"var(--red)",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>Unlock</button>
+          <button onClick={()=>{if(userRole!=="admin")postAction("logEditUnlock",{user:user?.name||"",email:user?.email||""});setEditLocked(false);}} style={{background:"none",border:"1px solid #ff4d6a40",color:"var(--red)",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>Unlock</button>
         </div>
       )}
 
