@@ -297,6 +297,16 @@ function logDeletion(type, name, details, deletedBy) {
   sendSlack("🗑️", type + " Deleted: " + name, null, ["*Deleted by*\n" + deletedBy, "*Details*\n" + details], "normal");
 }
 
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+// Logs every significant write action for accountability / troll detection.
+// Columns: date | user | email | action | details
+function logAudit(userName, userEmail, action, details) {
+  var sheet = getOrCreateSheet("AuditLog", ["date", "user", "email", "action", "details"]);
+  var now = new Date();
+  var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
+  sheet.appendRow([dateStr, userName || "", userEmail || "", action, details || ""]);
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function getSheet(name) {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
@@ -424,6 +434,7 @@ function doPost(e) {
       "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial", "displayId", "shared", "consumable"
     ]);
     sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
+    logAudit(userName, userEmail, "AddItem", it.name + " | qty:" + (it.qty||0) + " " + (it.unit||"") + " | cat:" + (it.cat||"") + " | id:" + (it.displayId||""));
     return jsonResponse({ ok: true });
   }
 
@@ -445,6 +456,7 @@ function doPost(e) {
           if (col >= 0 && it[f] !== undefined) row[col] = it[f];
         });
         sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        logAudit(userName, userEmail, "UpdateItem", (it.name||"") + " | id:" + (it.displayId||it.id||""));
         return jsonResponse({ ok: true });
       }
     }
@@ -470,6 +482,7 @@ function doPost(e) {
         var itemName = rowObj.name || "Unknown";
         var details = "cat:" + (rowObj.cat||"") + " qty:" + (rowObj.qty||"") + " loc:" + (rowObj.loc||"") + " serial:" + (rowObj.serial||"");
         logDeletion("Item", itemName, details, userName);
+        logAudit(userName, userEmail, "DeleteItem", itemName + " | " + details);
         sheet.deleteRow(i + 1);
         return jsonResponse({ ok: true });
       }
@@ -484,6 +497,7 @@ function doPost(e) {
       "id", "item", "qty", "unit", "from", "receivedBy", "date", "tracking", "status"
     ]);
     sendSlack("🚚", "Delivery Received: " + d.item, null, ["*Qty*\n" + d.qty + " " + d.unit, "*Supplier*\n" + (d.from||"—"), "*Received by*\n" + (d.receivedBy||userName), "*Tracking*\n" + (d.tracking||"—")]);
+    logAudit(userName, userEmail, "AddDelivery", d.item + " × " + d.qty + " " + (d.unit||"") + " from " + (d.from||"—"));
     return jsonResponse({ ok: true });
   }
 
@@ -495,6 +509,7 @@ function doPost(e) {
     ]);
     updateItemStatus(c.item, "In Use", c.user, "add");
     sendSlack("🔑", "Item Checked Out: " + c.item, null, ["*Person*\n" + c.user, "*Date*\n" + (c.out||"—"), "*Return by*\n" + (c.ret||"—")]);
+    logAudit(userName, userEmail, "Checkout", c.item + " → " + c.user + " | return by:" + (c.ret||"—"));
     return jsonResponse({ ok: true });
   }
 
@@ -524,6 +539,7 @@ function doPost(e) {
         const returnedUser = data[i][userCol];
         updateItemStatus(itemName, "Available", returnedUser, "remove");
         sendSlack("✅", "Item Returned: " + itemName, null, ["*Returned by*\n" + userName]);
+        logAudit(userName, userEmail, "Return", itemName + " | originally checked out by:" + returnedUser);
         break;
       }
     }
@@ -541,6 +557,7 @@ function doPost(e) {
       "*Store:* " + (o.store||"—") + linkText,
       ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName],
       (o.urgency==="Urgent"||o.urgency==="High")?"high":"normal");
+    logAudit(userName, userEmail, "AddOrder", o.item + " | " + (o.store||"—") + " | qty:" + o.qty + " | urgency:" + (o.urgency||"Normal"));
     return jsonResponse({ ok: true });
   }
 
@@ -562,6 +579,7 @@ function doPost(e) {
         var row = data[i].slice();
         fields.forEach(f => { const col = headers.indexOf(f); if (col >= 0 && o[f] !== undefined) row[col] = o[f]; });
         sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        logAudit(userName, userEmail, "UpdateOrder", (o.item||"") + " | store:" + (o.store||"—"));
         return jsonResponse({ ok: true });
       }
     }
@@ -593,6 +611,7 @@ function doPost(e) {
         sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
         var orderItem = data[i][itemCol] || "";
         sendSlack("📋", "Order Status Updated: " + orderItem, null, ["*New Status*\n" + newStatus, "*Updated by*\n" + userName]);
+        logAudit(userName, userEmail, "OrderStatus", orderItem + " → " + newStatus);
         return jsonResponse({ ok: true });
       }
     }
@@ -615,6 +634,7 @@ function doPost(e) {
       if (idsMatch(data[i][idCol], orderId)) {
         var orderName = data[i][itemCol] || "Unknown";
         logDeletion("Order", orderName, "id:" + orderId, userName);
+        logAudit(userName, userEmail, "DeleteOrder", orderName);
         sheet.deleteRow(i + 1);
         return jsonResponse({ ok: true });
       }
@@ -645,12 +665,9 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   }
 
-  // ── Log Edit Unlock (non-admin members only) ──────────────────────────────
+  // ── Log Edit Unlock (non-admin members only; admin skipped client-side) ────
   if (action === "logEditUnlock") {
-    var auditSheet = getOrCreateSheet("AuditLog", ["date", "user", "email", "action"]);
-    var now = new Date();
-    var dateStr = now.toISOString().slice(0, 19).replace("T", " ");
-    auditSheet.appendRow([dateStr, body.user || "", body.email || "", "EditUnlock"]);
+    logAudit(userName, userEmail, "EditUnlock", "inventory editing unlocked");
     return jsonResponse({ ok: true });
   }
 

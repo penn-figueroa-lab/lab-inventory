@@ -36,7 +36,21 @@ The backend uses a Google Sheet with these tabs:
 
 **DeleteLog** (auto-created) — `date | type | name | details | deletedBy`
 
-**AuditLog** (auto-created) — `date | user | email | action` — logs when a non-admin member unlocks editing mode
+**AuditLog** (auto-created) — `date | user | email | action | details`
+
+| Action | Logged for | Details |
+|--------|-----------|---------|
+| `EditUnlock` | non-admins only | "inventory editing unlocked" |
+| `AddItem` | everyone | name, qty, category, label ID |
+| `UpdateItem` | everyone | name, label ID |
+| `DeleteItem` | admins only | name + cat/qty/loc/serial |
+| `AddDelivery` | everyone | item × qty, supplier |
+| `Checkout` | everyone | item → person, return date |
+| `Return` | everyone | item, original checkout owner |
+| `AddOrder` | everyone | item, store, qty, urgency |
+| `UpdateOrder` | everyone | item, store |
+| `OrderStatus` | admins only | item → new status |
+| `DeleteOrder` | admins only | order name |
 
 **SlackQueue** (auto-created, used by digest mode) — `time | emoji | title | details | fields`
 
