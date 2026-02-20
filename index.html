@@ -516,10 +516,23 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
 const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
   const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",serial:"",shared:false,consumable:false});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
+  const [splitUnits,setSplitUnits]=useState(false);
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
+  const n=+f.qty||0;
+  const canSplit=n>1&&!f.consumable;
+  const submit=()=>{
+    if(!f.name||!f.qty)return;
+    const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
+    if(splitUnits&&canSplit){
+      for(let u=1;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,displayId:`${displayId}-${String(u).padStart(2,"0")}`});
+    } else {
+      onAdd({...base,id:Date.now(),qty:n,displayId});
+    }
+    onClose();
+  };
   return(
     <Modal onClose={onClose} title="Add Item">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -533,23 +546,47 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        {canSplit&&(
+          <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--cyan)"}}>
+              <input type="checkbox" checked={splitUnits} onChange={e=>setSplitUnits(e.target.checked)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>
+              <strong>Track each unit individually</strong><span style={{color:"var(--sub)",fontWeight:400}}> — for cameras, robots, laptops</span>
+            </label>
+            {splitUnits&&<div style={{marginTop:7,fontSize:11,color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.6}}>
+              Creates {n} separate items:{" "}
+              {Array.from({length:Math.min(n,3)},(_,i)=>`${displayId}-${String(i+1).padStart(2,"0")}`).join(", ")}
+              {n>3?` … ${displayId}-${String(n).padStart(2,"0")}`:""}<br/>
+              Each gets its own sticker, status, and checkout history.
+            </div>}
+          </div>
+        )}
         <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.name&&f.qty){onAdd({id:Date.now(),...f,qty:+f.qty,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[],displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
+        <Btn onClick={submit} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>{splitUnits&&canSplit?`Create ${n} Items`:"Add Item"}</Btn>
       </div>
     </Modal>
   );
 };
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
-const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
+const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) => {
   const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const [confirmDel,setConfirmDel]=useState(false);
+  const [splitConfirm,setSplitConfirm]=useState(false);
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
+  const n=+f.qty||0;
+  const canSplit=n>1&&!f.consumable;
+  const baseId=f.displayId.replace(/-\d{2}$/,"");
+  const handleSplit=()=>{
+    const base={...item,...f,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable};
+    onSave({...base,qty:1,displayId:`${baseId}-01`});
+    for(let u=2;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(2,"0")}`});
+    onClose();
+  };
   return(
     <Modal onClose={onClose} title="Edit Item" mw={560}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -564,6 +601,25 @@ const EditItemModal = ({item,onClose,onSave,onDelete,categories,isAdmin}) => {
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        {canSplit&&(
+          <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
+            {!splitConfirm?(
+              <button onClick={()=>setSplitConfirm(true)} style={{background:"none",border:"none",color:"var(--cyan)",fontSize:13,cursor:"pointer",padding:0,textAlign:"left"}}>
+                <Ico n="layers" s={12} col="var(--cyan)"/> Split into {n} individual units ({baseId}-01 … -{String(n).padStart(2,"0")})
+              </button>
+            ):(
+              <div>
+                <div style={{fontSize:12,color:"var(--sub)",marginBottom:8}}>
+                  Creates {n} items: <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-01</span> → <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-{String(n).padStart(2,"0")}</span>. This item becomes <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-01</span> with qty 1.
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <Btn sm onClick={handleSplit}><Ico n="check" s={12} col="#000"/>Confirm Split</Btn>
+                  <Btn v="ghost" sm onClick={()=>setSplitConfirm(false)}>Cancel</Btn>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
@@ -1000,8 +1056,9 @@ function catPrefix(cat) {
 }
 function genDisplayId(cat, allItems) {
   const prefix = catPrefix(cat);
-  // Global sequential counter (5 digits, up to 99,999 items)
-  const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d+)$/);return m?parseInt(m[1]):0;}));
+  // Global sequential 5-digit counter. The regex ignores any sub-ID suffix
+  // (e.g. captures 00042 from "CE-00042-01" so split units don't corrupt the counter)
+  const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d{5})(?:-\d+)?$/);return m?parseInt(m[1]):0;}));
   return `${prefix}-${String(maxNum+1).padStart(5,"0")}`;
 }
 
@@ -2033,7 +2090,7 @@ function LabInventory(){
       {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items}/>}
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
-      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} categories={categories} isAdmin={userRole==="admin"}/>}
+      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} onAdd={handleAddItem} categories={categories} isAdmin={userRole==="admin"}/>}
       {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={userRole==="admin"} categories={categories}/>}
       {modal==="emailText"&&<Modal onClose={()=>{setModal(null);setEmailText("");}} title="📧 Purchase Request Email Text" mw={700}>
         <p style={{color:"var(--sub)",fontSize:13,marginBottom:10}}>Select all and copy (Ctrl+A → Ctrl+C), then paste into your email.</p>
