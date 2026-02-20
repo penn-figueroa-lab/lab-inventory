@@ -844,7 +844,7 @@ const ConfirmModal = ({msg,onConfirm,onClose}) => (
 );
 
 // ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────
-const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories}) => {
+const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories,editLocked}) => {
   const [confirmId,setConfirmId]=useState(null);
   const hist=checkouts.filter(c=>c.item===item.name);
   const ac=getCatAccent(item.cat,categories);
@@ -873,7 +873,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
           </div>
           <div style={{display:"flex",gap:8}}>
             {item.status!=="Maintenance"&&<Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}><Ico n="tag" s={14} col="#000"/>Quick Check Out</Btn>}
-            <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}}><Ico n="edit" s={14}/>Edit</Btn>
+            <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}} disabled={editLocked} title={editLocked?"Editing is locked":"Edit item"} style={editLocked?{opacity:0.4,cursor:"not-allowed"}:{}}><Ico n={editLocked?"lock":"edit"} s={14}/>{editLocked?"Locked":"Edit"}</Btn>
           </div>
         </div>
       </div>
@@ -1471,7 +1471,10 @@ function LabInventory(){
     }
   };
 
-  const handleEditItem = (item) => { setEditItem(item); };
+  const handleEditItem = (item) => {
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
+    setEditItem(item);
+  };
 
   const handleAddOrder = async (order) => {
     setOrders(p=>[order,...p]);
@@ -1824,7 +1827,7 @@ function LabInventory(){
                             <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
                           </div>
                           {item.consumable?(
-                            <button onClick={e=>{e.stopPropagation();const n=parseInt(window.prompt(`How many ${item.unit} used?`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,n);}} style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Use</button>
+                            <button onClick={e=>{e.stopPropagation();if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}const n=parseInt(window.prompt(`How many ${item.unit} used?`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,n);}} style={{background:editLocked?"var(--bg3)":"var(--amber-d)",color:editLocked?"var(--dim)":"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:editLocked?"not-allowed":"pointer"}}>Use</button>
                           ):item.usedBy?.length>0?(
                             <div style={{display:"flex"}}>{item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
                           ):null}
@@ -2222,7 +2225,7 @@ function LabInventory(){
           ))}
         </div>
       </Modal>}
-      {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories}/>}
+      {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
