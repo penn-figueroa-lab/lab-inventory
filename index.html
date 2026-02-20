@@ -312,7 +312,7 @@ const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const saveAll = () => {localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onSave(cats);onClose();};
   return (
     <Modal onClose={onClose} title="Manage Categories" mw={460}>
-      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Optionally set a custom prefix per category — auto-generated from initials if left blank. Label IDs look like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>RM-00001</span>, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>SV-00042</span>.</div>
+      <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Optionally set a custom prefix per category — auto-generated from initials if left blank. Label IDs look like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>RM-000001</span>, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>SV-000042</span>.</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",alignItems:"center",gap:6,marginBottom:6,padding:"0 4px"}}>
         <span style={{color:"var(--dim)",fontSize:11,fontWeight:600}}>CATEGORY</span>
         <span style={{color:"var(--dim)",fontSize:11,fontWeight:600,textAlign:"center",width:72}}>PREFIX</span>
@@ -324,7 +324,7 @@ const ManageCategoriesModal = ({categories, onSave, onClose}) => {
           <div key={c} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",alignItems:"center",gap:6,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px"}}>
             <span style={{fontSize:14,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
             <input value={prefixes[c]||""} placeholder={autoP(c)} title="Custom prefix (letters only). Leave blank to auto-generate." onChange={e=>setPrefixes(p=>({...p,[c]:e.target.value.replace(/[^a-zA-Z]/g,"").toUpperCase().slice(0,5)}))} style={{width:72,background:"var(--bg0)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 6px",color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",textAlign:"center"}}/>
-            <span style={{color:"var(--sub)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",width:80,textAlign:"center"}}>{(prefixes[c]||autoP(c))+"-00001"}</span>
+            <span style={{color:"var(--sub)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",width:80,textAlign:"center"}}>{(prefixes[c]||autoP(c))+"-000001"}</span>
             <button onClick={()=>removeCat(c)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={14}/></button>
           </div>
         ))}
@@ -517,17 +517,27 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
   const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",serial:"",shared:false,consumable:false});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
   const [splitUnits,setSplitUnits]=useState(false);
+  const [serials,setSerials]=useState([]);
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
   const n=+f.qty||0;
   const canSplit=n>1&&!f.consumable;
+  // Keep serials array in sync with qty when split mode is on
+  useEffect(()=>{
+    if(splitUnits&&n>0) setSerials(s=>Array.from({length:n},(_,i)=>s[i]||""));
+  },[n,splitUnits]);
+  // Duplicate detection: flag existing items sharing a keyword with the typed name
+  const dupWords=f.name.toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+  const dupCheck=f.name.length>=3&&dupWords.length>0
+    ?allItems.filter(i=>dupWords.some(w=>(i.name||"").toLowerCase().includes(w)))
+    :[];
   const submit=()=>{
     if(!f.name||!f.qty)return;
     const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
     if(splitUnits&&canSplit){
-      for(let u=1;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,displayId:`${displayId}-${String(u).padStart(2,"0")}`});
+      for(let u=1;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,serial:serials[u-1]||"",displayId:`${displayId}-${String(u).padStart(3,"0")}`});
     } else {
       onAdd({...base,id:Date.now(),qty:n,displayId});
     }
@@ -536,14 +546,31 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
   return(
     <Modal onClose={onClose} title="Add Item">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}>
+          <Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld>
+          {dupCheck.length>0&&(
+            <div style={{marginTop:6,background:"var(--amber-d)",border:"1px solid #f5a62340",borderRadius:7,padding:"8px 12px",fontSize:12,color:"var(--amber)"}}>
+              <strong>Possible duplicate{dupCheck.length>1?"s":""} already in inventory:</strong>
+              <div style={{marginTop:4,display:"flex",flexWrap:"wrap",gap:6}}>
+                {dupCheck.slice(0,5).map(i=>(
+                  <span key={i.id} style={{background:"rgba(245,166,35,0.12)",border:"1px solid #f5a62330",borderRadius:5,padding:"1px 7px",fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>
+                    {i.name} <span style={{color:"var(--sub)"}}>({i.displayId||"no ID"}, qty {i.qty})</span>
+                  </span>
+                ))}
+                {dupCheck.length>5&&<span style={{color:"var(--sub)",fontSize:11}}>+{dupCheck.length-5} more</span>}
+              </div>
+            </div>
+          )}
+        </div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
+        {!(splitUnits&&canSplit)&&(
+          <div style={{gridColumn:"1/-1"}}><Fld label="Serial Number (optional)"><Inp placeholder="e.g. SN-2024-001" value={f.serial} onChange={s("serial")}/></Fld></div>
+        )}
         <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         {canSplit&&(
@@ -552,12 +579,23 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
               <input type="checkbox" checked={splitUnits} onChange={e=>setSplitUnits(e.target.checked)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>
               <strong>Track each unit individually</strong><span style={{color:"var(--sub)",fontWeight:400}}> — for cameras, robots, laptops</span>
             </label>
-            {splitUnits&&<div style={{marginTop:7,fontSize:11,color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.6}}>
-              Creates {n} separate items:{" "}
-              {Array.from({length:Math.min(n,3)},(_,i)=>`${displayId}-${String(i+1).padStart(2,"0")}`).join(", ")}
-              {n>3?` … ${displayId}-${String(n).padStart(2,"0")}`:""}<br/>
-              Each gets its own sticker, status, and checkout history.
-            </div>}
+            {splitUnits&&(
+              <div style={{marginTop:8}}>
+                <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8,lineHeight:1.6}}>
+                  Creates {n} items:{" "}
+                  {Array.from({length:Math.min(n,3)},(_,i)=>`${displayId}-${String(i+1).padStart(3,"0")}`).join(", ")}
+                  {n>3?` … ${displayId}-${String(n).padStart(3,"0")}`:""}<br/>
+                  Each gets its own sticker, status, and checkout history.
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:6}}>
+                  {Array.from({length:n},(_,i)=>(
+                    <Fld key={i} label={`Serial — unit ${String(i+1).padStart(3,"0")}`}>
+                      <Inp placeholder="optional" value={serials[i]||""} onChange={e=>{const a=[...serials];a[i]=e.target.value;setSerials(a);}}/>
+                    </Fld>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
@@ -580,11 +618,11 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
   const n=+f.qty||0;
   const canSplit=n>1&&!f.consumable;
-  const baseId=f.displayId.replace(/-\d{2}$/,"");
+  const baseId=f.displayId.replace(/-\d{3}$/,"");
   const handleSplit=()=>{
     const base={...item,...f,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable};
-    onSave({...base,qty:1,displayId:`${baseId}-01`});
-    for(let u=2;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(2,"0")}`});
+    onSave({...base,qty:1,displayId:`${baseId}-001`});
+    for(let u=2;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(3,"0")}`});
     onClose();
   };
   return(
@@ -605,12 +643,12 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
           <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
             {!splitConfirm?(
               <button onClick={()=>setSplitConfirm(true)} style={{background:"none",border:"none",color:"var(--cyan)",fontSize:13,cursor:"pointer",padding:0,textAlign:"left"}}>
-                <Ico n="layers" s={12} col="var(--cyan)"/> Split into {n} individual units ({baseId}-01 … -{String(n).padStart(2,"0")})
+                <Ico n="layers" s={12} col="var(--cyan)"/> Split into {n} individual units ({baseId}-001 … -{String(n).padStart(3,"0")})
               </button>
             ):(
               <div>
                 <div style={{fontSize:12,color:"var(--sub)",marginBottom:8}}>
-                  Creates {n} items: <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-01</span> → <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-{String(n).padStart(2,"0")}</span>. This item becomes <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-01</span> with qty 1.
+                  Creates {n} items: <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-001</span> → <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-{String(n).padStart(3,"0")}</span>. This item becomes <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-001</span> with qty 1.
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   <Btn sm onClick={handleSplit}><Ico n="check" s={12} col="#000"/>Confirm Split</Btn>
@@ -1056,10 +1094,10 @@ function catPrefix(cat) {
 }
 function genDisplayId(cat, allItems) {
   const prefix = catPrefix(cat);
-  // Global sequential 5-digit counter. The regex ignores any sub-ID suffix
-  // (e.g. captures 00042 from "CE-00042-01" so split units don't corrupt the counter)
-  const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d{5})(?:-\d+)?$/);return m?parseInt(m[1]):0;}));
-  return `${prefix}-${String(maxNum+1).padStart(5,"0")}`;
+  // Global sequential 6-digit counter. The regex ignores any sub-ID suffix
+  // (e.g. captures 000042 from "CE-000042-001" so split units don't corrupt the counter)
+  const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d{6})(?:-\d+)?$/);return m?parseInt(m[1]):0;}));
+  return `${prefix}-${String(maxNum+1).padStart(6,"0")}`;
 }
 
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
@@ -1118,6 +1156,8 @@ function LabInventory(){
   const [dataLoaded,setDataLoaded] = useState(false);
   const [userRole, setUserRole] = useState("member");
   const [page, setPage] = useState(0);
+  const [invLimit, setInvLimit] = useState(ITEMS_PER_PAGE);
+  const [checkoutLimit, setCheckoutLimit] = useState(30);
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const tid = useRef(0);
@@ -1252,8 +1292,8 @@ function LabInventory(){
     return () => clearInterval(interval);
   },[user, dataLoaded]);
 
-  // Reset page when filters change
-  useEffect(()=>{ setPage(0); },[search, catF]);
+  // Reset page/limit when filters change
+  useEffect(()=>{ setPage(0); setInvLimit(ITEMS_PER_PAGE); },[search, catF, sortBy]);
 
   const addToast=useCallback((type,msg,onClick)=>{
     const id=++tid.current;
@@ -1494,8 +1534,8 @@ function LabInventory(){
     return f;
   },[items, search, catF, sortBy]);
 
-  // Paginated
-  const paginatedItems = filtered.slice(page * ITEMS_PER_PAGE, (page+1) * ITEMS_PER_PAGE);
+  // Load-more sliced items
+  const paginatedItems = filtered.slice(0, invLimit);
 
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
   const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
@@ -1769,7 +1809,15 @@ function LabInventory(){
                 </div>
               </div>
             )}
-            <Pagination total={filtered.length} page={page} setPage={setPage}/>
+            {filtered.length>invLimit&&(
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:12}}>
+                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {filtered.length} items</span>
+                <button onClick={()=>setInvLimit(l=>l+ITEMS_PER_PAGE)} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>Load more</button>
+              </div>
+            )}
+            {filtered.length>0&&filtered.length<=invLimit&&invLimit>ITEMS_PER_PAGE&&(
+              <div style={{textAlign:"center",marginTop:16,color:"var(--dim)",fontSize:12}}>All {filtered.length} items shown</div>
+            )}
           </div>
         )}
 
@@ -2037,7 +2085,7 @@ function LabInventory(){
                       <th key={i} className="sticky-th" style={{padding:"10px 16px",textAlign:"left",color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{h}</th>
                     ))}
                   </tr></thead>
-                  <tbody>{checkouts.map((c,i)=>{
+                  <tbody>{checkouts.slice(0,checkoutLimit).map((c,i)=>{
                     const od=isOverdue(c);const isSel=selected.has(c.id);const canRet=canReturn(c);
                     const activeCheckouts=checkouts.filter(x=>x.status==="Active"&&canReturn(x));
                     const handleCoClick=(e)=>{
@@ -2066,6 +2114,12 @@ function LabInventory(){
                   })}</tbody>
                 </table>
               </div>
+              {checkouts.length>checkoutLimit&&(
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 0",gap:12,borderTop:"1px solid var(--border)"}}>
+                  <span style={{color:"var(--dim)",fontSize:12}}>Showing {checkoutLimit} of {checkouts.length} records</span>
+                  <button onClick={()=>setCheckoutLimit(l=>l+30)} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"5px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>Load more</button>
+                </div>
+              )}
             </div>
               </>
             )}
@@ -2103,7 +2157,7 @@ function LabInventory(){
       {modal==="help" && <Modal onClose={()=>setModal(null)} title="LabTrack — Help & Guide" mw={640}>
         <div style={{display:"flex",flexDirection:"column",gap:20,fontSize:13}}>
           {[
-            {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared items (e.g. toolboxes) stay Available when checked out — multiple people can use them simultaneously.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-00001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","Click any item card to see full details, checkout history, and quick actions."]},
+            {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared items (e.g. toolboxes) stay Available when checked out — multiple people can use them simultaneously.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-000001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","When adding multiple cameras, laptops, or robots, check 'Track each unit individually' to create separate items with sub-IDs (e.g. CE-000042-001, CE-000042-002), each with its own serial number.","Click any item card to see full details, checkout history, and quick actions."]},
             {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable, non-shared item to a person. Enter qty, dates, and optional notes.","Shared items can be checked out by multiple people at the same time and remain Available.","Consumable items do not appear in the checkout list — use the Use button on the card instead.","Mark items Returned when done. Overdue checkouts are highlighted in red.","Only the person who created the checkout, listed group members, or admins can return an item.","Group members: when checking out, optionally add teammates' emails (comma-separated) so they can also return the item.","Bulk Return lets you return multiple items at once."]},
             {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Only the person who submitted an order (or an admin) can edit it.","Select multiple orders with checkboxes → Email Text generates a formatted purchase request table with per-item totals and a grand total — ready to paste into an email.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
             {icon:"calendar",title:"Calendar Tab",color:"var(--purple)",items:["Visual monthly calendar showing deliveries, active checkouts, and return due dates.","Color-coded: green = delivery, blue = checkout start, amber = return due.","Click any day to see all events on that date."]},
