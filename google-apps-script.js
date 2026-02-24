@@ -94,6 +94,25 @@ function getLowStockItems_() {
   return data.filter(function(i){ return i.qty!==undefined && i.minQty!==undefined && Number(i.minQty) > 0 && Number(i.qty) <= Number(i.minQty); });
 }
 
+// Sort orders so Urgent/High come first
+function sortOrdersByUrgency_(list) {
+  return list.slice().sort(function(a, b) {
+    var aH = (a.urgency === "Urgent" || a.urgency === "High") ? 0 : 1;
+    var bH = (b.urgency === "Urgent" || b.urgency === "High") ? 0 : 1;
+    return aH - bH;
+  });
+}
+
+// Format a single order line with urgency badge inline
+function formatOrderLine_(o) {
+  var badge = (o.urgency === "Urgent") ? "🚨 " : (o.urgency === "High") ? "⚠️ " : "";
+  var parts = [badge + "*" + o.item + "*  " + o.qty + " " + (o.unit || "")];
+  if (o.store) parts.push(o.store);
+  if (o.price) parts.push(o.price);
+  if (o.link)  parts.push("<" + o.link + "|link>");
+  return "• " + parts.join(" | ");
+}
+
 // ─── DAILY DIGEST (Trigger: sendDailyDigest → Day timer → 5pm–6pm, timezone: America/New_York) ─
 function sendDailyDigest() {
   if (!SLACK_WEBHOOK_URL || SLACK_WEBHOOK_URL === "YOUR_SLACK_WEBHOOK_URL_HERE") return;
@@ -118,36 +137,37 @@ function sendDailyDigest() {
     { type: "divider" }
   ];
 
-  // ── Urgent/High pending orders (most important for PI) ──
-  var urgentOrders = pending.filter(function(o){ return o.urgency==="Urgent"||o.urgency==="High"; });
-  if (urgentOrders.length > 0) {
-    var urgText = urgentOrders.map(function(o){
-      var parts = ["• *" + o.item + "* — " + o.qty + " " + o.unit];
-      if (o.store) parts.push(o.store);
-      if (o.price) parts.push(o.price);
-      parts.push("*" + o.urgency + "*");
-      if (o.link) parts.push("<" + o.link + "|link>");
-      return parts.join(" | ");
-    }).join("\n");
-    blocks.push({ type: "section", text: { type: "mrkdwn", text: "🚨 *Urgent/High Orders Pending (" + urgentOrders.length + ")*\n" + urgText } });
-  }
-
-  // ── All pending orders (compact) ──
-  var normalPending = pending.filter(function(o){ return o.urgency!=="Urgent"&&o.urgency!=="High"; });
-  if (normalPending.length > 0) {
-    var normText = normalPending.slice(0,8).map(function(o){
-      var parts = ["• *" + o.item + "* — " + o.qty + " " + o.unit];
-      if (o.store) parts.push(o.store);
-      parts.push(o.status);
-      if (o.link) parts.push("<" + o.link + "|link>");
-      return parts.join(" | ");
-    }).join("\n");
-    if (normalPending.length > 8) normText += "\n_…and " + (normalPending.length-8) + " more_";
-    blocks.push({ type: "section", text: { type: "mrkdwn", text: "🛒 *Pending Orders (" + normalPending.length + ")*\n" + normText } });
-  }
+  // ── Orders: grouped by stage so PI sees exactly what action is needed ──
+  var needsApproval    = pending.filter(function(o){ return o.status === "Pending"; });
+  var needsOrdering    = pending.filter(function(o){ return o.status === "Approved"; });
+  var awaitingDelivery = pending.filter(function(o){ return o.status === "Ordered"; });
 
   if (pending.length === 0) {
-    blocks.push({ type: "section", text: { type: "mrkdwn", text: "🛒 *Orders:* No pending orders" } });
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: "🛒 *Orders:* No active orders" } });
+  } else {
+    // 1 — Needs Approval (Pending): PI must act
+    if (needsApproval.length > 0) {
+      var approvalList = sortOrdersByUrgency_(needsApproval);
+      var approvalText = approvalList.slice(0, 8).map(formatOrderLine_).join("\n");
+      if (needsApproval.length > 8) approvalText += "\n_…and " + (needsApproval.length - 8) + " more_";
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: "🔔 *Needs Approval (" + needsApproval.length + ")*\n" + approvalText } });
+    }
+
+    // 2 — Approved / Needs Ordering: approved but not yet purchased
+    if (needsOrdering.length > 0) {
+      var orderingList = sortOrdersByUrgency_(needsOrdering);
+      var orderingText = orderingList.slice(0, 8).map(formatOrderLine_).join("\n");
+      if (needsOrdering.length > 8) orderingText += "\n_…and " + (needsOrdering.length - 8) + " more_";
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: "🛍️ *Approved — Place Order (" + needsOrdering.length + ")*\n" + orderingText } });
+    }
+
+    // 3 — Ordered / Awaiting Delivery: already purchased, just waiting
+    if (awaitingDelivery.length > 0) {
+      var deliveryList = sortOrdersByUrgency_(awaitingDelivery);
+      var deliveryText = deliveryList.slice(0, 8).map(formatOrderLine_).join("\n");
+      if (awaitingDelivery.length > 8) deliveryText += "\n_…and " + (awaitingDelivery.length - 8) + " more_";
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: "📬 *Ordered — Awaiting Delivery (" + awaitingDelivery.length + ")*\n" + deliveryText } });
+    }
   }
 
   // ── Overdue checkouts ──
