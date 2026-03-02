@@ -820,9 +820,11 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
               <div style={{display:"flex",flexDirection:"column",gap:3,flex:1}}>
                 <Inp placeholder="Purchase link (required) https://…" value={it.link} onChange={e=>upd(i,"link",e.target.value)}
                   style={{borderColor:it.link.trim()?"var(--border)":"var(--amber)"}}/>
-                {it.link.includes("amazon.com")&&it.link.length>60&&(
+                {it.link.includes("amazon.com")&&it.link.length>60?(
                   <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4}}>💡 Amazon tip: use <strong>Share → Copy link</strong> on the product page for a short URL like <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>a.co/d/…</span> instead of the full address bar URL.</span>
-                )}
+                ):it.link.length>60?(
+                  <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4}}>💡 Long URL — please shorten it with <a href="https://bitly.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>Bitly</a>, <a href="https://cutt.ly" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>Cuttly</a>, or <a href="https://tinyurl.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>TinyURL</a>.</span>
+                ):null}
               </div>
             </div>
           </div>
@@ -1137,7 +1139,14 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{UNITS.map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Category"><Sel value={f.cat||categories[0]} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Unit Price" hint="Per unit, not total"><Inp placeholder="e.g. 12.99" value={f.price||""} onChange={s("price")}/></Fld>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Purchase Link *"><Inp value={f.link||""} onChange={s("link")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}>
+          <Fld label="Purchase Link *"><Inp value={f.link||""} onChange={s("link")}/></Fld>
+          {(f.link||"").includes("amazon.com")&&(f.link||"").length>60?(
+            <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4,display:"block",marginTop:4}}>💡 Amazon tip: use <strong>Share → Copy link</strong> on the product page for a short URL like <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>a.co/d/…</span></span>
+          ):(f.link||"").length>60?(
+            <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4,display:"block",marginTop:4}}>💡 Long URL — please shorten it with <a href="https://bitly.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>Bitly</a>, <a href="https://cutt.ly" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>Cuttly</a>, or <a href="https://tinyurl.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--cyan)"}}>TinyURL</a>.</span>
+          ):null}
+        </div>
         <Fld label="Date Needed By"><Inp type="date" value={f.date||""} onChange={s("date")}/></Fld>
         {isAdmin&&<Fld label="Status (Admin only)"><Sel value={f.status} onChange={s("status")}>{STATUSES.map(st=><option key={st}>{st}</option>)}</Sel></Fld>}
         <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp value={f.reason||""} onChange={s("reason")}/></Fld></div>
@@ -1547,12 +1556,14 @@ function LabInventory(){
   };
 
   const handleAddOrder = async (order) => {
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
     setOrders(p=>[order,...p]);
     addToast("success",`Order request submitted: ${order.item}`);
     await postAction("addOrder", {order});
   };
 
   const handleAddOrderMany = async (orders) => {
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
     setOrders(p=>[...orders,...p]);
     addToast("success",`${orders.length} order request${orders.length>1?"s":""} submitted`);
     for (const order of orders) {
@@ -1574,12 +1585,14 @@ function LabInventory(){
   };
 
   const handleUpdateOrder = async (order) => {
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
     setOrders(p=>p.map(o=>o.id===order.id?order:o));
     addToast("success","Order updated");
     await postAction("updateOrder", {order});
   };
 
   const handleDeleteOrder = async (orderId) => {
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
     if (userRole !== "admin") {
       addToast("error", "Only admins can delete orders.");
       return;
@@ -2061,7 +2074,7 @@ function LabInventory(){
                   </Btn>
                 )}
                 <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
-                <Btn onClick={()=>setModal("order")}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
+                <Btn onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("order");}}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
               </div>
             </div>
 
@@ -2088,7 +2101,7 @@ function LabInventory(){
                   <Ico n="cart" s={40} col="var(--bg4)"/>
                   <div style={{marginTop:12,fontSize:14,color:"var(--sub)"}}>No active orders</div>
                   <div style={{fontSize:12,marginTop:4}}>Request supplies or equipment your lab needs</div>
-                  <Btn style={{marginTop:12}} onClick={()=>setModal("order")}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
+                  <Btn style={{marginTop:12}} onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("order");}}><Ico n="plus" s={14} col="#000"/>Submit first request</Btn>
                 </div>
               ):filteredActiveOrders.length===0?(
                 <div style={{textAlign:"center",padding:"24px",color:"var(--dim)",background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14}}>No orders match the filter</div>
@@ -2140,7 +2153,7 @@ function LabInventory(){
                             {o.link&&<a href={o.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--cyan)",fontSize:12,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="link" s={11} col="var(--cyan)"/>Purchase link</a>}
                           </div>
                           <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
-                            {(effectiveRole==="admin"||user?.email===o.requestedByEmail)&&<Btn sm v="ghost" onClick={()=>setEditOrder(o)}><Ico n="edit" s={12}/>Edit</Btn>}
+                            {(effectiveRole==="admin"||user?.email===o.requestedByEmail)&&<Btn sm v="ghost" onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setEditOrder(o);}} style={editLocked?{opacity:0.45,cursor:"not-allowed"}:{}}><Ico n={editLocked?"lock":"edit"} s={12}/>{editLocked?"":"Edit"}</Btn>}
                             {effectiveRole==="admin"&&ns&&(
                               <Btn sm v={ns==="Received"?"success":"ghost"} onClick={()=>{
                                 if(ns==="Received"){ handleOrderReceived(o); }
