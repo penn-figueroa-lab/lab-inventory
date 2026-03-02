@@ -450,7 +450,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
   const removeSlot=i=>setSlots(p=>p.filter((_,j)=>j!==i));
   const updSlot=(i,k,v)=>setSlots(p=>p.map((s,j)=>j===i?{...s,[k]:v}:s));
   const valid=slots.filter(s=>s.item);
-  const canSubmit=coUser.trim()&&valid.length>0;
+  const canSubmit=coUser.trim()&&valid.length>0&&retDate.trim();
   const submit=()=>{
     if(!canSubmit)return;
     const ts=Date.now();
@@ -471,7 +471,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
           <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose…" value={notes} onChange={e=>setNotes(e.target.value)}/></Fld>
           <Fld label="Checkout Date"><Inp type="date" value={outDate} onChange={e=>setOutDate(e.target.value)}/></Fld>
           <Fld label="Checkout Time"><input type="time" value={outTime} onChange={e=>setOutTime(e.target.value)} style={timeInputStyle}/></Fld>
-          <Fld label="Return By (date)"><Inp type="date" value={retDate} onChange={e=>setRetDate(e.target.value)}/></Fld>
+          <Fld label="Return By (date) *"><Inp type="date" value={retDate} onChange={e=>setRetDate(e.target.value)}/></Fld>
           <Fld label="Return By (time)"><input type="time" value={retTime} onChange={e=>setRetTime(e.target.value)} style={timeInputStyle}/></Fld>
           <div style={{gridColumn:"1/-1"}}>
             <Fld label="Group members (optional)" hint="Others who can also return these items — comma-separated @seas.upenn.edu emails">
