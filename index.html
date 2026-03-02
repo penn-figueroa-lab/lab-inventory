@@ -29,7 +29,7 @@ body{background:var(--bg0);color:var(--text);font-family:'Outfit',sans-serif;mar
 ::-webkit-scrollbar-track{background:var(--bg1);}
 ::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px;}
 select option{background:var(--bg2);}
-input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.5);}
+input[type=date]::-webkit-calendar-picker-indicator,input[type=time]::-webkit-calendar-picker-indicator{filter:invert(0.5);}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -59,7 +59,7 @@ html.light body{background:var(--bg0);color:var(--text);}
 html.light ::-webkit-scrollbar-track{background:var(--bg1);}
 html.light ::-webkit-scrollbar-thumb{background:var(--border-hi);}
 html.light select option{background:var(--bg2);}
-html.light input[type=date]::-webkit-calendar-picker-indicator{filter:none;}
+html.light input[type=date]::-webkit-calendar-picker-indicator,html.light input[type=time]::-webkit-calendar-picker-indicator{filter:none;}
 html.light .card-item:hover{box-shadow:0 8px 24px rgba(0,0,0,.12),0 0 0 1px rgba(0,212,200,.25);}
 html.light .sticky-th{background:var(--bg2);}
 html.light .row-hover:hover{background:var(--bg3)!important;}
@@ -72,6 +72,10 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 // ─── DYNAMIC DATE ────────────────────────────────────────────────────────────
 const getToday = () => new Date().toISOString().slice(0,10);
+const getNow = () => { const n=new Date(); return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); };
+const getDatePart = dt => dt ? String(dt).split(" ")[0] : "";
+const getTimePart = dt => dt ? (String(dt).split(" ")[1]||"") : "";
+const fmtDatetime = (d, t) => d ? (t ? `${d} ${t}` : d) : "";
 const getTodayParts = () => {
   const d = new Date();
   return { d: d.getDate(), m: d.getMonth(), y: d.getFullYear() };
@@ -94,7 +98,7 @@ const getCatAccent = (cat, categories) => {
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const isOverdue = (co) => co.status === "Active" && co.ret && co.ret < getToday();
+const isOverdue = (co) => co.status === "Active" && co.ret && getDatePart(co.ret) < getToday();
 const STATUS_C = {
   "Available":  {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
   "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
@@ -435,8 +439,10 @@ const ItemPicker = ({items, value, onChange, categories}) => {
 // ─── CHECKOUT MODAL (multi-item) ─────────────────────────────────────────────
 const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",categories}) => {
   const [coUser,setCoUser]=useState(userName);
-  const [out,setOut]=useState(getToday());
-  const [ret,setRet]=useState("");
+  const [outDate,setOutDate]=useState(getToday());
+  const [outTime,setOutTime]=useState(getNow());
+  const [retDate,setRetDate]=useState("");
+  const [retTime,setRetTime]=useState("");
   const [notes,setNotes]=useState("");
   const [groupEmails,setGroupEmails]=useState("");
   const [slots,setSlots]=useState([{item:preItem,qty:1}]);
@@ -448,20 +454,25 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
   const submit=()=>{
     if(!canSubmit)return;
     const ts=Date.now();
+    const out=fmtDatetime(outDate,outTime);
+    const ret=fmtDatetime(retDate,retTime);
     valid.forEach((sl,i)=>{
       const sel=items.find(it=>it.name===sl.item);
       onAdd({id:ts+i,item:sl.item,user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,groupEmails:groupEmails.trim(),status:"Active"});
     });
     onClose();
   };
+  const timeInputStyle={background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 10px",color:"var(--text)",fontSize:14,outline:"none",width:"100%",fontFamily:"'Roboto',sans-serif",boxSizing:"border-box"};
   return(
     <Modal onClose={onClose} title="Check Out Items" mw={660}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fld label="Person *"><Inp placeholder="Your name" value={coUser} onChange={e=>setCoUser(e.target.value)}/></Fld>
           <Fld label="Notes (optional)"><Inp placeholder="Experiment, purpose…" value={notes} onChange={e=>setNotes(e.target.value)}/></Fld>
-          <Fld label="Checkout Date"><Inp type="date" value={out} onChange={e=>setOut(e.target.value)}/></Fld>
-          <Fld label="Return By"><Inp type="date" value={ret} onChange={e=>setRet(e.target.value)}/></Fld>
+          <Fld label="Checkout Date"><Inp type="date" value={outDate} onChange={e=>setOutDate(e.target.value)}/></Fld>
+          <Fld label="Checkout Time"><input type="time" value={outTime} onChange={e=>setOutTime(e.target.value)} style={timeInputStyle}/></Fld>
+          <Fld label="Return By (date)"><Inp type="date" value={retDate} onChange={e=>setRetDate(e.target.value)}/></Fld>
+          <Fld label="Return By (time)"><input type="time" value={retTime} onChange={e=>setRetTime(e.target.value)} style={timeInputStyle}/></Fld>
           <div style={{gridColumn:"1/-1"}}>
             <Fld label="Group members (optional)" hint="Others who can also return these items — comma-separated @seas.upenn.edu emails">
               <Inp placeholder="alice@seas.upenn.edu, bob@seas.upenn.edu" value={groupEmails} onChange={e=>setGroupEmails(e.target.value)}/>
@@ -1018,8 +1029,11 @@ const CalView=({checkouts,deliveries})=>{
   const evts=d=>{
     const ds=`${yr}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const r=[];
-    deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item}));
-    checkouts.forEach(x=>{if(x.out===ds)r.push({t:"out",l:x.item});if(x.ret===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item});});
+    deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item,time:""}));
+    checkouts.forEach(x=>{
+      if(getDatePart(x.out)===ds)r.push({t:"out",l:x.item,time:getTimePart(x.out)});
+      if(getDatePart(x.ret)===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item,time:getTimePart(x.ret)});
+    });
     return r;
   };
   const EC={pkg:{bg:"var(--green-d)",col:"var(--green)"},out:{bg:"var(--blue-d)",col:"var(--blue)"},ret:{bg:"var(--amber-d)",col:"var(--amber)"},odd:{bg:"var(--red-d)",col:"var(--red)"}};
@@ -1042,7 +1056,7 @@ const CalView=({checkouts,deliveries})=>{
           return(
             <div key={d} style={{background:isT?"var(--blue-d)":"var(--bg2)",borderRadius:8,minHeight:68,border:`1px solid ${isT?"var(--blue)":"var(--border)"}`,padding:"5px 6px"}}>
               <div style={{color:isT?"var(--blue)":"var(--dim)",fontSize:10,fontWeight:isT?800:500,fontFamily:"'IBM Plex Mono',monospace",marginBottom:3}}>{d}</div>
-              {ev.slice(0,2).map((e,j)=>{const ec=EC[e.t];return<div key={j} style={{background:ec.bg,color:ec.col,fontSize:8,borderRadius:4,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{EC_LABELS[e.t]} {e.l}</div>;})}
+              {ev.slice(0,2).map((e,j)=>{const ec=EC[e.t];return<div key={j} style={{background:ec.bg,color:ec.col,fontSize:8,borderRadius:4,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{e.time&&<span style={{opacity:0.85,marginRight:2}}>{e.time}</span>}{e.l}</div>;})}
               {ev.length>2&&<div style={{color:"var(--dim)",fontSize:8}}>+{ev.length-2}</div>}
             </div>
           );
