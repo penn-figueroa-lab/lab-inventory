@@ -843,6 +843,55 @@ const ConfirmModal = ({msg,onConfirm,onClose}) => (
   </Modal>
 );
 
+// ─── GROUP DETAIL MODAL ─────────────────────────────────────────────────────
+const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,editLocked,categories}) => {
+  const ac = getCatAccent(group.cat,categories||[]);
+  return(
+    <Modal onClose={onClose} title={`📦 ${group.name}`} mw={640}>
+      <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"2px 8px",color:"var(--cyan)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.05em"}}>{group.displayId}</span>
+        <span style={{color:"var(--purple)",fontSize:11,fontWeight:700}}>TRACKED UNITS · {group.qty} total</span>
+        <span style={{color:"var(--sub)",fontSize:11}}>{group.cat}</span>
+        {group.loc&&<span style={{color:"var(--dim)",fontSize:11}}>📍 {group.loc}</span>}
+      </div>
+      {group.desc&&<p style={{margin:"0 0 12px",color:"var(--sub)",fontSize:13,lineHeight:1.5}}>{group.desc}</p>}
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"60vh",overflowY:"auto"}}>
+        {group._items.map((unit,i)=>{
+          const inUse=unit.usedBy&&unit.usedBy.length>0;
+          const activeCheckout=checkouts.find(c=>c.item===unit.name&&c.status==="Active"&&(!c.displayId||c.displayId===unit.displayId));
+          return(
+            <div key={unit.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <div style={{minWidth:120}}>
+                <div style={{fontFamily:"'IBM Plex Mono',monospace",color:"var(--cyan)",fontSize:12,fontWeight:700,letterSpacing:"0.05em"}}>{unit.displayId}</div>
+                {unit.serial&&<div style={{color:"var(--dim)",fontSize:11,marginTop:2}}>S/N: {unit.serial}</div>}
+              </div>
+              <div style={{flex:1}}>
+                <Badge status={inUse?"In Use":"Available"}/>
+                {inUse&&<span style={{marginLeft:8,fontSize:12,color:"var(--sub)"}}>→ {unit.usedBy?.join(", ")}</span>}
+                {activeCheckout&&activeCheckout.ret&&<div style={{fontSize:11,color:"var(--dim)",marginTop:3}}>Due: {activeCheckout.ret}</div>}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                {inUse&&activeCheckout&&(
+                  <Btn v="ghost" sm onClick={()=>{onReturn(activeCheckout.id);onClose();}}>Return</Btn>
+                )}
+                {!inUse&&(
+                  <Btn v="cyan" sm onClick={()=>{onClose();onQuickCheckout(unit.name);}}>Check Out</Btn>
+                )}
+                <Btn v="ghost" sm onClick={()=>{if(editLocked){return;}onClose();onEdit(unit);}} disabled={editLocked} style={editLocked?{opacity:0.4,cursor:"not-allowed"}:{}}>
+                  <Ico n={editLocked?"lock":"edit"} s={13}/>{editLocked?"":"Edit"}
+                </Btn>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{marginTop:16,display:"flex",justifyContent:"flex-end"}}>
+        <Btn v="ghost" onClick={onClose}>Close</Btn>
+      </div>
+    </Modal>
+  );
+};
+
 // ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────
 const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories,editLocked}) => {
   const [confirmId,setConfirmId]=useState(null);
@@ -1104,6 +1153,12 @@ function genDisplayId(cat, allItems) {
   const maxNum = Math.max(0,...(allItems||[]).map(i=>{const m=String(i.displayId||"").match(/(\d{6})(?:-\d+)?$/);return m?parseInt(m[1]):0;}));
   return `${prefix}-${String(maxNum+1).padStart(6,"0")}`;
 }
+function isSubItem(displayId) {
+  return /^.+-\d{3}$/.test(String(displayId||""));
+}
+function getBaseId(displayId) {
+  return String(displayId||"").replace(/-\d{3}$/, "");
+}
 
 // ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
 function generateEmailText(orders) {
@@ -1150,6 +1205,7 @@ function LabInventory(){
   const [modal,setModal] = useState(null);
   const [preItem,setPreItem] = useState("");
   const [detail,setDetail] = useState(null);
+  const [groupDetail,setGroupDetail] = useState(null);
   const [editItem,setEditItem] = useState(null);
   const [pendingItem,setPendingItem] = useState(null);
   const [search,setSearch] = useState("");
@@ -1550,8 +1606,34 @@ function LabInventory(){
     return f;
   },[items, search, catF, sortBy]);
 
+  // Group sub-ID items (track-individually, non-consumable) under one display entry
+  const displayItems = useMemo(()=>{
+    const groups = {};
+    const result = [];
+    filtered.forEach(item => {
+      if (isSubItem(item.displayId) && !item.consumable) {
+        const baseId = getBaseId(item.displayId);
+        if (!groups[baseId]) {
+          const g = {_isGroup:true,_baseId:baseId,_items:[],id:baseId,name:item.name,cat:item.cat,loc:item.loc,desc:item.desc,img:item.img,unit:item.unit,displayId:baseId,shared:item.shared,consumable:false,minQty:item.minQty};
+          groups[baseId] = g;
+          result.push(g);
+        }
+        groups[baseId]._items.push(item);
+      } else {
+        result.push(item);
+      }
+    });
+    Object.values(groups).forEach(g=>{
+      g.qty = g._items.length;
+      const inUseCount = g._items.filter(i=>i.usedBy&&i.usedBy.length>0).length;
+      g.usedBy = [...new Set(g._items.flatMap(i=>i.usedBy||[]))];
+      g.status = inUseCount===0?"Available":inUseCount===g._items.length?"In Use":"Partially In Use";
+    });
+    return result;
+  },[filtered]);
+
   // Load-more sliced items
-  const paginatedItems = filtered.slice(0, invLimit);
+  const paginatedItems = displayItems.slice(0, invLimit);
 
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
   const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
@@ -1807,6 +1889,40 @@ function LabInventory(){
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
                 {paginatedItems.map((item,idx)=>{
                   const ac=getCatAccent(item.cat,categories);
+                  if(item._isGroup){
+                    const availCount=item._items.filter(i=>!i.usedBy?.length).length;
+                    const inUseCount=item._items.length-availCount;
+                    return(
+                      <div key={item._baseId} className="card-item" onClick={()=>setGroupDetail(item)} style={{background:"var(--bg1)",border:"2px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`,cursor:"pointer"}}>
+                        <div style={{position:"relative"}}>
+                          <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
+                          <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
+                          <div style={{position:"absolute",top:10,right:10}}><Badge status={item.status}/></div>
+                          <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
+                            <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
+                          </div>
+                        </div>
+                        <div style={{padding:"11px 14px 13px"}}>
+                          <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                          <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {item.displayId&&<span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"0px 5px",color:"var(--cyan)",letterSpacing:"0.05em"}}>{item.displayId}</span>}
+                            <span style={{color:"var(--purple)",fontSize:10}}>TRACKED UNITS</span>
+                          </div>
+                          <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                              <span style={{color:ac,fontFamily:"'Roboto',sans-serif",fontSize:24,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
+                              <span style={{color:"var(--dim)",fontSize:11}}>units</span>
+                            </div>
+                            <div style={{fontSize:11,textAlign:"right",lineHeight:1.4}}>
+                              <div style={{color:"var(--green)",fontWeight:600}}>{availCount} avail</div>
+                              {inUseCount>0&&<div style={{color:"var(--amber)",fontWeight:600}}>{inUseCount} in use</div>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                   const isLow=item.minQty>0&&item.qty<=item.minQty;
                   return(
                     <div key={item.id} className="card-item" onClick={()=>setDetail(item)} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`}}>
@@ -1852,30 +1968,47 @@ function LabInventory(){
                       ))}
                     </tr></thead>
                     <tbody>
-                      {paginatedItems.map((item,i)=>(
-                        <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
-                          <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}</td>
-                          <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
-                          <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.minQty>0&&item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
-                          <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
-                          <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.serial||"—"}</td>
-                          <td style={{padding:"10px 16px"}}><Badge status={item.minQty>0&&item.qty<=item.minQty?"Low Stock":item.status}/></td>
-                          <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
-                        </tr>
-                      ))}
+                      {paginatedItems.map((item,i)=>{
+                        if(item._isGroup){
+                          const availCount=item._items.filter(it=>!it.usedBy?.length).length;
+                          const inUseCount=item._items.length-availCount;
+                          return(
+                            <tr key={item._baseId} className="row-hover" onClick={()=>setGroupDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
+                              <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}<span style={{marginLeft:6,fontSize:10,color:"var(--purple)",fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}}>TRACKED UNITS</span></td>
+                              <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
+                              <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>units</span></td>
+                              <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
+                              <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11}}><span style={{color:"var(--green)"}}>{availCount} avail</span>{inUseCount>0&&<span style={{color:"var(--amber)",marginLeft:6}}>{inUseCount} in use</span>}</td>
+                              <td style={{padding:"10px 16px"}}><Badge status={item.status}/></td>
+                              <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                            </tr>
+                          );
+                        }
+                        return(
+                          <tr key={item.id} className="row-hover" onClick={()=>setDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
+                            <td style={{padding:"10px 16px",color:"var(--text)",fontWeight:600}}>{item.name}</td>
+                            <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
+                            <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",color:item.minQty>0&&item.qty<=item.minQty?"var(--red)":"var(--text)",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>{item.unit}</span></td>
+                            <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
+                            <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.serial||"—"}</td>
+                            <td style={{padding:"10px 16px"}}><Badge status={item.minQty>0&&item.qty<=item.minQty?"Low Stock":item.status}/></td>
+                            <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
-            {filtered.length>invLimit&&(
+            {displayItems.length>invLimit&&(
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:12}}>
-                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {filtered.length} items</span>
+                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {displayItems.length} items</span>
                 <button onClick={()=>setInvLimit(l=>l+ITEMS_PER_PAGE)} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>Load more</button>
               </div>
             )}
-            {filtered.length>0&&filtered.length<=invLimit&&invLimit>ITEMS_PER_PAGE&&(
-              <div style={{textAlign:"center",marginTop:16,color:"var(--dim)",fontSize:12}}>All {filtered.length} items shown</div>
+            {displayItems.length>0&&displayItems.length<=invLimit&&invLimit>ITEMS_PER_PAGE&&(
+              <div style={{textAlign:"center",marginTop:16,color:"var(--dim)",fontSize:12}}>All {displayItems.length} items shown</div>
             )}
           </div>
         )}
@@ -2231,6 +2364,7 @@ function LabInventory(){
         </div>
       </Modal>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
+      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
