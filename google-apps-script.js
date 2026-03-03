@@ -730,6 +730,8 @@ function doPost(e) {
       ];
     });
 
+    var lastDataRow = firstDataRow + dataRows.length - 1;
+
     if (dataRows.length > 0) {
       ps.getRange(firstDataRow, 1, dataRows.length, 6).setValues(dataRows);
 
@@ -746,17 +748,15 @@ function doPost(e) {
       }
 
       // Format Unit Price (col C) and Total (col D) as currency
-      var lastDataRow = firstDataRow + dataRows.length - 1;
       ps.getRange(firstDataRow, 3, dataRows.length, 2)
         .setNumberFormat('"$"#,##0.00');
     }
 
     // ── Grand total row with SUM formula ──
-    var totalRow = firstDataRow + dataRows.length + 1;
-    var lastDataRow2 = firstDataRow + dataRows.length - 1;
+    var totalRow = lastDataRow + 2;
     ps.getRange(totalRow, 1, 1, 3).merge().setValue("Grand Total").setFontWeight("bold").setHorizontalAlignment("right");
     ps.getRange(totalRow, 4)
-      .setFormula("=SUM(D" + firstDataRow + ":D" + lastDataRow2 + ")")
+      .setFormula("=SUM(D" + firstDataRow + ":D" + lastDataRow + ")")
       .setNumberFormat('"$"#,##0.00')
       .setFontWeight("bold");
 
