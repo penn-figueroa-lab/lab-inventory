@@ -699,53 +699,68 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetName = "Purchase Summary";
 
-    // Remove existing sheet if present
+    // Remove existing sheet if present, then create fresh
     var existing = ss.getSheetByName(sheetName);
     if (existing) ss.deleteSheet(existing);
     var ps = ss.insertSheet(sheetName);
 
-    // ── Header row ──
+    // ── Header row (plain styling) ──
     var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMMM d, yyyy");
     ps.getRange(1, 1, 1, 6).merge()
       .setValue("Purchase Summary — " + dateStr)
-      .setFontWeight("bold").setFontSize(13)
-      .setBackground("#1a1f2e").setFontColor("#00d4c8");
+      .setFontWeight("bold").setFontSize(13);
 
-    // ── Column headers ──
+    // ── Column headers (plain bold, default background) ──
     var headers = ["Qty", "Item", "Unit Price", "Total", "Purchase Link", "Store"];
     var hRow = ps.getRange(2, 1, 1, 6);
-    hRow.setValues([headers]);
-    hRow.setFontWeight("bold").setBackground("#0d1117").setFontColor("#8899aa");
+    hRow.setValues([headers]).setFontWeight("bold");
 
-    // ── Data rows ──
-    var grand = 0;
+    // ── Data rows: qty and price as numbers; total and grand total as formulas ──
+    var firstDataRow = 3;
     var dataRows = orders.map(function(o) {
       var qty = parseFloat(o.qty) || 0;
-      var price = parseFloat(String(o.price || "").replace(/[^0-9.]/g, "")) || 0;
-      var total = (qty && price) ? qty * price : 0;
-      if (total) grand += total;
+      var price = parseFloat(String(o.price || "").replace(/[^0-9.]/g, "")) || null;
       return [
         qty || o.qty || "",
         o.item || "",
-        price ? "$" + price.toFixed(2) : "",
-        total ? "$" + total.toFixed(2) : "",
+        price !== null ? price : "",  // numeric — formatted as currency below
+        "",                           // Total: filled with formula per row below
         o.link || "",
         o.store || ""
       ];
     });
+
     if (dataRows.length > 0) {
-      var dataRange = ps.getRange(3, 1, dataRows.length, 6);
-      dataRange.setValues(dataRows);
+      ps.getRange(firstDataRow, 1, dataRows.length, 6).setValues(dataRows);
+
+      // Per-row total formulas: =A3*C3, =A4*C4, …
+      for (var r = 0; r < dataRows.length; r++) {
+        var rowNum = firstDataRow + r;
+        ps.getRange(rowNum, 4).setFormula("=A" + rowNum + "*C" + rowNum);
+
+        // Clickable hyperlink in Link column
+        var link = dataRows[r][4];
+        if (link && link.startsWith("http")) {
+          ps.getRange(rowNum, 5).setFormula('=HYPERLINK("' + link.replace(/"/g, '""') + '","' + link.replace(/"/g, '""') + '")');
+        }
+      }
+
+      // Format Unit Price (col C) and Total (col D) as currency
+      var lastDataRow = firstDataRow + dataRows.length - 1;
+      ps.getRange(firstDataRow, 3, dataRows.length, 2)
+        .setNumberFormat('"$"#,##0.00');
     }
 
-    // ── Grand total row ──
-    var totalRow = dataRows.length + 3;
-    ps.getRange(totalRow, 1, 1, 6).merge().setValue("");
-    ps.getRange(totalRow, 3, 1, 2).merge()
-      .setValue(grand > 0 ? "Grand Total:  $" + grand.toFixed(2) : "Grand Total: —")
-      .setFontWeight("bold").setFontColor("#00d4c8").setHorizontalAlignment("right");
+    // ── Grand total row with SUM formula ──
+    var totalRow = firstDataRow + dataRows.length + 1;
+    var lastDataRow2 = firstDataRow + dataRows.length - 1;
+    ps.getRange(totalRow, 1, 1, 3).merge().setValue("Grand Total").setFontWeight("bold").setHorizontalAlignment("right");
+    ps.getRange(totalRow, 4)
+      .setFormula("=SUM(D" + firstDataRow + ":D" + lastDataRow2 + ")")
+      .setNumberFormat('"$"#,##0.00')
+      .setFontWeight("bold");
 
-    // ── Formatting ──
+    // ── Column widths and freeze ──
     ps.setColumnWidth(1, 50);   // Qty
     ps.setColumnWidth(2, 220);  // Item
     ps.setColumnWidth(3, 100);  // Unit Price
@@ -754,19 +769,8 @@ function doPost(e) {
     ps.setColumnWidth(6, 120);  // Store
     ps.setFrozenRows(2);
 
-    // Make links clickable
-    for (var r = 0; r < dataRows.length; r++) {
-      var link = dataRows[r][4];
-      if (link && link.startsWith("http")) {
-        var cell = ps.getRange(3 + r, 5);
-        cell.setFormula('=HYPERLINK("' + link.replace(/"/g, '""') + '","' + link.replace(/"/g, '""') + '")');
-        cell.setFontColor("#00aaff");
-      }
-    }
-
-    // Bring sheet to front
     ss.setActiveSheet(ps);
-    logAudit(userName, userEmail, "PurchaseSummary", orders.length + " items, grand total $" + (grand > 0 ? grand.toFixed(2) : "0"));
+    logAudit(userName, userEmail, "PurchaseSummary", orders.length + " items");
     return jsonResponse({ ok: true });
   }
 
