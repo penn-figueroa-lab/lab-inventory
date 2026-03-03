@@ -691,6 +691,85 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   }
 
+  // ── Generate Purchase Summary sheet ──────────────────────────────────────
+  if (action === "generatePurchaseSummary") {
+    var orders = body.orders || [];
+    if (orders.length === 0) return jsonResponse({ error: "No orders provided" });
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetName = "Purchase Summary";
+
+    // Remove existing sheet if present
+    var existing = ss.getSheetByName(sheetName);
+    if (existing) ss.deleteSheet(existing);
+    var ps = ss.insertSheet(sheetName);
+
+    // ── Header row ──
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMMM d, yyyy");
+    ps.getRange(1, 1, 1, 6).merge()
+      .setValue("Purchase Summary — " + dateStr)
+      .setFontWeight("bold").setFontSize(13)
+      .setBackground("#1a1f2e").setFontColor("#00d4c8");
+
+    // ── Column headers ──
+    var headers = ["Qty", "Item", "Unit Price", "Total", "Purchase Link", "Store"];
+    var hRow = ps.getRange(2, 1, 1, 6);
+    hRow.setValues([headers]);
+    hRow.setFontWeight("bold").setBackground("#0d1117").setFontColor("#8899aa");
+
+    // ── Data rows ──
+    var grand = 0;
+    var dataRows = orders.map(function(o) {
+      var qty = parseFloat(o.qty) || 0;
+      var price = parseFloat(String(o.price || "").replace(/[^0-9.]/g, "")) || 0;
+      var total = (qty && price) ? qty * price : 0;
+      if (total) grand += total;
+      return [
+        qty || o.qty || "",
+        o.item || "",
+        price ? "$" + price.toFixed(2) : "",
+        total ? "$" + total.toFixed(2) : "",
+        o.link || "",
+        o.store || ""
+      ];
+    });
+    if (dataRows.length > 0) {
+      var dataRange = ps.getRange(3, 1, dataRows.length, 6);
+      dataRange.setValues(dataRows);
+    }
+
+    // ── Grand total row ──
+    var totalRow = dataRows.length + 3;
+    ps.getRange(totalRow, 1, 1, 6).merge().setValue("");
+    ps.getRange(totalRow, 3, 1, 2).merge()
+      .setValue(grand > 0 ? "Grand Total:  $" + grand.toFixed(2) : "Grand Total: —")
+      .setFontWeight("bold").setFontColor("#00d4c8").setHorizontalAlignment("right");
+
+    // ── Formatting ──
+    ps.setColumnWidth(1, 50);   // Qty
+    ps.setColumnWidth(2, 220);  // Item
+    ps.setColumnWidth(3, 100);  // Unit Price
+    ps.setColumnWidth(4, 90);   // Total
+    ps.setColumnWidth(5, 320);  // Link
+    ps.setColumnWidth(6, 120);  // Store
+    ps.setFrozenRows(2);
+
+    // Make links clickable
+    for (var r = 0; r < dataRows.length; r++) {
+      var link = dataRows[r][4];
+      if (link && link.startsWith("http")) {
+        var cell = ps.getRange(3 + r, 5);
+        cell.setFormula('=HYPERLINK("' + link.replace(/"/g, '""') + '","' + link.replace(/"/g, '""') + '")');
+        cell.setFontColor("#00aaff");
+      }
+    }
+
+    // Bring sheet to front
+    ss.setActiveSheet(ps);
+    logAudit(userName, userEmail, "PurchaseSummary", orders.length + " items, grand total $" + (grand > 0 ? grand.toFixed(2) : "0"));
+    return jsonResponse({ ok: true });
+  }
+
   return jsonResponse({ error: "Unknown action: " + action });
   } catch (err) {
     return jsonResponse({ error: "Server error", detail: err.message });

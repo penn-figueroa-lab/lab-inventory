@@ -1183,33 +1183,26 @@ function getBaseId(displayId) {
   return String(displayId||"").replace(/-\d{3}$/, "");
 }
 
-// ─── EMAIL TEXT GENERATOR ─────────────────────────────────────────────────────
+// ─── PURCHASE TEXT GENERATOR ──────────────────────────────────────────────────
 function generateEmailText(orders) {
-  const dateStr = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
   const fmtP = p => {
-    if(!p && p!==0) return "—";
+    if(!p && p!==0) return null;
     const n = typeof p==="number" ? p : parseFloat(String(p).replace(/[^0-9.]/g,""));
-    return isNaN(n) ? String(p) : "$"+n.toFixed(2);
+    return isNaN(n) ? null : "$"+n.toFixed(2);
   };
   const calcTotal = (price,qty) => {
     const p = typeof price==="number" ? price : parseFloat(String(price||"").replace(/[^0-9.]/g,""));
     const q = parseFloat(qty)||0;
     return (!isNaN(p)&&q) ? p*q : null;
   };
-  const cols = ["Store","Item","Purchase Link","Qty","Unit Price","Total"];
-  const rows = orders.map(o=>{
-    const tot=calcTotal(o.price,o.qty);
-    return [String(o.store||"—"),String(o.item||"—"),String(o.link||"(no link)"),
-      `${o.qty||""} ${o.unit||""}`.trim()||"—",fmtP(o.price),tot!==null?"$"+tot.toFixed(2):"—"];
+  const lines = orders.map(o=>{
+    const qty = o.qty||"";
+    const price = fmtP(o.price);
+    const meta = [`Quantity: ${qty}`, ...(price?[`Price/Item: ${price}`]:[])].join(", ");
+    return `- ${qty} ${o.item}  ${o.link||""}  (${meta})`;
   });
   const grand = orders.reduce((a,o)=>{const t=calcTotal(o.price,o.qty);return t!==null?a+t:a;},0);
-  const widths = cols.map((c,i)=>Math.max(c.length,...rows.map(r=>r[i].length))+2);
-  const pad=(s,w)=>s.padEnd(w);
-  const sep=widths.map(w=>"-".repeat(w)).join("+");
-  const header=widths.map((w,i)=>pad(cols[i],w)).join("|");
-  const dataRows=rows.map(r=>widths.map((w,i)=>pad(r[i],w)).join("|")).join("\n");
-  const footer=grand>0?`\n\nGrand Total: $${grand.toFixed(2)}`:"";
-  return `Purchase Request — ${dateStr}\n\n${header}\n${sep}\n${dataRows}${footer}`;
+  return lines.join("\n") + (grand>0 ? `\n\nGrand Total: $${grand.toFixed(2)}` : "");
 }
 
 
@@ -2059,20 +2052,29 @@ function LabInventory(){
                     {[...new Set(filteredActiveOrders.map(o=>String(o.id)))].every(id=>selectedOrders.has(id))?"Deselect Filtered":"Select Filtered"}
                   </Btn>
                 )}
-                {selectedOrders.size>0&&(
+                {selectedOrders.size>0&&(<>
                   <Btn v="amber" onClick={()=>{
                     const text=generateEmailText(activeOrders.filter(o=>selectedOrders.has(String(o.id))));
                     const w=window.open('','_blank','width=720,height=520,resizable=yes,scrollbars=yes');
                     if(w){
-                      w.document.write('<html><head><title>Purchase Request Email</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">&#x1F4E7; Purchase Request &#x2014; select all and copy (Ctrl+A &#x2192; Ctrl+C)</h3><pre id="t" style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#1a1a1a;padding:20px;border-radius:8px"></pre></body></html>');
+                      w.document.write('<html><head><title>Purchase Request</title></head><body style="margin:0;padding:24px;font-family:monospace;background:#111;color:#eee"><h3 style="font-family:sans-serif;color:#00d4c8;margin:0 0 16px">&#x1F6D2; Purchase Request &#x2014; select all and copy (Ctrl+A &#x2192; Ctrl+C)</h3><pre id="t" style="white-space:pre-wrap;font-size:13px;line-height:2;background:#1a1a1a;padding:20px;border-radius:8px"></pre></body></html>');
                       w.document.close();
                       w.document.getElementById('t').textContent=text;
                     }
                     else{setEmailText(text);setModal("emailText");}
                   }}>
-                    <Ico n="mail" s={14} col="var(--amber)"/>Email Text ({selectedOrders.size})
+                    <Ico n="mail" s={14} col="var(--amber)"/>Copy Text ({selectedOrders.size})
                   </Btn>
-                )}
+                  <Btn v="ghost" onClick={async()=>{
+                    const sel=activeOrders.filter(o=>selectedOrders.has(String(o.id)));
+                    addToast("info","Creating sheet summary…");
+                    const r=await postAction("generatePurchaseSummary",{orders:sel});
+                    if(r&&r.ok) addToast("success","Purchase summary saved to Google Sheet ✓");
+                    else addToast("error","Could not create sheet — check GAS deployment");
+                  }}>
+                    <Ico n="layers" s={14}/>Save to Sheet
+                  </Btn>
+                </>)}
                 <Btn v="ghost" onClick={()=>setModal("delivery")}><Ico n="truck" s={14}/>Log Delivery</Btn>
                 <Btn onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("order");}}><Ico n="cart" s={14} col="#000"/>New Request</Btn>
               </div>
@@ -2378,7 +2380,7 @@ function LabInventory(){
           {[
             {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared items (e.g. toolboxes) stay Available when checked out — multiple people can use them simultaneously.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-000001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","When adding multiple cameras, laptops, or robots, check 'Track each unit individually' to create separate items with sub-IDs (e.g. CE-000042-001, CE-000042-002), each with its own serial number.","Click any item card to see full details, checkout history, and quick actions."]},
             {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable, non-shared item to a person. Enter qty, dates, and optional notes.","Shared items can be checked out by multiple people at the same time and remain Available.","Consumable items do not appear in the checkout list — use the Use button on the card instead.","Mark items Returned when done. Overdue checkouts are highlighted in red.","Only the person who created the checkout, listed group members, or admins can return an item.","Group members: when checking out, optionally add teammates' emails (comma-separated) so they can also return the item.","Bulk Return lets you return multiple items at once."]},
-            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Only the person who submitted an order (or an admin) can edit it.","Select multiple orders with checkboxes → Email Text generates a formatted purchase request table with per-item totals and a grand total — ready to paste into an email.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
+            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Only the person who submitted an order (or an admin) can edit it.","Select multiple orders with checkboxes → Copy Text generates a bullet-list (qty · item · link · price) with grand total — ready to paste into an email or message. Save to Sheet writes the same summary as a table to your Google Sheet.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
             {icon:"calendar",title:"Calendar Tab",color:"var(--purple)",items:["Visual monthly calendar showing deliveries, active checkouts, and return due dates.","Color-coded: green = delivery, blue = checkout start, amber = return due.","Click any day to see all events on that date."]},
             {icon:"layers",title:"Item Statuses",color:"var(--sub)",items:["🟢 Available — ready to use","🔵 In Use — checked out by one or more people","🟡 Maintenance — temporarily out of service","🔴 Broken — damaged or needs repair","⚠️ Low Stock — qty is at or below the Min Stock threshold (shown as a badge)"]},
             {icon:"settings",title:"Settings (Admin only)",color:"var(--orange)",items:["Manage Categories — add, remove, or rename categories; set label ID prefix per category (e.g. RM for Robots & Motors).","Admins list — edit in the Settings tab of the Google Sheet (JSON array of emails).","Slack notifications — set slack_mode in Settings tab: all | important | digest | off.","Session expires after ~1 hour and auto-renews silently. If you see a red banner at the top, click Sign In Again."]},
