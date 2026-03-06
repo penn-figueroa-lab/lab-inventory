@@ -72,6 +72,7 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 // ─── DYNAMIC DATE ────────────────────────────────────────────────────────────
 const getToday = () => new Date().toISOString().slice(0,10);
+const uid = () => Date.now() + Math.floor(Math.random() * 1e9);
 const getNow = () => { const n=new Date(); return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); };
 const getDatePart = dt => dt ? String(dt).split(" ")[0] : "";
 const getTimePart = dt => dt ? (String(dt).split(" ")[1]||"") : "";
@@ -453,7 +454,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
   const canSubmit=coUser.trim()&&valid.length>0&&retDate.trim();
   const submit=()=>{
     if(!canSubmit)return;
-    const ts=Date.now();
+    const ts=uid();
     const out=fmtDatetime(outDate,outTime);
     const ret=fmtDatetime(retDate,retTime);
     valid.forEach((sl,i)=>{
@@ -522,7 +523,7 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:Date.now(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="check" s={14} col="#000"/>Log Delivery</Btn>
+        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:uid(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="check" s={14} col="#000"/>Log Delivery</Btn>
       </div>
     </Modal>
   );
@@ -554,9 +555,9 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
     if(!f.name||!f.qty)return;
     const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
     if(splitUnits&&canSplit){
-      for(let u=1;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,serial:serials[u-1]||"",displayId:`${displayId}-${String(u).padStart(3,"0")}`});
+      for(let u=1;u<=n;u++) onAdd({...base,id:uid(),qty:1,serial:serials[u-1]||"",displayId:`${displayId}-${String(u).padStart(3,"0")}`});
     } else {
-      onAdd({...base,id:Date.now(),qty:n,displayId});
+      onAdd({...base,id:uid(),qty:n,displayId});
     }
     onClose();
   };
@@ -639,7 +640,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
   const handleSplit=()=>{
     const base={...item,...f,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable};
     onSave({...base,qty:1,displayId:`${baseId}-001`});
-    for(let u=2;u<=n;u++) onAdd({...base,id:Date.now()+u,qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(3,"0")}`});
+    for(let u=2;u<=n;u++) onAdd({...base,id:uid(),qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(3,"0")}`});
     onClose();
   };
   return(
@@ -753,9 +754,8 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
 
   const submit = () => {
     if(!canSubmit) return;
-    const ts = Date.now();
     onAddMany(validItems.map((it,i)=>({
-      id: ts+i, item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
+      id: uid(), item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
       store:store.trim(), link:it.link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
       requestedBy:userName, requestedByEmail:userEmail, status:"Pending"
     })));
@@ -1599,13 +1599,13 @@ function LabInventory(){
   // Show staging modal immediately; sync to sheet in background
   const handleOrderReceived = (order) => {
     setPendingItem(order); // instant — no waiting for API
-    const delivery={id:Date.now(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
+    const delivery={id:uid(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
     handleDelivery(delivery);              // fire and forget
     handleUpdateOrderStatus(order.id,"Received"); // fire and forget
   };
 
   const handleConfirmPendingItem = async (itemData) => {
-    const newItem = {id:Date.now(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:isNaN(+itemData.minQty)?0:+itemData.minQty};
+    const newItem = {id:uid(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:isNaN(+itemData.minQty)?0:+itemData.minQty};
     setItems(p=>[newItem,...p]);
     addToast("success",`"${newItem.name}" added to inventory!`);
     await postAction("addItem", {item: newItem});
@@ -1615,7 +1615,7 @@ function LabInventory(){
   const filtered = useMemo(()=>{
     let f = items.filter(i=>{
       const q=search.toLowerCase();
-      return(i.name?.toLowerCase().includes(q)||i.loc?.toLowerCase().includes(q)||i.cat?.toLowerCase().includes(q)||i.desc?.toLowerCase().includes(q)||i.serial?.toLowerCase().includes(q))
+      return((i.name||"").toLowerCase().includes(q)||(i.loc||"").toLowerCase().includes(q)||(i.cat||"").toLowerCase().includes(q)||(i.desc||"").toLowerCase().includes(q)||(i.serial||"").toLowerCase().includes(q))
         &&(catF==="All"||i.cat===catF);
     });
     // Sort
