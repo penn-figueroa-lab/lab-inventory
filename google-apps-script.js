@@ -449,13 +449,32 @@ function doPost(e) {
 
   // ── Add Item ──────────────────────────────────────────────────────────────
   if (action === "addItem") {
-    const it = body.item;
-    appendRow("Items", it, [
-      "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial", "displayId", "shared", "consumable"
-    ]);
-    sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
-    logAudit(userName, userEmail, "AddItem", it.name + " | qty:" + (it.qty||0) + " " + (it.unit||"") + " | cat:" + (it.cat||"") + " | id:" + (it.displayId||""));
-    return jsonResponse({ ok: true });
+    var addLock = LockService.getScriptLock();
+    addLock.waitLock(10000);
+    try {
+      const it = body.item;
+      // For regular items (not sub-items like CE-000042-001), generate displayId
+      // server-side so concurrent adds never produce the same number.
+      const isSubId = /^.+-\d{3}$/.test(String(it.displayId||""));
+      if (!isSubId) {
+        const allItems = sheetToJson(getSheet("Items"));
+        const prefixMatch = String(it.displayId||"GEN-000000").match(/^([^-]+)-/);
+        const prefix = prefixMatch ? prefixMatch[1] : "GEN";
+        const maxNum = Math.max(0, ...allItems.map(function(i) {
+          var m = String(i.displayId||"").match(/(\d{6})(?:-\d+)?$/);
+          return m ? parseInt(m[1]) : 0;
+        }));
+        it.displayId = prefix + "-" + String(maxNum + 1).padStart(6, "0");
+      }
+      appendRow("Items", it, [
+        "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial", "displayId", "shared", "consumable"
+      ]);
+      sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
+      logAudit(userName, userEmail, "AddItem", it.name + " | qty:" + (it.qty||0) + " " + (it.unit||"") + " | cat:" + (it.cat||"") + " | id:" + (it.displayId||""));
+      return jsonResponse({ ok: true, displayId: it.displayId });
+    } finally {
+      addLock.releaseLock();
+    }
   }
 
   // ── Update Item ───────────────────────────────────────────────────────────
