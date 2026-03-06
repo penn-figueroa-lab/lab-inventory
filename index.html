@@ -544,8 +544,9 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
   useEffect(()=>{
     if(splitUnits&&n>0) setSerials(s=>Array.from({length:n},(_,i)=>s[i]||""));
   },[n,splitUnits]);
-  // Duplicate detection: flag existing items sharing a keyword with the typed name
-  const dupWords=f.name.toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+  // Duplicate detection: flag existing items sharing a meaningful keyword with the typed name
+  const STOP_WORDS=new Set(["the","for","and","or","of","in","on","to","a","an","at","by","is","it","its","be","as","up","do","if","so","but","not","are","was","has","had","that","with","from","this","into","have","than","then","they","when","also","each","set","per","lot","pack","box","kit","new","pcs","qty","use","via","vs","type","size","mod","gen"]);
+  const dupWords=f.name.toLowerCase().split(/\s+/).filter(w=>w.length>=3&&!STOP_WORDS.has(w));
   const dupCheck=f.name.length>=3&&dupWords.length>0
     ?allItems.filter(i=>dupWords.some(w=>(i.name||"").toLowerCase().includes(w)))
     :[];
