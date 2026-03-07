@@ -1277,6 +1277,7 @@ function LabInventory(){
   const [page, setPage] = useState(0);
   const [invLimit, setInvLimit] = useState(ITEMS_PER_PAGE);
   const [checkoutLimit, setCheckoutLimit] = useState(30);
+  const invSentinelRef = useRef(null);
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
@@ -1415,6 +1416,17 @@ function LabInventory(){
 
   // Reset page/limit when filters change
   useEffect(()=>{ setPage(0); setInvLimit(ITEMS_PER_PAGE); },[search, catF, sortBy]);
+
+  // Infinite scroll: load more when sentinel enters viewport
+  useEffect(()=>{
+    const el = invSentinelRef.current;
+    if(!el) return;
+    const obs = new IntersectionObserver(entries=>{
+      if(entries[0].isIntersecting) setInvLimit(l=>l+ITEMS_PER_PAGE);
+    },{rootMargin:"200px"});
+    obs.observe(el);
+    return ()=>obs.disconnect();
+  },[invSentinelRef.current]);
 
   const addToast=useCallback((type,msg,onClick)=>{
     const id=++tid.current;
@@ -2076,9 +2088,8 @@ function LabInventory(){
               </ErrorBoundary>
             )}
             {displayItems.length>invLimit&&(
-              <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:12}}>
-                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {displayItems.length} items</span>
-                <button onClick={()=>setInvLimit(l=>l+ITEMS_PER_PAGE)} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>Load more</button>
+              <div ref={invSentinelRef} style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:8,padding:"12px 0"}}>
+                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {displayItems.length} items…</span>
               </div>
             )}
             {displayItems.length>0&&displayItems.length<=invLimit&&invLimit>ITEMS_PER_PAGE&&(
