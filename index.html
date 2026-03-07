@@ -1559,8 +1559,10 @@ function LabInventory(){
     setItems(p=>[item,...p]);
     addToast("success",`"${item.name}" added`);
     const res = await postAction("addItem", {item});
+    const finalId = res?.displayId || item.displayId;
     if(res?.displayId && res.displayId !== item.displayId)
       setItems(p=>p.map(i=>i.id===item.id?{...i,displayId:res.displayId}:i));
+    return finalId;
   };
 
   const handleUpdateItem = async (updatedItem) => {
@@ -2445,7 +2447,7 @@ function LabInventory(){
         </div>
       </Modal>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
-      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories} onAddUnit={async (newUnit)=>{await handleAddItem(newUnit);setGroupDetail(p=>p?{...p,qty:(p.qty||0)+1,_items:[...(p._items||[]),newUnit]}:p);}}/>}
+      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories} onAddUnit={async (newUnit)=>{const fid=await handleAddItem(newUnit);setGroupDetail(p=>p?{...p,qty:(p.qty||0)+1,_items:[...(p._items||[]),{...newUnit,displayId:fid||newUnit.displayId}]}:p);}}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>

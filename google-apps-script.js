@@ -464,11 +464,11 @@ function doPost(e) {
     addLock.waitLock(10000);
     try {
       const it = body.item;
-      // For regular items (not sub-items like CE-000042-001), generate displayId
-      // server-side so concurrent adds never produce the same number.
+      // Always generate displayId server-side (inside the lock) to prevent collisions.
+      const allItems = sheetToJson(getSheet("Items"));
       const isSubId = /^.+-\d{3}$/.test(String(it.displayId||""));
       if (!isSubId) {
-        const allItems = sheetToJson(getSheet("Items"));
+        // Regular item: global sequential 6-digit counter across all prefixes.
         const prefixMatch = String(it.displayId||"GEN-000000").match(/^([^-]+)-/);
         const prefix = prefixMatch ? prefixMatch[1] : "GEN";
         const maxNum = Math.max(0, ...allItems.map(function(i) {
@@ -476,6 +476,18 @@ function doPost(e) {
           return m ? parseInt(m[1]) : 0;
         }));
         it.displayId = prefix + "-" + String(maxNum + 1).padStart(6, "0");
+      } else {
+        // Sub-ID item (e.g. CE-000042-001): assign next available 3-digit suffix
+        // for this base ID server-side so concurrent "Add Unit" calls can't collide.
+        const baseId = String(it.displayId||"").replace(/-\d{3}$/, "");
+        const maxSuffix = Math.max(0, ...allItems
+          .filter(function(i) { return String(i.displayId||"").replace(/-\d{3}$/, "") === baseId; })
+          .map(function(i) {
+            var m = String(i.displayId||"").match(/-(\d{3})$/);
+            return m ? parseInt(m[1]) : 0;
+          })
+        );
+        it.displayId = baseId + "-" + String(maxSuffix + 1).padStart(3, "0");
       }
       appendRow("Items", it, [
         "id", "name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "usedBy", "serial", "displayId", "shared", "consumable"
