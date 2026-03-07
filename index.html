@@ -1277,7 +1277,8 @@ function LabInventory(){
   const [page, setPage] = useState(0);
   const [invLimit, setInvLimit] = useState(ITEMS_PER_PAGE);
   const [checkoutLimit, setCheckoutLimit] = useState(30);
-  const invSentinelRef = useRef(null);
+  const tableScrollRef = useRef(null);
+  const scrollCooldown = useRef(false);
   const [sortBy, setSortBy] = useState("name-az");
   const [darkMode, setDarkMode] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
@@ -1417,20 +1418,28 @@ function LabInventory(){
   // Reset page/limit when filters change
   useEffect(()=>{ setPage(0); setInvLimit(ITEMS_PER_PAGE); },[search, catF, sortBy]);
 
-  // Infinite scroll: load one batch when sentinel enters viewport, then disconnect
-  // until the next batch is needed (invLimit change reconnects the observer).
+  // Infinite scroll via scroll event on the correct container:
+  // - list view: the inner table div (overflow:auto, maxHeight:65vh)
+  // - grid view: window (page grows naturally as items are added)
   useEffect(()=>{
-    const el = invSentinelRef.current;
-    if(!el) return;
-    const obs = new IntersectionObserver(entries=>{
-      if(entries[0].isIntersecting){
-        obs.disconnect();
-        setInvLimit(l=>l+ITEMS_PER_PAGE);
-      }
-    },{threshold:0});
-    obs.observe(el);
-    return ()=>obs.disconnect();
-  },[invLimit]);
+    const loadMore=()=>{
+      if(scrollCooldown.current) return;
+      scrollCooldown.current=true;
+      setInvLimit(l=>l+ITEMS_PER_PAGE);
+      setTimeout(()=>{scrollCooldown.current=false;},400);
+    };
+    if(view==="list"){
+      const el=tableScrollRef.current;
+      if(!el) return;
+      const fn=()=>{if(el.scrollTop+el.clientHeight>=el.scrollHeight-150) loadMore();};
+      el.addEventListener("scroll",fn,{passive:true});
+      return ()=>el.removeEventListener("scroll",fn);
+    } else {
+      const fn=()=>{if(window.innerHeight+window.scrollY>=document.body.scrollHeight-300) loadMore();};
+      window.addEventListener("scroll",fn,{passive:true});
+      return ()=>window.removeEventListener("scroll",fn);
+    }
+  },[view]);
 
   const addToast=useCallback((type,msg,onClick)=>{
     const id=++tid.current;
@@ -2049,7 +2058,7 @@ function LabInventory(){
             ):(
               <ErrorBoundary>
               <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-                <div style={{overflow:"auto",maxHeight:"65vh"}}>
+                <div ref={tableScrollRef} style={{overflow:"auto",maxHeight:"65vh"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                     <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
                       {["Item","Category","Stock","Location","Serial/Product No.","Status","In Use By"].map(h=>(
@@ -2092,8 +2101,8 @@ function LabInventory(){
               </ErrorBoundary>
             )}
             {displayItems.length>invLimit&&(
-              <div ref={invSentinelRef} style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:8,padding:"12px 0"}}>
-                <span style={{color:"var(--dim)",fontSize:12}}>Showing {invLimit} of {displayItems.length} items…</span>
+              <div style={{textAlign:"center",marginTop:16,color:"var(--dim)",fontSize:12,padding:"8px 0"}}>
+                Showing {invLimit} of {displayItems.length} items
               </div>
             )}
             {displayItems.length>0&&displayItems.length<=invLimit&&invLimit>ITEMS_PER_PAGE&&(
