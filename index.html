@@ -633,6 +633,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
   const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
+  const onCatChange=e=>{const nc=e.target.value;setF(p=>{const np=catPrefix(nc);const m=String(p.displayId||"").match(/(\d{6}(?:-\d{3})?)$/);const num=m?m[1]:"";return{...p,cat:nc,displayId:num?`${np}-${num}`:p.displayId};});};
   const [confirmDel,setConfirmDel]=useState(false);
   const [splitConfirm,setSplitConfirm]=useState(false);
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
@@ -649,7 +650,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
     <Modal onClose={onClose} title="Edit Item" mw={560}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
+        <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
         <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
@@ -860,8 +861,16 @@ const ConfirmModal = ({msg,onConfirm,onClose}) => (
 );
 
 // ─── GROUP DETAIL MODAL ─────────────────────────────────────────────────────
-const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,editLocked,categories}) => {
+const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,editLocked,categories,onAddUnit}) => {
+  const [addingUnit,setAddingUnit] = React.useState(false);
+  const [newSerial,setNewSerial] = React.useState("");
   const ac = getCatAccent(group.cat,categories||[]);
+  const handleAddUnit = () => {
+    const maxIdx = Math.max(0,...group._items.map(u=>{const m=String(u.displayId||"").match(/-(\d{3})$/);return m?parseInt(m[1]):0;}));
+    const nextDisplayId = `${group._baseId}-${String(maxIdx+1).padStart(3,"0")}`;
+    onAddUnit({id:uid(),name:group.name,cat:group.cat,qty:1,unit:group.unit||"units",loc:group.loc||"",desc:group.desc||"",minQty:group.minQty||0,img:group.img||"",status:"Available",usedBy:[],serial:newSerial.trim(),displayId:nextDisplayId,shared:group.shared||false,consumable:false});
+    setNewSerial(""); setAddingUnit(false);
+  };
   return(
     <Modal onClose={onClose} title={`📦 ${group.name}`} mw={640}>
       <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
@@ -871,9 +880,9 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
         {group.loc&&<span style={{color:"var(--dim)",fontSize:11}}>📍 {group.loc}</span>}
       </div>
       {group.desc&&<p style={{margin:"0 0 12px",color:"var(--sub)",fontSize:13,lineHeight:1.5}}>{group.desc}</p>}
-      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"60vh",overflowY:"auto"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
         {group._items.map((unit,i)=>{
-          const inUse=unit.usedBy&&unit.usedBy.length>0;
+          const inUse=toArr(unit.usedBy).length>0;
           const activeCheckout=checkouts.find(c=>c.item===unit.name&&c.status==="Active"&&(!c.displayId||c.displayId===unit.displayId));
           return(
             <div key={unit.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -883,7 +892,7 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
               </div>
               <div style={{flex:1}}>
                 <Badge status={inUse?"In Use":"Available"}/>
-                {inUse&&<span style={{marginLeft:8,fontSize:12,color:"var(--sub)"}}>→ {unit.usedBy?.join(", ")}</span>}
+                {inUse&&<span style={{marginLeft:8,fontSize:12,color:"var(--sub)"}}>→ {toArr(unit.usedBy).join(", ")}</span>}
                 {activeCheckout&&activeCheckout.ret&&<div style={{fontSize:11,color:"var(--dim)",marginTop:3}}>Due: {activeCheckout.ret}</div>}
               </div>
               <div style={{display:"flex",gap:6}}>
@@ -901,7 +910,20 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
           );
         })}
       </div>
-      <div style={{marginTop:16,display:"flex",justifyContent:"flex-end"}}>
+      {!editLocked&&addingUnit&&(
+        <div style={{marginTop:12,background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 12px",display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{color:"var(--cyan)",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",whiteSpace:"nowrap"}}>
+            Next: {group._baseId}-{String(Math.max(0,...group._items.map(u=>{const m=String(u.displayId||"").match(/-(\d{3})$/);return m?parseInt(m[1]):0;}))+1).padStart(3,"0")}
+          </span>
+          <Inp placeholder="Serial / Product No. (optional)" value={newSerial} onChange={e=>setNewSerial(e.target.value)} style={{flex:1,padding:"6px 10px",fontSize:13}}/>
+          <Btn sm onClick={handleAddUnit}><Ico n="check" s={12} col="#000"/>Add</Btn>
+          <Btn v="ghost" sm onClick={()=>{setAddingUnit(false);setNewSerial("");}}>Cancel</Btn>
+        </div>
+      )}
+      <div style={{marginTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        {!editLocked&&!addingUnit
+          ?<Btn v="ghost" onClick={()=>setAddingUnit(true)}><Ico n="plus" s={14}/>Add Unit</Btn>
+          :<div/>}
         <Btn v="ghost" onClick={onClose}>Close</Btn>
       </div>
     </Modal>
@@ -2423,7 +2445,7 @@ function LabInventory(){
         </div>
       </Modal>}
       {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
-      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories}/>}
+      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories} onAddUnit={async (newUnit)=>{await handleAddItem(newUnit);setGroupDetail(p=>p?{...p,qty:(p.qty||0)+1,_items:[...(p._items||[]),newUnit]}:p);}}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
