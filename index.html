@@ -1209,6 +1209,23 @@ function generateEmailText(orders) {
 }
 
 
+// ─── ERROR BOUNDARY ──────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return{err:e};}
+  componentDidCatch(e,info){console.error("LabTrack render error:",e,info);}
+  render(){
+    if(this.state.err){
+      return React.createElement("div",{style:{textAlign:"center",padding:"60px 20px"}},
+        React.createElement("div",{style:{color:"var(--red)",fontSize:16,fontWeight:700,marginBottom:8}},"Something went wrong rendering the item list"),
+        React.createElement("div",{style:{color:"var(--dim)",fontSize:12,marginBottom:16,fontFamily:"'IBM Plex Mono',monospace"}},String(this.state.err?.message||"")),
+        React.createElement("button",{onClick:()=>this.setState({err:null}),style:{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13}},"Retry")
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 function LabInventory(){
   const [user, setUser] = useState(null);
@@ -1621,12 +1638,14 @@ function LabInventory(){
   const filtered = useMemo(()=>{
     let f = items.filter(i=>{
       const q=search.toLowerCase();
-      return((i.name||"").toLowerCase().includes(q)||(i.loc||"").toLowerCase().includes(q)||(i.cat||"").toLowerCase().includes(q)||(i.desc||"").toLowerCase().includes(q)||(i.serial||"").toLowerCase().includes(q))
+      const s = v => String(v==null?"":v).toLowerCase();
+      return(s(i.name).includes(q)||s(i.loc).includes(q)||s(i.cat).includes(q)||s(i.desc).includes(q)||s(i.serial).includes(q))
         &&(catF==="All"||i.cat===catF);
     });
     // Sort
-    if(sortBy==="name-az") f.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
-    else if(sortBy==="name-za") f.sort((a,b)=>(b.name||"").localeCompare(a.name||""));
+    const srt = v => String(v==null?"":v);
+    if(sortBy==="name-az") f.sort((a,b)=>srt(a.name).localeCompare(srt(b.name)));
+    else if(sortBy==="name-za") f.sort((a,b)=>srt(b.name).localeCompare(srt(a.name)));
     else if(sortBy==="newest") f.sort((a,b)=>Number(b.id)-Number(a.id));
     else if(sortBy==="qty-low") f.sort((a,b)=>a.qty-b.qty);
     else if(sortBy==="qty-high") f.sort((a,b)=>b.qty-a.qty);
@@ -1668,7 +1687,7 @@ function LabInventory(){
   const ORDERS_PER_PAGE = 15;
   const filteredActiveOrders = activeOrders.filter(o=>{
     const q = orderSearch.toLowerCase();
-    const matchText = !q || o.item?.toLowerCase().includes(q) || o.store?.toLowerCase().includes(q) || o.requestedBy?.toLowerCase().includes(q) || o.reason?.toLowerCase().includes(q);
+    const matchText = !q || (o.item||"").toLowerCase().includes(q) || (o.store||"").toLowerCase().includes(q) || (o.requestedBy||"").toLowerCase().includes(q) || (o.reason||"").toLowerCase().includes(q);
     const matchStatus = orderStatusFilter==="All" || o.status===orderStatusFilter;
     const matchDate = true; // date filter handled via orderStatusFilter "Today" below
     return matchText && matchStatus;
@@ -1913,6 +1932,7 @@ function LabInventory(){
                 )}
               </div>
             ):view==="grid"?(
+              <ErrorBoundary>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
                 {paginatedItems.map((item,idx)=>{
                   const ac=getCatAccent(item.cat,categories);
@@ -1985,7 +2005,9 @@ function LabInventory(){
                   );
                 })}
               </div>
+              </ErrorBoundary>
             ):(
+              <ErrorBoundary>
               <div style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
                 <div style={{overflow:"auto",maxHeight:"65vh"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -2027,6 +2049,7 @@ function LabInventory(){
                   </table>
                 </div>
               </div>
+              </ErrorBoundary>
             )}
             {displayItems.length>invLimit&&(
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginTop:20,gap:12}}>
