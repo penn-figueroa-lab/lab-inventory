@@ -353,8 +353,13 @@ function sheetToJson(sheet) {
     const obj = {};
     headers.forEach((h, i) => {
       let val = row[i];
-      if (h === "usedBy" && typeof val === "string") {
-        try { val = JSON.parse(val); } catch(e) { val = []; }
+      if (h === "usedBy") {
+        if (typeof val === "string") {
+          try { val = JSON.parse(val); } catch(e) { val = []; }
+        }
+        // Always ensure usedBy is a clean array of non-empty strings
+        if (!Array.isArray(val)) val = [];
+        else val = val.filter(function(x){ return x != null && x !== ""; });
       }
       if (["qty", "minQty", "itemId"].includes(h) && val !== "") {
         val = Number(val);

@@ -73,6 +73,7 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 // ─── DYNAMIC DATE ────────────────────────────────────────────────────────────
 const getToday = () => new Date().toISOString().slice(0,10);
 const uid = () => Date.now() + Math.floor(Math.random() * 1e9);
+const toArr = v => Array.isArray(v) ? v.filter(x => x != null && x !== "") : [];
 const getNow = () => { const n=new Date(); return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); };
 const getDatePart = dt => dt ? String(dt).split(" ")[0] : "";
 const getTimePart = dt => dt ? (String(dt).split(" ")[1]||"") : "";
@@ -941,11 +942,11 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
           </div>
         </div>
       </div>
-      {item.usedBy?.length>0&&(
+      {toArr(item.usedBy).length>0&&(
         <div style={{marginBottom:18}}>
           <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Currently Using</div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {item.usedBy.map(u=>(
+            {toArr(item.usedBy).map(u=>(
               <div key={u} style={{display:"flex",alignItems:"center",gap:8,background:"var(--blue-d)",border:"1px solid #4da6ff22",borderRadius:8,padding:"6px 12px"}}>
                 <MemberAvatar name={u} sz={24}/><span style={{fontSize:13,color:"var(--blue)"}}>{u}</span>
               </div>
@@ -1464,7 +1465,7 @@ function LabInventory(){
 
   const handleCheckout=(c)=>{
     const checkout={...c, checkedOutByEmail: user?.email||""};
-    setItems(prev=>prev.map(i=>i.name===checkout.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...(i.usedBy||[]),checkout.user]}:i));
+    setItems(prev=>prev.map(i=>i.name===checkout.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...toArr(i.usedBy),checkout.user]}:i));
     setCheckouts(p=>[checkout,...p]);
     addToast("success",`${checkout.item} → ${checkout.user}`);
     postAction("addCheckout", {checkout});
@@ -1482,7 +1483,7 @@ function LabInventory(){
   const handleReturn=async(coId)=>{
     const co=checkouts.find(c=>c.id===coId); if(!co)return;
     setCheckouts(p=>p.map(c=>c.id===coId?{...c,status:"Returned"}:c));
-    setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i));
+    setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:toArr(i.usedBy).filter(u=>u!==co.user)}:i));
     addToast("success",`${co.item} returned`);
     await postAction("returnItem", {checkoutId: coId});
   };
@@ -1504,7 +1505,7 @@ function LabInventory(){
     setCheckouts(prev=>prev.map(c=>ids.includes(c.id)?{...c,status:"Returned"}:c));
     setItems(prev=>{
       let s=[...prev];
-      ids.forEach(id=>{const co=coMap[id];if(!co)return;s=s.map(i=>i.name===co.item?{...i,status:"Available",usedBy:(i.usedBy||[]).filter(u=>u!==co.user)}:i);});
+      ids.forEach(id=>{const co=coMap[id];if(!co)return;s=s.map(i=>i.name===co.item?{...i,status:"Available",usedBy:toArr(i.usedBy).filter(u=>u!==co.user)}:i);});
       return s;
     });
     setSelected(new Set());
@@ -1651,8 +1652,8 @@ function LabInventory(){
     });
     Object.values(groups).forEach(g=>{
       g.qty = g._items.length;
-      const inUseCount = g._items.filter(i=>i.usedBy&&i.usedBy.length>0).length;
-      g.usedBy = [...new Set(g._items.flatMap(i=>i.usedBy||[]))];
+      const inUseCount = g._items.filter(i=>toArr(i.usedBy).length>0).length;
+      g.usedBy = [...new Set(g._items.flatMap(i=>toArr(i.usedBy)))];
       g.status = inUseCount===0?"Available":inUseCount===g._items.length?"In Use":"Partially In Use";
     });
     return result;
@@ -1975,8 +1976,8 @@ function LabInventory(){
                           </div>
                           {item.consumable?(
                             <button onClick={e=>{e.stopPropagation();if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}const n=parseInt(window.prompt(`How many ${item.unit} used?`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,n);}} style={{background:editLocked?"var(--bg3)":"var(--amber-d)",color:editLocked?"var(--dim)":"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:editLocked?"not-allowed":"pointer"}}>Use</button>
-                          ):item.usedBy?.length>0?(
-                            <div style={{display:"flex"}}>{item.usedBy.slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
+                          ):toArr(item.usedBy).length>0?(
+                            <div style={{display:"flex"}}>{toArr(item.usedBy).slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
                           ):null}
                         </div>
                       </div>
@@ -2006,7 +2007,7 @@ function LabInventory(){
                               <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
                               <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11}}><span style={{color:"var(--green)"}}>{availCount} avail</span>{inUseCount>0&&<span style={{color:"var(--amber)",marginLeft:6}}>{inUseCount} in use</span>}</td>
                               <td style={{padding:"10px 16px"}}><Badge status={item.status}/></td>
-                              <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                              <td style={{padding:"10px 16px"}}>{toArr(item.usedBy).length>0?<div style={{display:"flex",gap:4}}>{toArr(item.usedBy).slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
                             </tr>
                           );
                         }
@@ -2018,7 +2019,7 @@ function LabInventory(){
                             <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
                             <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.serial||"—"}</td>
                             <td style={{padding:"10px 16px"}}><Badge status={item.minQty>0&&item.qty<=item.minQty?"Low Stock":item.status}/></td>
-                            <td style={{padding:"10px 16px"}}>{item.usedBy?.length>0?<div style={{display:"flex",gap:4}}>{item.usedBy.slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
+                            <td style={{padding:"10px 16px"}}>{toArr(item.usedBy).length>0?<div style={{display:"flex",gap:4}}>{toArr(item.usedBy).slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
                           </tr>
                         );
                       })}
