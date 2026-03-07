@@ -1417,16 +1417,20 @@ function LabInventory(){
   // Reset page/limit when filters change
   useEffect(()=>{ setPage(0); setInvLimit(ITEMS_PER_PAGE); },[search, catF, sortBy]);
 
-  // Infinite scroll: load more when sentinel enters viewport
+  // Infinite scroll: load one batch when sentinel enters viewport, then disconnect
+  // until the next batch is needed (invLimit change reconnects the observer).
   useEffect(()=>{
     const el = invSentinelRef.current;
     if(!el) return;
     const obs = new IntersectionObserver(entries=>{
-      if(entries[0].isIntersecting) setInvLimit(l=>l+ITEMS_PER_PAGE);
-    },{rootMargin:"200px"});
+      if(entries[0].isIntersecting){
+        obs.disconnect();
+        setInvLimit(l=>l+ITEMS_PER_PAGE);
+      }
+    },{threshold:0});
     obs.observe(el);
     return ()=>obs.disconnect();
-  },[invSentinelRef.current]);
+  },[invLimit]);
 
   const addToast=useCallback((type,msg,onClick)=>{
     const id=++tid.current;
