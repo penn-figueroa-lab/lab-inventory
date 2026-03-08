@@ -453,7 +453,8 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
   const removeSlot=i=>setSlots(p=>p.filter((_,j)=>j!==i));
   const updSlot=(i,k,v)=>setSlots(p=>p.map((s,j)=>j===i?{...s,[k]:v}:s));
   const valid=slots.filter(s=>s.item);
-  const canSubmit=coUser.trim()&&valid.length>0&&retDate.trim();
+  const hasOutOfStock=valid.some(s=>{const it=items.find(i=>i.name===s.item);return it&&(it.qty??0)<=0;});
+  const canSubmit=coUser.trim()&&valid.length>0&&retDate.trim()&&!hasOutOfStock;
   const submit=()=>{
     if(!canSubmit)return;
     const ts=uid();
@@ -489,11 +490,14 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
           </div>
           {slots.map((sl,i)=>{
             const sel=items.find(it=>it.name===sl.item);
-            const maxQ=sel?.qty||1;
+            const maxQ=sel?.qty??0;
+            const outOfStock=sel&&maxQ<=0;
             return(
               <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
                 <div style={{flex:1}}><ItemPicker items={items} value={sl.item} onChange={v=>updSlot(i,"item",v)} categories={categories}/></div>
-                <input type="number" min={1} max={maxQ} value={sl.qty} title={`Max ${maxQ}`} onChange={e=>updSlot(i,"qty",Math.min(maxQ,Math.max(1,parseInt(e.target.value)||1)))} style={{width:60,background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 8px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,color:"var(--text)",outline:"none"}}/>
+                {outOfStock
+                  ?<span style={{fontSize:11,color:"var(--red)",fontWeight:700,whiteSpace:"nowrap"}}>Out of stock</span>
+                  :<input type="number" min={1} max={maxQ} value={sl.qty} title={`Max ${maxQ}`} onChange={e=>updSlot(i,"qty",Math.min(maxQ,Math.max(1,parseInt(e.target.value)||1)))} style={{width:60,background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 8px",textAlign:"center",fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:15,color:"var(--text)",outline:"none"}}/>}
                 {slots.length>1&&<button onClick={()=>removeSlot(i)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}><Ico n="x" s={14}/></button>}
               </div>
             );
@@ -584,7 +588,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
         </div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
-        <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Quantity"><Inp type="number" min="0" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
@@ -652,7 +656,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
-        <Fld label="Quantity"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Quantity"><Inp type="number" min="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
@@ -720,7 +724,7 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
-        <Fld label="Inventory Qty" hint="How many individual units are going in?"><Inp type="number" value={f.qty} onChange={s("qty")}/></Fld>
+        <Fld label="Inventory Qty" hint="How many individual units are going in?"><Inp type="number" min="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Inventory Unit" hint="Unit for each individual item"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
@@ -2044,7 +2048,7 @@ function LabInventory(){
                             <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
                           </div>
                           {item.consumable?(
-                            <button onClick={e=>{e.stopPropagation();if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}const n=parseInt(window.prompt(`How many ${item.unit} used?`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,n);}} style={{background:editLocked?"var(--bg3)":"var(--amber-d)",color:editLocked?"var(--dim)":"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:editLocked?"not-allowed":"pointer"}}>Use</button>
+                            <button onClick={e=>{e.stopPropagation();if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}const n=parseInt(window.prompt(`How many ${item.unit} used? (max ${item.qty})`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,Math.min(n,item.qty));}} style={{background:editLocked?"var(--bg3)":"var(--amber-d)",color:editLocked?"var(--dim)":"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:editLocked?"not-allowed":"pointer"}}>Use</button>
                           ):toArr(item.usedBy).length>0?(
                             <div style={{display:"flex"}}>{toArr(item.usedBy).slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
                           ):null}
