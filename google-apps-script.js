@@ -371,6 +371,18 @@ function sheetToJson(sheet) {
       if (textFields.indexOf(h) >= 0 && typeof val !== "string") {
         val = val == null ? "" : String(val);
       }
+      // Normalize datetime fields — Sheets auto-converts "YYYY-MM-DD HH:MM" strings to Date objects
+      if (["out","ret"].includes(h)) {
+        if (val instanceof Date) {
+          val = val.getFullYear()+"-"+String(val.getMonth()+1).padStart(2,"0")+"-"+String(val.getDate()).padStart(2,"0")
+               +" "+String(val.getHours()).padStart(2,"0")+":"+String(val.getMinutes()).padStart(2,"0");
+        } else if (val != null && typeof val !== "string") { val = String(val); }
+      }
+      if (h === "date") {
+        if (val instanceof Date) {
+          val = val.getFullYear()+"-"+String(val.getMonth()+1).padStart(2,"0")+"-"+String(val.getDate()).padStart(2,"0");
+        } else if (val != null && typeof val !== "string") { val = String(val); }
+      }
       obj[h] = val;
     });
     return obj;

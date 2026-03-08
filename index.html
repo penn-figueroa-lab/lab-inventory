@@ -1049,52 +1049,159 @@ const Pagination = ({total, page, setPage}) => {
 };
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
+const CAL_EC={pkg:{bg:"var(--green-d)",col:"var(--green)"},out:{bg:"var(--blue-d)",col:"var(--blue)"},ret:{bg:"var(--amber-d)",col:"var(--amber)"},odd:{bg:"var(--red-d)",col:"var(--red)"},act:{bg:"var(--blue-d)",col:"#6ab8ff"}};
+const CAL_LBL={pkg:"Delivery",out:"Checked Out",ret:"Return Due",odd:"OVERDUE",act:"In Use"};
+const CalChip=({e,full=false})=>{
+  const ec=CAL_EC[e.t];
+  if(full) return(
+    <div style={{background:ec.bg,color:ec.col,borderLeft:`3px solid ${ec.col}`,borderRadius:6,padding:"7px 10px",marginBottom:5}}>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:2}}>
+        <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{CAL_LBL[e.t]}</span>
+        {e.time&&<span style={{fontSize:11,fontFamily:"'IBM Plex Mono',monospace",opacity:.75}}>{e.time}</span>}
+      </div>
+      <div style={{fontSize:13,fontWeight:700}}>{e.l}</div>
+      {e.user&&<div style={{fontSize:11,opacity:.7,marginTop:2}}>{e.user}</div>}
+    </div>
+  );
+  return(
+    <div style={{background:ec.bg,color:ec.col,borderLeft:`2px solid ${ec.col}`,borderRadius:3,padding:"2px 5px",marginBottom:2,overflow:"hidden",fontSize:9,lineHeight:1.4}}>
+      <div style={{display:"flex",gap:3,overflow:"hidden"}}>
+        {e.time&&<span style={{opacity:.75,whiteSpace:"nowrap",flexShrink:0}}>{e.time}</span>}
+        <span style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.l}</span>
+      </div>
+      {e.user&&<div style={{opacity:.7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.user}</div>}
+    </div>
+  );
+};
 const CalView=({checkouts,deliveries})=>{
-  const now = new Date();
+  const now=new Date();
   const [yr,setYr]=useState(now.getFullYear());
   const [mo,setMo]=useState(now.getMonth());
-  const MNS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const first=new Date(yr,mo,1).getDay(), total=new Date(yr,mo+1,0).getDate();
-  const prev=()=>mo===0?(setMo(11),setYr(y=>y-1)):setMo(m=>m-1);
-  const next=()=>mo===11?(setMo(0),setYr(y=>y+1)):setMo(m=>m+1);
-  const evts=d=>{
-    const ds=`${yr}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const [calMode,setCalMode]=useState("month");
+  const [selDay,setSelDay]=useState(null);
+  const [wkStart,setWkStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);return d;});
+  const MNS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const HOURS=Array.from({length:15},(_,i)=>i+7);
+  const todayStr=getToday();
+  const goToday=()=>{const n=new Date();setYr(n.getFullYear());setMo(n.getMonth());const ws=new Date(n);ws.setDate(ws.getDate()-ws.getDay());ws.setHours(0,0,0,0);setWkStart(ws);};
+  const prev=()=>calMode==="month"?(mo===0?(setMo(11),setYr(y=>y-1)):setMo(m=>m-1)):setWkStart(d=>{const nd=new Date(d);nd.setDate(nd.getDate()-7);return nd;});
+  const next=()=>calMode==="month"?(mo===11?(setMo(0),setYr(y=>y+1)):setMo(m=>m+1)):setWkStart(d=>{const nd=new Date(d);nd.setDate(nd.getDate()+7);return nd;});
+  const evtsFor=ds=>{
     const r=[];
-    deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item,time:""}));
+    deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item,time:"",user:""}));
     checkouts.forEach(x=>{
-      if(getDatePart(x.out)===ds)r.push({t:"out",l:x.item,time:getTimePart(x.out)});
-      if(getDatePart(x.ret)===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item,time:getTimePart(x.ret)});
+      if(getDatePart(x.out)===ds)r.push({t:"out",l:x.item,time:getTimePart(x.out),user:x.user});
+      if(getDatePart(x.ret)===ds)r.push({t:isOverdue(x)?"odd":"ret",l:x.item,time:getTimePart(x.ret),user:x.user});
     });
     return r;
   };
-  const EC={pkg:{bg:"var(--green-d)",col:"var(--green)"},out:{bg:"var(--blue-d)",col:"var(--blue)"},ret:{bg:"var(--amber-d)",col:"var(--amber)"},odd:{bg:"var(--red-d)",col:"var(--red)"}};
-  const EC_LABELS={pkg:"Pkg",out:"Out",ret:"Ret",odd:"Due!"};
-  const td=getTodayParts();
+  const spanning=ds=>checkouts.filter(x=>x.status==="Active"&&getDatePart(x.out)<ds&&getDatePart(x.ret)>=ds).map(x=>({t:"act",l:x.item,time:"",user:x.user}));
+  const toHour=t=>{if(!t)return null;const h=parseInt(t.split(":")[0]);return isNaN(h)?null:h;};
+  const wkDays=Array.from({length:7},(_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return d;});
+  const wkStrs=wkDays.map(d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+  const wkLabel=()=>{const s=wkDays[0],e=wkDays[6];return s.getMonth()===e.getMonth()?`${MNS[s.getMonth()].slice(0,3)} ${s.getDate()}–${e.getDate()}, ${s.getFullYear()}`:`${MNS[s.getMonth()].slice(0,3)} ${s.getDate()} – ${MNS[e.getMonth()].slice(0,3)} ${e.getDate()}, ${e.getFullYear()}`;};
+  const evsByDay=wkStrs.map(ds=>{const byHr={};evtsFor(ds).forEach(e=>{const h=toHour(e.time)??-1;(byHr[h]=byHr[h]||[]).push(e);});return byHr;});
+  const spanByDay=wkStrs.map(spanning);
+  const first=new Date(yr,mo,1).getDay(),total=new Date(yr,mo+1,0).getDate();
+  const NB={background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:14,fontWeight:600};
+  const MB=act=>({background:act?"var(--cyan-d)":"var(--bg3)",color:act?"var(--cyan)":"var(--dim)",border:`1px solid ${act?"#00d4c830":"var(--border)"}`,borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"});
+  const DAYS_S=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const GW="48px";
   return(
     <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-        <button onClick={prev} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>←</button>
-        <span style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:19}}>{MNS[mo]} {yr}</span>
-        <button onClick={next} style={{background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:14}}>→</button>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={prev} style={NB}>←</button>
+          <span style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:18,minWidth:calMode==="month"?150:210,textAlign:"center"}}>{calMode==="month"?`${MNS[mo]} ${yr}`:wkLabel()}</span>
+          <button onClick={next} style={NB}>→</button>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={goToday} style={MB(false)}>Today</button>
+          <button onClick={()=>setCalMode("month")} style={MB(calMode==="month")}>Month</button>
+          <button onClick={()=>setCalMode("week")} style={MB(calMode==="week")}>Week</button>
+        </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
-        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} style={{textAlign:"center",color:"var(--dim)",fontSize:10,fontWeight:700,padding:"4px 0",fontFamily:"'IBM Plex Mono',monospace"}}>{d}</div>)}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-        {Array.from({length:first}).map((_,i)=><div key={`e${i}`}/>)}
-        {Array.from({length:total}).map((_,i)=>{
-          const d=i+1,isT=d===td.d&&mo===td.m&&yr===td.y,ev=evts(d);
-          return(
-            <div key={d} style={{background:isT?"var(--blue-d)":"var(--bg2)",borderRadius:8,minHeight:68,border:`1px solid ${isT?"var(--blue)":"var(--border)"}`,padding:"5px 6px"}}>
-              <div style={{color:isT?"var(--blue)":"var(--dim)",fontSize:10,fontWeight:isT?800:500,fontFamily:"'IBM Plex Mono',monospace",marginBottom:3}}>{d}</div>
-              {ev.slice(0,2).map((e,j)=>{const ec=EC[e.t];return<div key={j} style={{background:ec.bg,color:ec.col,fontSize:8,borderRadius:4,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{e.time&&<span style={{opacity:0.85,marginRight:2}}>{e.time}</span>}{e.l}</div>;})}
-              {ev.length>2&&<div style={{color:"var(--dim)",fontSize:8}}>+{ev.length-2}</div>}
+
+      {calMode==="month"?(
+        /* ── Month view ── */
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+            {DAYS_S.map(d=><div key={d} style={{textAlign:"center",color:"var(--dim)",fontSize:10,fontWeight:700,padding:"4px 0",fontFamily:"'IBM Plex Mono',monospace"}}>{d}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+            {Array.from({length:first}).map((_,i)=><div key={`e${i}`}/>)}
+            {Array.from({length:total}).map((_,i)=>{
+              const d=i+1,ds=`${yr}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+              const isT=ds===todayStr,isSel=selDay===ds,ev=evtsFor(ds);
+              return(
+                <div key={d} onClick={()=>setSelDay(isSel?null:ds)} style={{background:isT?"var(--cyan-d)":isSel?"var(--bg3)":"var(--bg2)",borderRadius:8,minHeight:72,border:`1px solid ${isT?"var(--cyan)":isSel?"var(--border-hi)":"var(--border)"}`,padding:"5px 6px",cursor:"pointer",transition:"border-color .1s"}}>
+                  <div style={{color:isT?"var(--cyan)":"var(--dim)",fontSize:10,fontWeight:isT?800:500,fontFamily:"'IBM Plex Mono',monospace",marginBottom:3}}>{d}</div>
+                  {ev.slice(0,2).map((e,j)=><CalChip key={j} e={e}/>)}
+                  {ev.length>2&&<div style={{color:"var(--dim)",fontSize:8,fontWeight:700}}>+{ev.length-2}</div>}
+                </div>
+              );
+            })}
+          </div>
+          {selDay&&(()=>{
+            const ev=evtsFor(selDay);if(!ev.length)return null;
+            const [sy,sm,sd]=selDay.split("-").map(Number);
+            return(
+              <div style={{marginTop:12,background:"var(--bg2)",border:"1px solid var(--border-hi)",borderRadius:10,padding:"14px 16px"}}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"var(--text)",fontFamily:"'Roboto',sans-serif"}}>{MNS[sm-1]} {sd}, {sy}</div>
+                {ev.map((e,i)=><CalChip key={i} e={e} full/>)}
+              </div>
+            );
+          })()}
+        </div>
+      ):(
+        /* ── Week view ── */
+        <div style={{border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
+          {/* Day headers */}
+          <div style={{display:"grid",gridTemplateColumns:`${GW} repeat(7,1fr)`,background:"var(--bg2)",borderBottom:"1px solid var(--border)"}}>
+            <div style={{borderRight:"1px solid var(--border)"}}/>
+            {wkDays.map((day,i)=>{const ds=wkStrs[i],isT=ds===todayStr;return(
+              <div key={i} style={{textAlign:"center",padding:"8px 4px",borderLeft:i>0?"1px solid var(--border)":"none"}}>
+                <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace"}}>{DAYS_S[day.getDay()]}</div>
+                <div style={{fontFamily:"'Roboto',sans-serif",fontWeight:900,fontSize:20,width:30,height:30,borderRadius:"50%",background:isT?"var(--cyan)":"transparent",color:isT?"#000":"var(--text)",display:"flex",alignItems:"center",justifyContent:"center",margin:"3px auto 0"}}>{day.getDate()}</div>
+              </div>
+            );})}
+          </div>
+          {/* All-day strip — checkouts spanning this week (started before, returns during/after) */}
+          {spanByDay.some(s=>s.length>0)&&(
+            <div style={{display:"grid",gridTemplateColumns:`${GW} repeat(7,1fr)`,background:"var(--bg2)",borderBottom:"1px solid var(--border)"}}>
+              <div style={{fontSize:8,color:"var(--dim)",textAlign:"right",paddingRight:5,paddingTop:6,lineHeight:1.3,fontFamily:"'IBM Plex Mono',monospace",borderRight:"1px solid var(--border)"}}>ALL<br/>DAY</div>
+              {spanByDay.map((evs,i)=>(
+                <div key={i} style={{padding:"3px",borderLeft:"1px solid var(--border)",minHeight:22}}>
+                  {evs.map((e,j)=><CalChip key={j} e={e}/>)}
+                </div>
+              ))}
             </div>
-          );
-        })}
-      </div>
-      <div style={{display:"flex",gap:20,marginTop:14,flexWrap:"wrap"}}>
-        {[["var(--green)","Delivery"],["var(--blue)","Checkout"],["var(--amber)","Return Due"],["var(--red)","Overdue"]].map(([col,lbl])=>(
+          )}
+          {/* Hourly time grid */}
+          <div style={{maxHeight:"58vh",overflowY:"auto"}}>
+            {HOURS.map(hr=>(
+              <div key={hr} style={{display:"grid",gridTemplateColumns:`${GW} repeat(7,1fr)`,borderBottom:"1px solid var(--border)"}}>
+                <div style={{fontSize:9,color:"var(--dim)",textAlign:"right",paddingRight:5,paddingTop:5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1,borderRight:"1px solid var(--border)",flexShrink:0}}>
+                  {hr===12?"12pm":hr>12?`${hr-12}pm`:`${hr}am`}
+                </div>
+                {wkStrs.map((ds,di)=>{
+                  const isT=ds===todayStr,evs=evsByDay[di][hr]||[];
+                  return(
+                    <div key={di} style={{padding:"2px 3px",minHeight:44,background:isT?"rgba(0,212,200,0.04)":"transparent",borderLeft:"1px solid var(--border)"}}>
+                      {evs.map((e,j)=><CalChip key={j} e={e}/>)}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,marginTop:14,flexWrap:"wrap"}}>
+        {[["var(--green)","Delivery"],["var(--blue)","Checkout / In Use"],["var(--amber)","Return Due"],["var(--red)","Overdue"]].map(([col,lbl])=>(
           <div key={lbl} style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
             <span style={{width:10,height:10,borderRadius:3,background:col,display:"inline-block"}}/>
             <span style={{color:col}}>{lbl}</span>
