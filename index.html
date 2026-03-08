@@ -1081,6 +1081,15 @@ const CalView=({checkouts,deliveries})=>{
   const [calMode,setCalMode]=useState("month");
   const [selDay,setSelDay]=useState(null);
   const [wkStart,setWkStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);return d;});
+  const [showPicker,setShowPicker]=useState(false);
+  const [pickerYr,setPickerYr]=useState(now.getFullYear());
+  const pickerRef=useRef(null);
+  useEffect(()=>{
+    if(!showPicker)return;
+    const fn=e=>{if(pickerRef.current&&!pickerRef.current.contains(e.target))setShowPicker(false);};
+    document.addEventListener("mousedown",fn);
+    return()=>document.removeEventListener("mousedown",fn);
+  },[showPicker]);
   const MNS=["January","February","March","April","May","June","July","August","September","October","November","December"];
   const HOURS=Array.from({length:15},(_,i)=>i+7); // 7am–9pm
   const ROW_H=56; // px per hour row
@@ -1089,6 +1098,16 @@ const CalView=({checkouts,deliveries})=>{
   const goToday=()=>{const n=new Date();setYr(n.getFullYear());setMo(n.getMonth());const ws=new Date(n);ws.setDate(ws.getDate()-ws.getDay());ws.setHours(0,0,0,0);setWkStart(ws);};
   const prev=()=>calMode==="month"?(mo===0?(setMo(11),setYr(y=>y-1)):setMo(m=>m-1)):setWkStart(d=>{const nd=new Date(d);nd.setDate(nd.getDate()-7);return nd;});
   const next=()=>calMode==="month"?(mo===11?(setMo(0),setYr(y=>y+1)):setMo(m=>m+1)):setWkStart(d=>{const nd=new Date(d);nd.setDate(nd.getDate()+7);return nd;});
+  const openPicker=()=>{setPickerYr(calMode==="month"?yr:wkStart.getFullYear());setShowPicker(v=>!v);};
+  const pickMonth=(py,pm)=>{
+    if(calMode==="month"){setYr(py);setMo(pm);}
+    else{const d=new Date(py,pm,1);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWkStart(d);}
+    setShowPicker(false);
+  };
+  const switchToWeek=()=>{
+    if(selDay){const[sy,sm,sd]=selDay.split("-").map(Number);const d=new Date(sy,sm-1,sd);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWkStart(d);}
+    setCalMode("week");
+  };
   const evtsFor=ds=>{
     const r=[];
     deliveries.forEach(x=>x.date===ds&&r.push({t:"pkg",l:x.item,time:"",user:""}));
@@ -1149,13 +1168,32 @@ const CalView=({checkouts,deliveries})=>{
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <button onClick={prev} style={NB}>←</button>
-          <span style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:18,minWidth:calMode==="month"?150:210,textAlign:"center"}}>{calMode==="month"?`${MNS[mo]} ${yr}`:wkLabel()}</span>
+          <div ref={pickerRef} style={{position:"relative"}}>
+            <button onClick={openPicker} style={{fontFamily:"'Roboto',sans-serif",fontWeight:700,fontSize:18,minWidth:calMode==="month"?150:210,textAlign:"center",background:"transparent",border:"1px solid transparent",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"var(--text)",transition:"border-color .15s",":hover":{borderColor:"var(--border)"}}}>
+              {calMode==="month"?`${MNS[mo]} ${yr}`:wkLabel()} <span style={{fontSize:12,opacity:.5}}>▾</span>
+            </button>
+            {showPicker&&(
+              <div style={{position:"absolute",top:"calc(100% + 6px)",left:"50%",transform:"translateX(-50%)",zIndex:200,background:"var(--bg2)",border:"1px solid var(--border-hi)",borderRadius:12,padding:"14px 12px",boxShadow:"0 8px 28px rgba(0,0,0,0.5)",width:220}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <button onClick={()=>setPickerYr(y=>y-1)} style={{...NB,padding:"3px 10px",fontSize:13}}>←</button>
+                  <span style={{fontWeight:800,fontSize:16,fontFamily:"'Roboto',sans-serif"}}>{pickerYr}</span>
+                  <button onClick={()=>setPickerYr(y=>y+1)} style={{...NB,padding:"3px 10px",fontSize:13}}>→</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
+                  {MNS.map((mn,mi)=>{
+                    const isAct=calMode==="month"?mi===mo&&pickerYr===yr:false;
+                    return(<button key={mi} onClick={()=>pickMonth(pickerYr,mi)} style={{background:isAct?"var(--cyan-d)":"var(--bg3)",color:isAct?"var(--cyan)":"var(--text)",border:`1px solid ${isAct?"var(--cyan)":"var(--border)"}`,borderRadius:7,padding:"7px 2px",cursor:"pointer",fontSize:11,fontWeight:700}}>{mn.slice(0,3)}</button>);
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           <button onClick={next} style={NB}>→</button>
         </div>
         <div style={{display:"flex",gap:6}}>
           <button onClick={goToday} style={MB(false)}>Today</button>
           <button onClick={()=>setCalMode("month")} style={MB(calMode==="month")}>Month</button>
-          <button onClick={()=>setCalMode("week")} style={MB(calMode==="week")}>Week</button>
+          <button onClick={switchToWeek} style={MB(calMode==="week")}>Week</button>
         </div>
       </div>
 
