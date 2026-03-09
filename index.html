@@ -1090,6 +1090,14 @@ const CalView=({checkouts,deliveries})=>{
     document.addEventListener("mousedown",fn);
     return()=>document.removeEventListener("mousedown",fn);
   },[showPicker]);
+  const [wkOvfDay,setWkOvfDay]=useState(null);
+  const wkOvfRef=useRef(null);
+  useEffect(()=>{
+    if(!wkOvfDay)return;
+    const fn=e=>{if(wkOvfRef.current&&!wkOvfRef.current.contains(e.target))setWkOvfDay(null);};
+    document.addEventListener("mousedown",fn);
+    return()=>document.removeEventListener("mousedown",fn);
+  },[wkOvfDay]);
   const MNS=["January","February","March","April","May","June","July","August","September","October","November","December"];
   const HOURS=Array.from({length:15},(_,i)=>i+7); // 7am–9pm
   const ROW_H=56; // px per hour row
@@ -1145,14 +1153,17 @@ const CalView=({checkouts,deliveries})=>{
       }
     });
     // Greedy lane assignment for overlapping events
+    const MAX_LANES=3;
     const sorted=[...evs].sort((a,b)=>(a.sh*60+a.sm)-(b.sh*60+b.sm));
     const lns=[];
     sorted.forEach(e=>{
       const li=lns.findIndex(ln=>(e.sh*60+e.sm)>=(ln[ln.length-1].eh*60+ln[ln.length-1].em));
       if(li<0){e.ln=lns.length;lns.push([e]);}else{e.ln=li;lns[li].push(e);}
     });
-    sorted.forEach(e=>{e.nln=Math.max(lns.length,1);});
-    return sorted;
+    const totalLns=Math.max(lns.length,1);
+    const vis=sorted.filter(e=>e.ln<MAX_LANES);
+    vis.forEach(e=>{e.nln=Math.min(totalLns,MAX_LANES);});
+    return {vis,ovf:sorted.filter(e=>e.ln>=MAX_LANES)};
   });
   const evTop=e=>(e.sh-FHOUR)*ROW_H+(e.sm/60)*ROW_H;
   const evH=e=>Math.max((e.eh-e.sh)*ROW_H+((e.em-e.sm)/60)*ROW_H,24);
@@ -1234,10 +1245,21 @@ const CalView=({checkouts,deliveries})=>{
           {/* Day headers */}
           <div style={{display:"flex",background:"var(--bg2)",borderBottom:"1px solid var(--border)"}}>
             <div style={{width:GW,flexShrink:0,borderRight:"1px solid var(--border)"}}/>
-            {wkDays.map((day,i)=>{const ds=wkStrs[i],isT=ds===todayStr;return(
-              <div key={i} style={{flex:1,textAlign:"center",padding:"8px 4px",borderLeft:i>0?"1px solid var(--border)":"none"}}>
+            {wkDays.map((day,i)=>{const ds=wkStrs[i],isT=ds===todayStr,ovfCnt=wkBlocks[i].ovf.length;return(
+              <div key={i} style={{flex:1,textAlign:"center",padding:"8px 4px",borderLeft:i>0?"1px solid var(--border)":"none",position:"relative"}}>
                 <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace"}}>{DAYS_S[day.getDay()]}</div>
                 <div style={{fontFamily:"'Roboto',sans-serif",fontWeight:900,fontSize:20,width:30,height:30,borderRadius:"50%",background:isT?"var(--cyan)":"transparent",color:isT?"#000":"var(--text)",display:"flex",alignItems:"center",justifyContent:"center",margin:"3px auto 0"}}>{day.getDate()}</div>
+                {ovfCnt>0&&(
+                  <div ref={wkOvfDay===ds?wkOvfRef:null} style={{display:"inline-block",position:"relative"}}>
+                    <button onClick={()=>setWkOvfDay(p=>p===ds?null:ds)} style={{marginTop:3,background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--dim)",borderRadius:10,padding:"1px 6px",cursor:"pointer",fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}}>+{ovfCnt} more</button>
+                    {wkOvfDay===ds&&(
+                      <div style={{position:"absolute",top:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",zIndex:200,background:"var(--bg2)",border:"1px solid var(--border-hi)",borderRadius:10,padding:"10px",width:200,boxShadow:"0 6px 20px rgba(0,0,0,0.5)",textAlign:"left"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"var(--dim)",marginBottom:6,fontFamily:"'IBM Plex Mono',monospace"}}>Hidden events</div>
+                        {wkBlocks[i].ovf.map((e,j)=><CalChip key={j} e={e} full/>)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );})}
           </div>
@@ -1266,7 +1288,7 @@ const CalView=({checkouts,deliveries})=>{
               </div>
               {/* Day columns */}
               {wkStrs.map((ds,di)=>{
-                const isT=ds===todayStr,blks=wkBlocks[di];
+                const isT=ds===todayStr,blks=wkBlocks[di].vis;
                 return(
                   <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--border)",background:isT?"rgba(0,212,200,0.03)":"transparent"}}>
                     {/* Hour grid lines */}
@@ -1286,7 +1308,6 @@ const CalView=({checkouts,deliveries})=>{
                           style={{position:"absolute",top:`${top}px`,height:`${ht}px`,left,width,background:ec.bg,color:ec.col,borderLeft:`3px solid ${ec.col}`,borderRadius:4,padding:"3px 5px",overflow:"hidden",boxSizing:"border-box",zIndex:2,fontSize:10,lineHeight:1.35,cursor:"default"}}>
                           <div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.l}</div>
                           {ht>36&&<div style={{opacity:.75,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:9}}>{e.user}</div>}
-                          {ht>52&&<div style={{opacity:.6,fontSize:9,fontFamily:"'IBM Plex Mono',monospace"}}>{e.sh}:{String(e.sm).padStart(2,"0")}–{e.continues?"→":`${e.eh}:${String(e.em).padStart(2,"0")}`}</div>}
                         </div>
                       );
                     })}
@@ -1756,7 +1777,9 @@ function LabInventory(){
 
   const handleReturn=async(coId)=>{
     const co=checkouts.find(c=>c.id===coId); if(!co)return;
-    setCheckouts(p=>p.map(c=>c.id===coId?{...c,status:"Returned"}:c));
+    const now=new Date();
+    const nowStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    setCheckouts(p=>p.map(c=>c.id===coId?{...c,status:"Returned",ret:nowStr}:c));
     setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:toArr(i.usedBy).filter(u=>u!==co.user)}:i));
     addToast("success",`${co.item} returned`);
     await postAction("returnItem", {checkoutId: coId});

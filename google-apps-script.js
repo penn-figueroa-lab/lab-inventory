@@ -595,6 +595,7 @@ function doPost(e) {
     const headers = data[0];
     const idCol = headers.indexOf("id");
     const statusCol = headers.indexOf("status");
+    const retCol = headers.indexOf("ret");
     const itemCol = headers.indexOf("item");
     const userCol = headers.indexOf("user");
 
@@ -608,6 +609,10 @@ function doPost(e) {
         if (!admin && coEmail && userEmail !== coEmail && !groupList.includes(userEmail)) {
           return jsonResponse({ error: "Forbidden", detail: "Only the person who checked out this item, group members, or an admin can return it." });
         }
+        const now = new Date();
+        const nowStr = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")
+                      +" "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+        if (retCol >= 0) sheet.getRange(i + 1, retCol + 1).setValue(nowStr);
         sheet.getRange(i + 1, statusCol + 1).setValue("Returned");
         const itemName = data[i][itemCol];
         const returnedUser = data[i][userCol];
