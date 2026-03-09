@@ -367,7 +367,7 @@ function sheetToJson(sheet) {
       if (h === "id") { val = String(val); }
       // Ensure text fields are strings — Sheets auto-detects numbers in text cells
       // (e.g. a serial number "12345678" returns as the JS number 12345678)
-      var textFields = ["name","loc","cat","desc","serial","unit","status","displayId","item","store","requestedBy","reason","link","from","receivedBy","tracking"];
+      var textFields = ["name","loc","cat","desc","serial","unit","status","displayId","tags","item","store","requestedBy","reason","link","from","receivedBy","tracking"];
       if (textFields.indexOf(h) >= 0 && typeof val !== "string") {
         val = val == null ? "" : String(val);
       }

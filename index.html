@@ -242,19 +242,37 @@ const Btn = ({children,onClick,v="primary",style,disabled,sm}) => {
 };
 
 // ─── MODAL SHELL ─────────────────────────────────────────────────────────────
-const Modal = ({onClose,title,mw=560,children,noPad}) => (
-  <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
-      {title!==false&&(
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
-          <h2 style={{margin:0,color:"var(--text)",fontSize:17,fontFamily:"'Roboto',sans-serif",fontWeight:700}}>{title}</h2>
-          <button onClick={onClose} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}><Ico n="x" s={14}/></button>
-        </div>
-      )}
-      <div style={{overflow:"auto",flex:1,padding:noPad?"0":"24px"}}>{children}</div>
+const Modal = ({onClose,title,mw=560,children,noPad,dirty=false}) => {
+  const mdTarget=useRef(null);
+  const [warnClose,setWarnClose]=useState(false);
+  const warnTimer=useRef(null);
+  const handleBdMD=e=>{mdTarget.current=e.target;};
+  const handleBdClick=e=>{
+    if(e.target!==e.currentTarget||mdTarget.current!==e.currentTarget)return;
+    if(dirty&&!warnClose){
+      setWarnClose(true);
+      clearTimeout(warnTimer.current);
+      warnTimer.current=setTimeout(()=>setWarnClose(false),3000);
+      return;
+    }
+    clearTimeout(warnTimer.current);
+    onClose();
+  };
+  return(
+    <div onMouseDown={handleBdMD} onClick={handleBdClick} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
+        {warnClose&&<div style={{background:"var(--amber-d)",borderBottom:"1px solid #f5a62340",padding:"8px 20px",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--amber)",flexShrink:0}}>⚠ Click outside again to discard unsaved changes</div>}
+        {title!==false&&(
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px 16px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+            <h2 style={{margin:0,color:"var(--text)",fontSize:17,fontFamily:"'Roboto',sans-serif",fontWeight:700}}>{title}</h2>
+            <button onClick={onClose} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}><Ico n="x" s={14}/></button>
+          </div>
+        )}
+        <div style={{overflow:"auto",flex:1,padding:noPad?"0":"24px"}}>{children}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 const ToastStack = ({toasts,rm}) => (
@@ -271,6 +289,42 @@ const ToastStack = ({toasts,rm}) => (
     })}
   </div>
 );
+
+// ─── TAG INPUT ───────────────────────────────────────────────────────────────
+const TagInput = ({tags,onChange,placeholder=""}) => {
+  const [inp,setInp]=useState("");
+  const inpRef=useRef(null);
+  const add=()=>{const t=inp.trim();if(t&&!tags.includes(t))onChange([...tags,t]);setInp("");};
+  const remove=i=>onChange(tags.filter((_,j)=>j!==i));
+  const onKeyDown=e=>{
+    if(e.key==="Enter"||e.key===","){e.preventDefault();add();}
+    if(e.key==="Backspace"&&!inp&&tags.length>0){e.preventDefault();remove(tags.length-1);}
+  };
+  return(
+    <div onClick={()=>inpRef.current?.focus()} style={{display:"flex",flexWrap:"wrap",gap:4,padding:"5px 8px",border:"1px solid var(--border)",borderRadius:8,background:"var(--bg2)",cursor:"text",minHeight:38,alignItems:"center"}}>
+      {tags.map((t,i)=>(
+        <span key={i} style={{background:"var(--bg3)",border:"1px solid var(--border-hi)",borderRadius:5,padding:"2px 7px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3,color:"var(--text)",lineHeight:1.4}}>
+          {t}
+          <span onMouseDown={e=>{e.preventDefault();remove(i);}} style={{cursor:"pointer",color:"var(--dim)",fontSize:14,lineHeight:1,userSelect:"none",marginLeft:2}}>×</span>
+        </span>
+      ))}
+      <input ref={inpRef} value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={onKeyDown} onBlur={add}
+        placeholder={tags.length===0?placeholder:""}
+        style={{flex:1,minWidth:80,background:"transparent",border:"none",outline:"none",color:"var(--text)",fontSize:13,padding:"2px 4px"}}/>
+    </div>
+  );
+};
+// Renders a comma-separated desc string as chips (if it looks like tags) or plain text
+const DescChips = ({desc}) => {
+  if(!desc)return <span style={{color:"var(--dim)",fontSize:13}}>No description.</span>;
+  const tags=desc.split(",").map(t=>t.trim()).filter(Boolean);
+  if(tags.length<=1&&desc.length>40)return <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:0}}>{desc}</p>;
+  return(
+    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+      {tags.map((t,i)=><span key={i} style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:5,padding:"2px 9px",fontSize:11,color:"var(--sub)"}}>{t}</span>)}
+    </div>
+  );
+};
 
 // ─── IMAGE UPLOAD WIDGET ─────────────────────────────────────────────────────
 const ImageUpload = ({value, onChange}) => {
@@ -568,7 +622,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
     onClose();
   };
   return(
-    <Modal onClose={onClose} title="Add Item">
+    <Modal onClose={onClose} title="Add Item" dirty={f.name.trim()!==""||f.qty!==""}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}>
           <Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld>
@@ -595,7 +649,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
         {!(splitUnits&&canSplit)&&(
           <div style={{gridColumn:"1/-1"}}><Fld label="Serial/Product No."><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         )}
-        <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp placeholder="Brief description..." value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Tags / Specs" hint="Press Enter or , to add — e.g. M3×8, stainless, pack of 50"><TagInput tags={f.desc?f.desc.split(",").map(t=>t.trim()).filter(Boolean):[]} onChange={ts=>setF(p=>({...p,desc:ts.join(", ")}))} placeholder="Type a tag and press Enter…"/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         {canSplit&&(
           <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
@@ -635,9 +689,10 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
 const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) => {
   const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
-  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
-  const onCatChange=e=>{const nc=e.target.value;setF(p=>{const np=catPrefix(nc);const m=String(p.displayId||"").match(/(\d{6}(?:-\d{3})?)$/);const num=m?m[1]:"";return{...p,cat:nc,displayId:num?`${np}-${num}`:p.displayId};});};
+  const [changed,setChanged]=useState(false);
+  const s=k=>e=>{setF(p=>({...p,[k]:e.target.value}));setChanged(true);};
+  const chk=k=>e=>{setF(p=>({...p,[k]:e.target.checked}));setChanged(true);};
+  const onCatChange=e=>{setChanged(true);const nc=e.target.value;setF(p=>{const np=catPrefix(nc);const m=String(p.displayId||"").match(/(\d{6}(?:-\d{3})?)$/);const num=m?m[1]:"";return{...p,cat:nc,displayId:num?`${np}-${num}`:p.displayId};});};
   const [confirmDel,setConfirmDel]=useState(false);
   const [splitConfirm,setSplitConfirm]=useState(false);
   const CHKBOX=(label,key)=><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f[key]} onChange={chk(key)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>{label}</label>;
@@ -651,7 +706,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
     onClose();
   };
   return(
-    <Modal onClose={onClose} title="Edit Item" mw={560}>
+    <Modal onClose={onClose} title="Edit Item" mw={560} dirty={changed}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
@@ -662,7 +717,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
         <Fld label="Location"><Inp value={f.loc} onChange={s("loc")}/></Fld>
         <Fld label="Label ID" hint="ID on physical sticker"><Inp value={f.displayId} onChange={s("displayId")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial/Product No."><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Description"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><Fld label="Tags / Specs" hint="Press Enter or , to add — e.g. M3×8, stainless, pack of 50"><TagInput tags={f.desc?f.desc.split(",").map(t=>t.trim()).filter(Boolean):[]} onChange={ts=>{setF(p=>({...p,desc:ts.join(", ")}));setChanged(true);}}/></Fld></div>
         <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         {canSplit&&(
           <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
@@ -772,7 +827,7 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
   const urgColors={Urgent:"var(--red)",High:"var(--amber)",Normal:"var(--blue)",Low:"var(--sub)"};
 
   return(
-    <Modal onClose={onClose} title="🛒 Request Order" mw={680}>
+    <Modal onClose={onClose} title="🛒 Request Order" mw={680} dirty={store.trim()!==""||items.some(it=>it.name.trim()!=="")}>
       {/* ── Store + Link (required) ── */}
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",marginBottom:14}}>
         <div style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:10}}>Store Info</div>
@@ -883,7 +938,7 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
         <span style={{color:"var(--sub)",fontSize:11}}>{group.cat}</span>
         {group.loc&&<span style={{color:"var(--dim)",fontSize:11}}>📍 {group.loc}</span>}
       </div>
-      {group.desc&&<p style={{margin:"0 0 12px",color:"var(--sub)",fontSize:13,lineHeight:1.5}}>{group.desc}</p>}
+      {group.desc&&<div style={{margin:"0 0 12px"}}><DescChips desc={group.desc}/></div>}
       <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
         {group._items.map((unit,i)=>{
           const inUse=toArr(unit.usedBy).length>0;
@@ -953,7 +1008,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
             <Badge status={isLow?"Low Stock":item.status}/>
             <span style={{background:"var(--bg3)",color:ac,border:`1px solid ${ac}30`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat}</span>
           </div>
-          <p style={{color:"var(--sub)",fontSize:13,lineHeight:1.6,margin:"0 0 14px"}}>{item.desc||"No description."}</p>
+          <div style={{marginBottom:14}}><DescChips desc={item.desc}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
             {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Serial/Product No.",item.serial||"—"]].map(([k,v])=>(
               <div key={k}>
