@@ -367,6 +367,46 @@ const ImageUpload = ({value, onChange}) => {
   );
 };
 
+// ─── COPY ID BADGE ────────────────────────────────────────────────────────────
+const CopyIdBadge = ({id}) => {
+  const [cp,setCp]=useState(false);
+  if(!id)return null;
+  const copy=async e=>{e.stopPropagation();try{await navigator.clipboard.writeText(id);}catch(err){}setCp(true);setTimeout(()=>setCp(false),2000);};
+  return(
+    <span onClick={copy} title="Click to copy label ID"
+      style={{background:"var(--bg3)",border:`1px solid ${cp?"var(--green)":"var(--border)"}`,borderRadius:4,padding:"1px 6px",color:cp?"var(--green)":"var(--cyan)",letterSpacing:"0.05em",cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:3,fontFamily:"'IBM Plex Mono',monospace",fontSize:11}}>
+      {id}
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{opacity:cp?1:.45}}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    </span>
+  );
+};
+
+// ─── LABEL MODAL ──────────────────────────────────────────────────────────────
+const LabelModal = ({item,onClose,onAddAnother}) => {
+  const [copied,setCopied]=useState(false);
+  const copy=async()=>{try{await navigator.clipboard.writeText(item.displayId);}catch(e){}setCopied(true);setTimeout(()=>setCopied(false),2500);};
+  return(
+    <Modal onClose={onClose} title={false} mw={380}>
+      <div style={{textAlign:"center",padding:"24px 8px 8px"}}>
+        <div style={{width:52,height:52,borderRadius:"50%",background:"var(--green-d)",border:"2px solid var(--green)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.12em",color:"var(--green)",textTransform:"uppercase",marginBottom:8}}>Item Added</div>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:24,lineHeight:1.3}}>{item.name}</div>
+        <div onClick={copy} style={{background:"var(--bg2)",border:`2px solid ${copied?"var(--green)":"var(--cyan)"}`,borderRadius:14,padding:"24px 16px",cursor:"pointer",marginBottom:24,transition:"border-color .2s",userSelect:"none"}}>
+          <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:36,fontWeight:900,letterSpacing:"0.06em",color:copied?"var(--green)":"var(--cyan)",lineHeight:1}}>{item.displayId}</div>
+          {item.count>1&&<div style={{marginTop:10,fontSize:12,color:"var(--dim)",fontFamily:"'IBM Plex Mono',monospace"}}>{item.baseId}-001 → {item.baseId}-{String(item.count).padStart(3,"0")}</div>}
+          <div style={{marginTop:10,fontSize:12,color:copied?"var(--green)":"var(--dim)",fontWeight:copied?700:400}}>{copied?"✓ Copied to clipboard!":"tap to copy"}</div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <Btn v="ghost" onClick={onAddAnother}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{marginRight:4}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Another</Btn>
+          <Btn onClick={onClose}>Done</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 // ─── MANAGE CATEGORIES MODAL ─────────────────────────────────────────────────
 const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const [cats, setCats] = useState([...categories]);
@@ -590,11 +630,13 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
 };
 
 // ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────
-const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
+const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
   const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",serial:"",shared:false,consumable:false});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
   const [splitUnits,setSplitUnits]=useState(false);
   const [serials,setSerials]=useState([]);
+  const [advanced,setAdvanced]=useState(false);
+  const [submitting,setSubmitting]=useState(false);
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
   const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
@@ -611,15 +653,22 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
   const dupCheck=f.name.length>=3&&dupWords.length>0
     ?allItems.filter(i=>dupWords.some(w=>(i.name||"").toLowerCase().includes(w)))
     :[];
-  const submit=()=>{
-    if(!f.name||!f.qty)return;
+  const submit=async()=>{
+    if(!f.name||!f.qty||submitting)return;
+    setSubmitting(true);
     const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
-    if(splitUnits&&canSplit){
-      for(let u=1;u<=n;u++) onAdd({...base,id:uid(),qty:1,serial:serials[u-1]||"",displayId:`${displayId}-${String(u).padStart(3,"0")}`});
-    } else {
-      onAdd({...base,id:uid(),qty:n,displayId});
+    try{
+      if(splitUnits&&canSplit){
+        await Promise.all(Array.from({length:n},(_,u)=>onAdd({...base,id:uid(),qty:1,serial:serials[u]||"",displayId:`${displayId}-${String(u+1).padStart(3,"0")}`})));
+        onShowLabel&&onShowLabel({name:base.name,displayId:`${displayId}-001`,baseId:displayId,count:n});
+      } else {
+        const finalId=await onAdd({...base,id:uid(),qty:n,displayId});
+        onShowLabel&&onShowLabel({name:base.name,displayId:finalId||displayId,count:1});
+      }
+    } finally {
+      setSubmitting(false);
+      onClose();
     }
-    onClose();
   };
   return(
     <Modal onClose={onClose} title="Add Item" dirty={f.name.trim()!==""||f.qty!==""}>
@@ -641,17 +690,34 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
           )}
         </div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
+        {advanced ? (
+          <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
+        ) : (
+          <div style={{marginBottom:14}}>
+            <div style={{color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>Label ID (auto)</div>
+            <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:15,fontWeight:700,color:"var(--cyan)",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",letterSpacing:"0.05em"}}>{displayId}</div>
+          </div>
+        )}
         <Fld label="Quantity"><Inp type="number" min="0" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
-        {!(splitUnits&&canSplit)&&(
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        <div style={{gridColumn:"1/-1",marginBottom:4}}>
+          <button onClick={()=>setAdvanced(v=>!v)} style={{background:"none",border:"none",color:"var(--dim)",fontSize:12,cursor:"pointer",padding:"2px 0",display:"flex",alignItems:"center",gap:4}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{transform:advanced?"rotate(180deg)":"rotate(0deg)",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+            {advanced?"Hide advanced fields":"Advanced (serial, min stock, tags, image, split units)"}
+          </button>
+        </div>
+        {advanced&&(
+          <Fld label="Min Stock Alert"><Inp type="number" min="0" placeholder="0" value={f.minQty} onChange={s("minQty")}/></Fld>
+        )}
+        {advanced&&!(splitUnits&&canSplit)&&(
           <div style={{gridColumn:"1/-1"}}><Fld label="Serial/Product No."><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         )}
-        <div style={{gridColumn:"1/-1"}}><Fld label="Tags / Specs" hint="Press Enter or , to add — e.g. M3×8, stainless, pack of 50"><TagInput tags={f.desc?f.desc.split(",").map(t=>t.trim()).filter(Boolean):[]} onChange={ts=>setF(p=>({...p,desc:ts.join(", ")}))} placeholder="Type a tag and press Enter…"/></Fld></div>
-        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
-        {canSplit&&(
+        {advanced&&(
+          <div style={{gridColumn:"1/-1"}}><Fld label="Tags / Specs" hint="Press Enter or , to add — e.g. M3×8, stainless, pack of 50"><TagInput tags={f.desc?f.desc.split(",").map(t=>t.trim()).filter(Boolean):[]} onChange={ts=>setF(p=>({...p,desc:ts.join(", ")}))} placeholder="Type a tag and press Enter…"/></Fld></div>
+        )}
+        {advanced&&canSplit&&(
           <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
             <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--cyan)"}}>
               <input type="checkbox" checked={splitUnits} onChange={e=>setSplitUnits(e.target.checked)} style={{accentColor:"var(--cyan)",width:14,height:14}}/>
@@ -676,11 +742,13 @@ const AddItemModal = ({onClose,onAdd,categories,allItems}) => {
             )}
           </div>
         )}
-        <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
+        {advanced&&(
+          <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
+        )}
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={submit} disabled={!f.name||!f.qty}><Ico n="plus" s={14} col="#000"/>{splitUnits&&canSplit?`Create ${n} Items`:"Add Item"}</Btn>
+        <Btn onClick={submit} disabled={!f.name||!f.qty||submitting}><Ico n="plus" s={14} col="#000"/>{submitting?"Adding…":(splitUnits&&canSplit?`Create ${n} Items`:"Add Item")}</Btn>
       </div>
     </Modal>
   );
@@ -1547,6 +1615,7 @@ function LabInventory(){
   const [orders,setOrders] = useState([]);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [modal,setModal] = useState(null);
+  const [labelItem,setLabelItem]=useState(null);
   const [preItem,setPreItem] = useState("");
   const [detail,setDetail] = useState(null);
   const [groupDetail,setGroupDetail] = useState(null);
@@ -1762,7 +1831,7 @@ function LabInventory(){
     if (!user) return;
     const h=e=>{
       if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.tagName==="SELECT")return;
-      if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);}
+      if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);setLabelItem(null);}
       if(e.key==="n"||e.key==="N") setModal("delivery");
       if(e.key==="c"||e.key==="C"){setPreItem("");setModal("checkout");}
     };
@@ -2289,7 +2358,7 @@ function LabInventory(){
                         <div style={{padding:"11px 14px 13px"}}>
                           <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
                           <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
-                            {item.displayId&&<span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"0px 5px",color:"var(--cyan)",letterSpacing:"0.05em"}}>{item.displayId}</span>}
+                            <CopyIdBadge id={item.displayId}/>
                             <span style={{color:"var(--purple)",fontSize:10}}>TRACKED UNITS</span>
                           </div>
                           <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
@@ -2321,7 +2390,7 @@ function LabInventory(){
                       <div style={{padding:"11px 14px 13px"}}>
                         <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
                         <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
-                          {item.displayId&&<span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"0px 5px",color:"var(--cyan)",letterSpacing:"0.05em"}}>{item.displayId}</span>}
+                          <CopyIdBadge id={item.displayId}/>
                           {item.shared&&<span style={{color:"var(--purple)",fontSize:10}}>SHARED</span>}
                           {item.consumable&&<span style={{color:"var(--amber)",fontSize:10}}>CONSUMABLE</span>}
                         </div>
@@ -2728,7 +2797,8 @@ function LabInventory(){
       {/* MODALS */}
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
-      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items}/>}
+      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items} onShowLabel={setLabelItem}/>}
+      {labelItem&&<LabelModal item={labelItem} onClose={()=>setLabelItem(null)} onAddAnother={()=>{setLabelItem(null);setModal("addItem");}}/>}
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
       {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} onAdd={handleAddItem} categories={categories} isAdmin={effectiveRole==="admin"}/>}
