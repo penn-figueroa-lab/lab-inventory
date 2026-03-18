@@ -315,6 +315,11 @@ function backupSpreadsheet() {
     if (!found) settingsSheet.appendRow(["last_backup", displayTime]);
   }
 
+  sendSlack("💾", "Weekly Backup Complete", null, [
+    "*File*\n" + backupName,
+    "*Location*\n" + FOLDER_NAME,
+    "*Kept*\n" + Math.min(files.length, BACKUP_KEEP_COUNT) + " backups"
+  ]);
   Logger.log("✅ Backup created: " + backupName + " → " + FOLDER_NAME);
   return backupName;
 }
