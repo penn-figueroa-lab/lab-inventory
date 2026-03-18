@@ -659,11 +659,12 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
     const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
     try{
       if(splitUnits&&canSplit){
-        await Promise.all(Array.from({length:n},(_,u)=>onAdd({...base,id:uid(),qty:1,serial:serials[u]||"",displayId:`${displayId}-${String(u+1).padStart(3,"0")}`})));
-        onShowLabel&&onShowLabel({name:base.name,displayId:`${displayId}-001`,baseId:displayId,count:n});
+        const results=await Promise.all(Array.from({length:n},(_,u)=>onAdd({...base,id:uid(),qty:1,serial:serials[u]||"",displayId:`${displayId}-${String(u+1).padStart(3,"0")}`})));
+        const firstId=results[0]; // server-confirmed ID of first unit
+        if(firstId&&onShowLabel) onShowLabel({name:base.name,displayId:firstId,baseId:firstId.replace(/-\d{3}$/,""),count:results.filter(Boolean).length});
       } else {
         const finalId=await onAdd({...base,id:uid(),qty:n,displayId});
-        onShowLabel&&onShowLabel({name:base.name,displayId:finalId||displayId,count:1});
+        if(finalId&&onShowLabel) onShowLabel({name:base.name,displayId:finalId,count:1});
       }
     } finally {
       setSubmitting(false);
@@ -694,7 +695,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
           <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
         ) : (
           <div style={{marginBottom:14}}>
-            <div style={{color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>Label ID (auto)</div>
+            <div style={{color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>Label ID <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"var(--dim)"}}>(preview — confirmed after saving)</span></div>
             <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:15,fontWeight:700,color:"var(--cyan)",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",letterSpacing:"0.05em"}}>{displayId}</div>
           </div>
         )}
@@ -1937,12 +1938,17 @@ function LabInventory(){
   const handleQuickCheckout=(itemName)=>{ setPreItem(itemName); setModal("checkout"); };
 
   const handleAddItem = async (item) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
+    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return null;}
     setItems(p=>[item,...p]);
-    addToast("success",`"${item.name}" added`);
     const res = await postAction("addItem", {item});
-    const finalId = res?.displayId || item.displayId;
-    if(res?.displayId && res.displayId !== item.displayId)
+    if(!res||res.error){
+      setItems(p=>p.filter(i=>i.id!==item.id)); // rollback optimistic add
+      if(!res) addToast("error",`Failed to save "${item.name}" — check your connection`);
+      return null;
+    }
+    addToast("success",`"${item.name}" added`);
+    const finalId = res.displayId || item.displayId;
+    if(res.displayId && res.displayId !== item.displayId)
       setItems(p=>p.map(i=>i.id===item.id?{...i,displayId:res.displayId}:i));
     return finalId;
   };
