@@ -228,7 +228,7 @@ function createTriggers() {
   // Remove any existing triggers for these functions to avoid duplicates
   ScriptApp.getProjectTriggers().forEach(function(t) {
     var fn = t.getHandlerFunction();
-    if (fn === "sendDailyDigest" || fn === "checkOverduesAndAlert") {
+    if (fn === "sendDailyDigest" || fn === "checkOverduesAndAlert" || fn === "backupSpreadsheet") {
       ScriptApp.deleteTrigger(t);
     }
   });
@@ -244,7 +244,79 @@ function createTriggers() {
     .atHour(8)
     .everyDays(1)
     .create();
-  Logger.log("✅ Triggers created. Verify: Apps Script → Triggers (clock icon). Make sure Project Settings → Time zone = America/New_York.");
+  // Weekly backup every Sunday at 3am
+  ScriptApp.newTrigger("backupSpreadsheet")
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(3)
+    .create();
+  Logger.log("✅ Triggers created (digest, overdue alert, weekly backup). Verify in Triggers tab. Time zone must be America/New_York.");
+}
+
+// ─── SPREADSHEET BACKUP ──────────────────────────────────────────────────────
+// Copies the entire spreadsheet into a "LabTrack Backups" folder in Google Drive.
+// Keeps the most recent BACKUP_KEEP_COUNT copies and trashes the rest.
+// Called automatically every Sunday at 3am (set up via createTriggers()),
+// or manually via the "Backup Now" button in the admin UI.
+function backupSpreadsheet() {
+  var BACKUP_KEEP_COUNT = 12; // keep ~3 months of weekly backups
+  var FOLDER_NAME = "LabTrack Backups";
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ssFile = DriveApp.getFileById(ss.getId());
+
+  // Place backup folder next to the spreadsheet (or in root if no parent)
+  var parents = ssFile.getParents();
+  var parentFolder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+
+  // Find or create the backup folder
+  var backupFolder;
+  var folders = parentFolder.getFoldersByName(FOLDER_NAME);
+  if (folders.hasNext()) {
+    backupFolder = folders.next();
+  } else {
+    backupFolder = parentFolder.createFolder(FOLDER_NAME);
+  }
+
+  // Name the backup with a timestamp (no colons — not allowed in Drive file names)
+  var now = new Date();
+  var pad = function(n) { return String(n).padStart(2, "0"); };
+  var dateStr = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+  var timeStr = pad(now.getHours()) + "h" + pad(now.getMinutes());
+  var backupName = "LabTrack Backup " + dateStr + " " + timeStr;
+
+  ssFile.makeCopy(backupName, backupFolder);
+
+  // Prune: keep only the most recent BACKUP_KEEP_COUNT files
+  var files = [];
+  var iter = backupFolder.getFiles();
+  while (iter.hasNext()) {
+    var f = iter.next();
+    files.push({ file: f, date: f.getDateCreated() });
+  }
+  files.sort(function(a, b) { return b.date - a.date; }); // newest first
+  for (var i = BACKUP_KEEP_COUNT; i < files.length; i++) {
+    files[i].file.setTrashed(true);
+  }
+
+  // Record last backup time in Settings sheet
+  var displayTime = dateStr + " " + pad(now.getHours()) + ":" + pad(now.getMinutes());
+  var settingsSheet = getSheet("Settings");
+  if (settingsSheet) {
+    var sData = settingsSheet.getDataRange().getValues();
+    var found = false;
+    for (var j = 1; j < sData.length; j++) {
+      if (String(sData[j][0]) === "last_backup") {
+        settingsSheet.getRange(j + 1, 2).setValue(displayTime);
+        found = true;
+        break;
+      }
+    }
+    if (!found) settingsSheet.appendRow(["last_backup", displayTime]);
+  }
+
+  Logger.log("✅ Backup created: " + backupName + " → " + FOLDER_NAME);
+  return backupName;
 }
 
 // ─── OVERDUE ALERT (Trigger: checkOverduesAndAlert → Day timer → 8am–9am) ────
@@ -831,6 +903,13 @@ function doPost(e) {
     ss.setActiveSheet(ps);
     logAudit(userName, userEmail, "PurchaseSummary", orders.length + " items");
     return jsonResponse({ ok: true });
+  }
+
+  // ── Backup Now (admin only) ───────────────────────────────────────────────
+  if (action === "backupNow") {
+    if (!admin) return jsonResponse({ error: "Forbidden", detail: "Admin only" });
+    var backupName = backupSpreadsheet();
+    return jsonResponse({ ok: true, backupName: backupName });
   }
 
   return jsonResponse({ error: "Unknown action: " + action });
