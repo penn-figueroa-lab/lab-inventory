@@ -3,7 +3,7 @@
 ## Quick Start
 
 1. Go to **https://penn-figueroa-lab.github.io/lab-inventory/**
-2. Sign in with your **@seas.upenn.edu** Google account
+2. Sign in with your **@engineering.upenn.edu** Google account
 3. Start managing inventory
 
 ---
@@ -30,8 +30,8 @@ The backend uses a Google Sheet with these tabs:
 | key | value |
 |-----|-------|
 | `categories` | `["Robots & Motors","Sensors & Vision","Compute & Electronics","Wiring & Networking","Tools & Hardware","Consumables & Supplies","Safety & Facility","Other"]` |
-| `admins` | `["admin@seas.upenn.edu"]` |
-| `members` | `["user1@seas.upenn.edu","user2@seas.upenn.edu"]` — if present and non-empty, only these accounts can sign in; all other `@seas.upenn.edu` accounts are rejected. Omit the key (or leave it as `[]`) to allow all seas accounts. |
+| `admins` | `["admin@engineering.upenn.edu"]` |
+| `members` | `["user1@engineering.upenn.edu","user2@engineering.upenn.edu"]` — if present and non-empty, only these accounts can sign in; all other `@engineering.upenn.edu` accounts are rejected. Omit the key (or leave it as `[]`) to allow all engineering accounts. |
 | `slack_mode` | `all` or `important` or `digest` or `off` |
 
 **DeleteLog** (auto-created) — `date | type | name | details | deletedBy`
@@ -110,7 +110,7 @@ Admins can send the digest at any time by clicking the **Digest** button in the 
 
 Add emails to the `admins` list in the Settings tab to grant admin access:
 ```
-["admin1@seas.upenn.edu","admin2@seas.upenn.edu"]
+["admin1@engineering.upenn.edu","admin2@engineering.upenn.edu"]
 ```
 
 **Admins can**: delete items/orders, manage categories, change settings, send digest manually, change order status (Approve/Reject/etc.), edit any order request, return any checked-out item
@@ -165,7 +165,7 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 
 ## Security
 
-- Google Sign-In restricted to `@seas.upenn.edu` domain (client + server verified via Google tokeninfo API); optionally further restricted to a specific `members` list in the Settings tab
+- Google Sign-In restricted to `@engineering.upenn.edu` domain (client + server verified via Google tokeninfo API); optionally further restricted to a specific `members` list in the Settings tab
 - Slack webhook stored only in Apps Script (server-side), never in client code
 - No secrets in HTML — only the OAuth Client ID (designed to be public) and Apps Script URL
 - **Server-side RBAC**: every sensitive action is verified in Apps Script regardless of client state:
@@ -179,7 +179,7 @@ Repo Settings → Pages → Deploy from branch: `main` / `/ (root)`
 
 | Issue | Fix |
 |-------|-----|
-| "Access restricted" | Must use `@seas.upenn.edu` account |
+| "Access restricted" | Must use `@engineering.upenn.edu` account |
 | Data not syncing | Check Apps Script URL; redeploy as new version |
 | Delete not working | Check you're in the `admins` list in Settings tab |
 | Digest not sending | Verify trigger is set; check script timezone = America/New_York |

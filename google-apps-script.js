@@ -20,7 +20,7 @@
  */
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const ALLOWED_DOMAIN = "seas.upenn.edu";
+const ALLOWED_DOMAIN = "engineering.upenn.edu";
 const SLACK_WEBHOOK_URL = "YOUR_SLACK_WEBHOOK_URL_HERE";
 
 // ─── SLACK HELPER ────────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ function isAdmin(email) {
 
 // ─── MEMBER CHECK ────────────────────────────────────────────────────────────
 // If "members" key exists in Settings with a non-empty array, only those emails
-// can access the system. If the key is absent or empty, all @seas.upenn.edu
+// can access the system. If the key is absent or empty, all @engineering.upenn.edu
 // accounts are allowed (backward compatible).
 function isMember(email) {
   var settingsSheet = getSheet("Settings");
@@ -382,7 +382,7 @@ function isMember(email) {
       } catch(e) { return true; }
     }
   }
-  return true; // key not set → allow all seas accounts
+  return true; // key not set → allow all engineering accounts
 }
 
 // ─── DELETE LOG ──────────────────────────────────────────────────────────────

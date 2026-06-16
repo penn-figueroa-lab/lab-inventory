@@ -3,7 +3,7 @@
 Hey everyone! The Figueroa Lab is moving to a shared digital system for tracking equipment and submitting purchase requests. No more spreadsheets, emails back and forth, or not knowing where things are. Everything lives in one place, synced in real time for the whole lab.
 
 :point_right: https://penn-figueroa-lab.github.io/lab-inventory/
-Sign in with your @seas.upenn.edu account.
+Sign in with your @engineering.upenn.edu account.
 
 *What it does*
 :package: Inventory — Browse all lab equipment by category, search by name/location/serial, view photos and label IDs

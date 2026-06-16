@@ -584,8 +584,8 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
           <Fld label="Return By (date) *"><Inp type="date" value={retDate} onChange={e=>setRetDate(e.target.value)}/></Fld>
           <Fld label="Return By (time)"><input type="time" value={retTime} onChange={e=>setRetTime(e.target.value)} style={timeInputStyle}/></Fld>
           <div style={{gridColumn:"1/-1"}}>
-            <Fld label="Group members (optional)" hint="Others who can also return these items — comma-separated @seas.upenn.edu emails">
-              <Inp placeholder="alice@seas.upenn.edu, bob@seas.upenn.edu" value={groupEmails} onChange={e=>setGroupEmails(e.target.value)}/>
+            <Fld label="Group members (optional)" hint="Others who can also return these items — comma-separated @engineering.upenn.edu emails">
+              <Inp placeholder="alice@engineering.upenn.edu, bob@engineering.upenn.edu" value={groupEmails} onChange={e=>setGroupEmails(e.target.value)}/>
             </Fld>
           </div>
         </div>
@@ -1490,11 +1490,11 @@ const LoginPage = ({onSignIn}) => {
           callback: (response) => {
             try {
               const payload = JSON.parse(atob(response.credential.split('.')[1]));
-              if (payload.hd !== "seas.upenn.edu") { setError("Access restricted to @seas.upenn.edu accounts only."); return; }
+              if (payload.hd !== "engineering.upenn.edu") { setError("Access restricted to @engineering.upenn.edu accounts only."); return; }
               onSignIn({ token: response.credential, name: payload.name, email: payload.email, picture: payload.picture });
             } catch(e) { setError("Failed to verify account. Please try again."); }
           },
-          hd: "seas.upenn.edu",
+          hd: "engineering.upenn.edu",
           auto_select: true,
         });
         google.accounts.id.renderButton(btnRef.current, { type: "standard", theme: "filled_black", size: "large", text: "signin_with", shape: "pill", width: 300 });
@@ -1515,7 +1515,7 @@ const LoginPage = ({onSignIn}) => {
         <div>
           <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
           {!gsiReady && <p style={{color:"var(--dim)",fontSize:12}}>Loading sign-in...</p>}
-          <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @seas.upenn.edu account</p>
+          <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @engineering.upenn.edu account</p>
           {error && <p style={{color:"var(--red)",fontSize:13,marginTop:12,background:"var(--red-d)",padding:"8px 14px",borderRadius:8,border:"1px solid #ff4d6a30"}}>{error}</p>}
         </div>
       </div>
