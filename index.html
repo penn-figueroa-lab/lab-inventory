@@ -1115,7 +1115,7 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
                 {unit.serial&&<div style={{color:"var(--dim)",fontSize:11,marginTop:2}}>S/N: {unit.serial}</div>}
               </div>
               <div style={{flex:1}}>
-                <Badge status={inUse?"In Use":"Available"}/>
+                <Badge status={unit.status}/>
                 {inUse&&<span style={{marginLeft:8,fontSize:12,color:"var(--sub)"}}>→ {toArr(unit.usedBy).join(", ")}</span>}
                 {activeCheckout&&activeCheckout.ret&&<div style={{fontSize:11,color:"var(--dim)",marginTop:3}}>Due: {activeCheckout.ret}</div>}
               </div>
@@ -1724,7 +1724,8 @@ function LabInventory(){
   useEffect(()=>{const t=setInterval(()=>setClockNow(Date.now()),15000);return()=>clearInterval(t);},[]);
   const items=useMemo(()=>rawItems.map(i=>{
     if(!capabilities.scheduling||i.consumable)return i;
-    if(migration.blockedItemIds.includes(String(i.id))||["Maintenance","Broken"].includes(i.status))return {...i,availableQty:0};
+    if(migration.blockedItemIds.includes(String(i.id)))return {...i,_inventoryStatus:i.status,availableQty:0,status:"Unavailable"};
+    if(["Maintenance","Broken"].includes(i.status))return {...i,availableQty:0};
     const active=reservations.filter(r=>String(r.itemId)===String(i.id)&&r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow);
     const reserved=active.reduce((n,r)=>n+Number(r.qty),0);
     return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:Number(i.qty)<=0?"Unavailable":reserved>=Number(i.qty)?"In Use":reserved>0?"Partially Available":"Available",usedBy:[...new Set(active.map(r=>r.user))]};

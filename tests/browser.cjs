@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {chromium}=require('playwright'),babel=require('@babel/core');
 const {harness}=require('./backend-harness.cjs');
 (async()=>{
- const h=harness();h.item({link:'https://example.com/robot',serial:12345});h.item({id:'camera1',name:'Camera',displayId:'CE-000002-001',qty:1,serial:'001'});h.item({id:'camera2',name:'Camera',displayId:'CE-000002-002',qty:1,serial:'002'});h.item({id:'consumable',name:'Electrodes',displayId:'CS-000003',qty:100,consumable:true});h.order({item:'New Robot',urgency:'Normal'});
+ const h=harness();h.item({link:'https://example.com/robot',serial:12345});h.item({id:'camera1',name:'Camera',displayId:'CE-000002-001',qty:1,serial:'001',status:'In Use',usedBy:['Legacy user']});h.item({id:'camera2',name:'Camera',displayId:'CE-000002-002',qty:1,serial:'002'});h.item({id:'consumable',name:'Electrodes',displayId:'CS-000003',qty:100,consumable:true});h.order({item:'New Robot',urgency:'Normal'});
  let html=fs.readFileSync('index.html','utf8');const source=html.match(/<script type="text\/babel"[^>]*>([\s\S]*?)<\/script>/)[1];const compiled=babel.transformSync(source,{presets:[['@babel/preset-react',{runtime:'classic'}]]}).code;
  html=html.replace(/<script src="https:\/\/unpkg.com\/react@[^>]+><\/script>/,'<script src="/react.js"></script>').replace(/<script src="https:\/\/unpkg.com\/react-dom@[^>]+><\/script>/,'<script src="/react-dom.js"></script>').replace(/<script src="https:\/\/unpkg.com\/@babel[^>]+><\/script>/,'').replace(/<script src="https:\/\/accounts.google.com[^>]+><\/script>/,'<script>window.google={accounts:{id:{prompt(){},initialize(){},renderButton(){},disableAutoSelect(){}}}};</script>').replace(/<script type="text\/babel"[^>]*>[\s\S]*?<\/script>/,'<script src="/app.js"></script>');
  const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox']});
@@ -29,7 +29,7 @@ const {harness}=require('./backend-harness.cjs');
  assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);
  const search=page.getByPlaceholder('Search name, location, serial or label ID…');await search.fill(' ce-000002-002 ');
  await page.locator('.card-item').filter({hasText:'Camera'}).click();await page.getByRole('dialog').waitFor();
- assert.match(await page.getByRole('dialog').innerText(),/2 total/);assert.match(await page.getByRole('dialog').innerText(),/Search match/);
+ assert.match(await page.getByRole('dialog').innerText(),/2 total/);assert.match(await page.getByRole('dialog').innerText(),/Unavailable/i);assert.match(await page.getByRole('dialog').innerText(),/Search match/);
  await page.getByRole('button',{name:'Details / reserve'}).nth(1).click();assert.match(await page.getByRole('dialog').innerText(),/CE-000002-002/);
  await page.getByRole('dialog').getByRole('button',{name:'Reserve this item'}).click();
  const modal=page.getByRole('dialog',{name:'Reserve equipment'});
