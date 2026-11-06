@@ -63,6 +63,21 @@ html.light input[type=date]::-webkit-calendar-picker-indicator,html.light input[
 html.light .card-item:hover{box-shadow:0 8px 24px rgba(0,0,0,.12),0 0 0 1px rgba(0,212,200,.25);}
 html.light .sticky-th{background:var(--bg2);}
 html.light .row-hover:hover{background:var(--bg3)!important;}
+
+:root{--dim:#8a9cb0;}
+html.light{--dim:#526477;--cyan:#007b75;--green:#087b40;--blue:#225fba;}
+a{color:var(--cyan);}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--cyan);outline-offset:3px;}
+button:disabled{opacity:.55;cursor:not-allowed;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-intro{color:var(--sub);font-size:13px;line-height:1.6;margin:12px 0;}
+.form-actions{display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin:12px 0;}
+.save-error{background:var(--red-d);color:var(--red);border:1px solid var(--red);padding:12px;border-radius:8px;margin:12px 0;font-size:13px;}
+.reservation-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px;margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:13px;line-height:1.7;}
+.reservation-summary,.item-reservations{margin:18px 0;padding:16px;border:1px solid var(--border);border-radius:12px;}
+.section-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+.sync-status{font-size:12px;color:var(--sub);padding:10px 0;display:flex;gap:12px;align-items:center;}
+@media(max-width:640px){.form-grid{grid-template-columns:1fr;}main{padding:12px!important;}header{padding:10px!important;flex-wrap:wrap;}input,select,textarea{max-width:100%;min-width:0;}[role=dialog]{max-width:calc(100vw - 20px)!important;}table{font-size:12px;} .form-actions button{min-height:40px;} .reservation-row{display:block;}}
 </style>
 </head>
 <body>
@@ -71,7 +86,7 @@ html.light .row-hover:hover{background:var(--bg3)!important;}
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 // ─── DYNAMIC DATE ────────────────────────────────────────────────────────────
-const getToday = () => new Date().toISOString().slice(0,10);
+const getToday = () => labLocal().slice(0,10);
 const uid = () => Date.now() + Math.floor(Math.random() * 1e9);
 const toArr = v => Array.isArray(v) ? v.filter(x => x != null && x !== "") : [];
 const getNow = () => { const n=new Date(); return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); };
@@ -106,6 +121,8 @@ const isOverdue = (co) => co.status === "Active" && co.ret && getDatePart(co.ret
 const STATUS_C = {
   "Available":  {bg:"var(--green-d)", t:"var(--green)",  b:"#00e67628"},
   "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
+  "Unavailable":{bg:"var(--amber-d)",t:"var(--amber)",b:"#f5a62328"},
+  "Partially Available":{bg:"var(--amber-d)",t:"var(--amber)",b:"#f5a62328"},
   "Maintenance":{bg:"var(--amber-d)", t:"var(--amber)",  b:"#f5a62328"},
   "Broken":     {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
   "Low Stock":  {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
@@ -115,23 +132,18 @@ const STATUS_C = {
   "Overdue":    {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
 };
 
+const availableQuantity = item => item.availableQty ?? (["In Use","Maintenance","Broken"].includes(item.status)?0:Number(item.qty));
+
 // ─── IMAGE COMPRESSION ──────────────────────────────────────────────────────
-const compressImage = (file) => new Promise((resolve) => {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > 400) { h = Math.round(h * 400 / w); w = 400; }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+const compressImage = (file) => new Promise((resolve,reject) => {
+  if(!file.type.startsWith("image/")) return reject(Error("Choose an image file."));
+  if(file.size>20*1024*1024) return reject(Error("Choose an image smaller than 20 MB."));
+  const reader=new FileReader();reader.onerror=()=>reject(Error("Could not read this file."));
+  reader.onload=()=>{const img=new Image();img.onerror=()=>reject(Error("Could not decode this image. Try JPEG or PNG."));img.onload=()=>{
+    const canvas=document.createElement("canvas");let scale=Math.min(1,600/Math.max(img.width,img.height));
+    for(let attempt=0;attempt<8;attempt++) {canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);const data=canvas.toDataURL("image/jpeg",0.7);if(data.length<=49000)return resolve(data);scale*=0.75;}
+    reject(Error("Image could not be compressed enough. Choose a smaller photo."));
+  };img.src=reader.result;};reader.readAsDataURL(file);
 });
 
 // ─── SVG ICONS ───────────────────────────────────────────────────────────────
@@ -189,8 +201,15 @@ const API = {
       const url = APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token);
       const r = await fetch(url, { redirect: "follow" });
       const text = await r.text();
-      try { return JSON.parse(text); } catch { console.error("[API] Not JSON:", text.slice(0, 500)); return null; }
+      try { const data=JSON.parse(text); if(data?.error)return data; return r.ok&&["items","orders","deliveries","checkouts"].every(k=>Array.isArray(data?.[k]))?data:null; } catch { return null; }
     } catch(e) { console.error("[API] fetchAll error:", e); return null; }
+  },
+  async listReservations(token, itemId, from, to) {
+    const query=new URLSearchParams({token,action:"listReservations",itemId,from,to});
+    const response=await fetch(APP_CONFIG.apps_script_url+"?"+query,{redirect:"follow"});
+    const data=await response.json();
+    if(!response.ok||data.ok!==true||!Array.isArray(data.reservations))throw Error(data.detail||"Could not load reservation history");
+    return data.reservations;
   },
   async post(token, action, payload) {
     if (!APP_CONFIG.apps_script_url) return null;
@@ -200,7 +219,7 @@ const API = {
         method: "POST", body: body, redirect: "follow",
       });
       const text = await r.text();
-      try { return JSON.parse(text); } catch { return { ok: true }; }
+      try { const data=JSON.parse(text); return data.ok===true||data.error?data:{error:"Invalid response",detail:"The server did not confirm this save. Retry safely."}; } catch { return {error:"Invalid response",detail:"The server did not confirm this save. Please sign in again or retry."}; }
     } catch(e) { console.error("[API] post error:", e); return null; }
   }
 };
@@ -225,14 +244,14 @@ const Inp = ({style,...p}) => (
 const Sel = ({children,style,...p}) => (
   <select style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",fontFamily:"'Outfit',sans-serif",...style}} {...p}>{children}</select>
 );
-const Fld = ({label,hint,children}) => (
+const Fld = ({label,hint,children}) => { const id=React.useId(); return (
   <div style={{marginBottom:14}}>
-    <label style={{display:"block",color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>{label}</label>
-    {children}
+    <label htmlFor={id} style={{display:"block",color:"var(--sub)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5,fontFamily:"'IBM Plex Mono',monospace"}}>{label}</label>
+    {React.isValidElement(children)?React.cloneElement(children,{id}):children}
     {hint&&<p style={{color:"var(--dim)",fontSize:11,marginTop:4}}>{hint}</p>}
   </div>
-);
-const Btn = ({children,onClick,v="primary",style,disabled,sm}) => {
+);};
+const Btn = ({children,onClick,v="primary",style,disabled,sm,...rest}) => {
   const VS={
     primary:{background:"var(--cyan)",color:"#000",border:"none"},
     ghost:{background:"transparent",color:"var(--sub)",border:"1px solid var(--border)"},
@@ -240,11 +259,17 @@ const Btn = ({children,onClick,v="primary",style,disabled,sm}) => {
     success:{background:"var(--green-d)",color:"var(--green)",border:"1px solid #00e67630"},
     amber:{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330"},
   };
-  return <button disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
+  return <button type="button" {...rest} disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
 };
 
 // ─── MODAL SHELL ─────────────────────────────────────────────────────────────
 const Modal = ({onClose,title,mw=560,children,noPad,dirty=false,saving=false}) => {
+  const dialogRef=useRef(null),restoreFocus=useRef(document.activeElement);
+  useEffect(()=>{const root=dialogRef.current;root?.querySelector("input,select,button,textarea,a[href]")?.focus();return()=>restoreFocus.current?.focus?.();},[]);
+  const keyDown=e=>{
+    if(e.key==="Escape"&&!saving){e.stopPropagation();if(dirty&&!warnClose){setWarnClose(true);return;}onClose();}
+    if(e.key==="Tab"){const all=[...dialogRef.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]')].filter(n=>n.getClientRects().length);if(!all.length)return;const first=all[0],last=all[all.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
+  };
   const mdTarget=useRef(null);
   const [warnClose,setWarnClose]=useState(false);
   const warnTimer=useRef(null);
@@ -263,7 +288,7 @@ const Modal = ({onClose,title,mw=560,children,noPad,dirty=false,saving=false}) =
   };
   return(
     <div onMouseDown={handleBdMD} onClick={handleBdClick} style={{position:"fixed",inset:0,background:"rgba(7,9,15,.88)",backdropFilter:"blur(7px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
+      <div role="dialog" aria-modal="true" aria-label={typeof title==="string"&&title?title:"Item details"} ref={dialogRef} onKeyDown={keyDown} onClick={e=>e.stopPropagation()} style={{background:"var(--bg1)",border:"1px solid var(--border-hi)",borderRadius:16,width:"100%",maxWidth:mw,maxHeight:"94vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,212,200,.05)",animation:"fadeUp .22s ease"}}>
         {saving&&<div style={{background:"var(--bg3)",borderBottom:"1px solid var(--border)",padding:"8px 20px",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--sub)",flexShrink:0}}>
           <div style={{width:13,height:13,border:"2px solid var(--border)",borderTopColor:"var(--cyan)",borderRadius:"50%",animation:"spin 1s linear infinite",flexShrink:0}}/>
           Saving to Google Sheets — please wait…
@@ -341,31 +366,34 @@ const ImageUpload = ({value, onChange}) => {
   const cameraRef = useRef(null);
   const [showUrl, setShowUrl] = useState(false);
   const [urlVal, setUrlVal] = useState(value && !value.startsWith("data:") ? value : "");
-  const preview = value || "";
+  const [imageError,setImageError]=useState("");
+  const [processing,setProcessing]=useState(false);
+  const preview = /^(https?:\/\/|data:image\/(jpeg|png|webp);base64,)/i.test(value||"") ? value : "";
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await compressImage(file);
-    onChange(compressed);
+    setProcessing(true);setImageError("");
+    try{onChange(await compressImage(file));}catch(err){setImageError(err.message);}finally{setProcessing(false);e.target.value="";}
   };
 
   return (
-    <div>
+    <div data-image-processing={processing}>
+      {imageError&&<div role="alert" className="save-error">{imageError}</div>}{processing&&<p role="status">Processing image…</p>}
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFile}/>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
         {preview && <img src={preview} alt="Preview" style={{width:80,height:80,objectFit:"cover",borderRadius:10,border:"1px solid var(--border)"}}/>}
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <div style={{display:"flex",gap:6}}>
-            <Btn sm v="ghost" onClick={()=>fileRef.current?.click()}><Ico n="upload" s={12}/>Upload Photo</Btn>
-            <Btn sm v="ghost" onClick={()=>cameraRef.current?.click()}><Ico n="camera" s={12}/>Take Photo</Btn>
+            <Btn sm v="ghost" disabled={processing} onClick={()=>fileRef.current?.click()}><Ico n="upload" s={12}/>Upload Photo</Btn>
+            <Btn sm v="ghost" disabled={processing} onClick={()=>cameraRef.current?.click()}><Ico n="camera" s={12}/>Take Photo</Btn>
           </div>
           {!showUrl ? (
             <button onClick={()=>setShowUrl(true)} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:11,textAlign:"left",padding:0}}>Or paste URL...</button>
           ) : (
             <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <Inp placeholder="https://..." value={urlVal} onChange={e=>{setUrlVal(e.target.value);onChange(e.target.value);}} style={{fontSize:12,padding:"5px 8px",width:200}}/>
+              <Inp placeholder="https://..." value={urlVal} onChange={e=>{const value=e.target.value;setUrlVal(value);onChange(value);setImageError(value&&!safeUrl(value)?"Image URL must start with https:// or http://":"");}} style={{fontSize:12,padding:"5px 8px",width:200}}/>
               <button onClick={()=>{setShowUrl(false);}} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>
             </div>
           )}
@@ -427,9 +455,11 @@ const ManageCategoriesModal = ({categories, onSave, onClose}) => {
   const autoP = c => {const words=c.split(/[\s&\/\-_]+/).filter(Boolean);return(words.length===1?words[0].slice(0,4):words.map(w=>w[0]).join("")).toUpperCase()||"GEN";};
   const addCat = () => {const t=newCat.trim();if(t&&!cats.includes(t)){setCats([...cats,t]);setNewCat("");}};
   const removeCat = (c) => setCats(cats.filter(x=>x!==c));
-  const saveAll = () => {localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onSave(cats);onClose();};
+  const save=useSave();
+  const saveAll = () => save.run(async()=>{await onSave(cats);localStorage.setItem("labtrack_catprefixes",JSON.stringify(prefixes));onClose();});
   return (
-    <Modal onClose={onClose} title="Manage Categories" mw={460}>
+    <Modal onClose={onClose} title="Manage Categories" mw={460} saving={save.saving}>
+      <SaveError error={save.error}/>
       <div style={{color:"var(--dim)",fontSize:12,marginBottom:10}}>Optionally set a custom prefix per category — auto-generated from initials if left blank. Label IDs look like <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>RM-000001</span>, <span style={{color:"var(--cyan)",fontFamily:"'IBM Plex Mono',monospace"}}>SV-000042</span>.</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",alignItems:"center",gap:6,marginBottom:6,padding:"0 4px"}}>
         <span style={{color:"var(--dim)",fontSize:11,fontWeight:600}}>CATEGORY</span>
@@ -454,7 +484,7 @@ const ManageCategoriesModal = ({categories, onSave, onClose}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={saveAll}><Ico n="check" s={14} col="#000"/>Save</Btn>
+        <Btn disabled={save.saving} onClick={saveAll}><Ico n="check" s={14} col="#000"/>Save</Btn>
       </div>
     </Modal>
   );
@@ -467,11 +497,11 @@ const ItemPicker = ({items, value, onChange, categories}) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const inputRef = useRef(null);
-  const selected = items.find(i=>i.name===value);
+  const selected = items.find(i=>String(i.id)===String(value));
   // Exclude: consumables (use "Use" button), broken/maintenance, and "In Use" non-shared items
   const avail = items.filter(i=>!i.consumable && i.status!=="Maintenance" && i.status!=="Broken" && !(i.status==="In Use"&&!i.shared));
   const filtered = avail.filter(i=>{
-    const match = i.name.toLowerCase().includes(q.toLowerCase()) || i.loc?.toLowerCase().includes(q.toLowerCase()) || i.desc?.toLowerCase().includes(q.toLowerCase());
+    const match = matchesInventory(i,q);
     return match && (cat==="All" || i.cat===cat);
   });
   useEffect(()=>{
@@ -480,7 +510,7 @@ const ItemPicker = ({items, value, onChange, categories}) => {
     return()=>document.removeEventListener("mousedown",handler);
   },[]);
   useEffect(()=>{if(open&&inputRef.current)inputRef.current.focus();},[open]);
-  const pick=(item)=>{onChange(item.name);setOpen(false);setQ("");};
+  const pick=(item)=>{onChange(String(item.id));setOpen(false);setQ("");};
   const ac = selected?getCatAccent(selected.cat,categories):"var(--dim)";
   return(
     <div ref={ref} style={{position:"relative"}}>
@@ -517,13 +547,13 @@ const ItemPicker = ({items, value, onChange, categories}) => {
             {filtered.length===0?(
               <div style={{padding:"24px 16px",textAlign:"center",color:"var(--dim)",fontSize:13}}>No items match "{q}"</div>
             ):filtered.map(item=>{
-              const itemAc=getCatAccent(item.cat,categories);const low=item.minQty>0&&item.qty<=item.minQty;const isSel=item.name===value;
+              const itemAc=getCatAccent(item.cat,categories);const low=item.minQty>0&&item.qty<=item.minQty;const isSel=String(item.id)===String(value);
               return(
                 <div key={item.id} onClick={()=>pick(item)} className={isSel?"item-sel-row":"row-hover"} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid var(--border)",transition:"background .12s"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:low?"var(--red)":itemAc,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:13,color:"var(--text)",marginBottom:1}}>{item.name}</div>
-                    <div style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.cat} · {item.loc}</div>
+                    <div style={{color:"var(--dim)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{item.displayId} · {item.cat} · {item.loc}</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     <div style={{fontSize:14,fontWeight:800,fontFamily:"'Roboto',sans-serif",color:low?"var(--red)":itemAc}}>{item.qty}</div>
@@ -547,6 +577,7 @@ const ItemPicker = ({items, value, onChange, categories}) => {
 
 // ─── CHECKOUT MODAL (multi-item) ─────────────────────────────────────────────
 const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",categories}) => {
+  const save=useSave(),checkoutIds=useRef(Array.from({length:200},()=>crypto.randomUUID()));
   const [coUser,setCoUser]=useState(userName);
   const [outDate,setOutDate]=useState(getToday());
   const [outTime,setOutTime]=useState(getNow());
@@ -559,22 +590,22 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
   const removeSlot=i=>setSlots(p=>p.filter((_,j)=>j!==i));
   const updSlot=(i,k,v)=>setSlots(p=>p.map((s,j)=>j===i?{...s,[k]:v}:s));
   const valid=slots.filter(s=>s.item);
-  const hasOutOfStock=valid.some(s=>{const it=items.find(i=>i.name===s.item);return it&&(it.qty??0)<=0;});
+  const hasOutOfStock=valid.some(s=>{const it=items.find(i=>String(i.id)===String(s.item));return it&&(it.qty??0)<=0;});
   const canSubmit=coUser.trim()&&valid.length>0&&retDate.trim()&&!hasOutOfStock;
-  const submit=()=>{
+  const submit=()=>save.run(async()=>{
     if(!canSubmit)return;
-    const ts=uid();
     const out=fmtDatetime(outDate,outTime);
     const ret=fmtDatetime(retDate,retTime);
-    valid.forEach((sl,i)=>{
-      const sel=items.find(it=>it.name===sl.item);
-      onAdd({id:ts+i,item:sl.item,user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,groupEmails:groupEmails.trim(),status:"Active"});
-    });
+    for(const [i,sl] of valid.entries()){
+      const sel=items.find(it=>String(it.id)===String(sl.item));
+      await onAdd({id:checkoutIds.current[i],item:sel.name,itemId:String(sel.id),user:coUser.trim(),out,ret,qty:Math.min(sl.qty,sel?.qty||1),notes,groupEmails:groupEmails.trim(),status:"Active"});
+    }
     onClose();
-  };
+  });
   const timeInputStyle={background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:8,padding:"9px 10px",color:"var(--text)",fontSize:14,outline:"none",width:"100%",fontFamily:"'Roboto',sans-serif",boxSizing:"border-box"};
   return(
-    <Modal onClose={onClose} title="Check Out Items" mw={660}>
+    <Modal onClose={onClose} title="Check Out Items" mw={660} saving={save.saving}>
+      <SaveError error={save.error}/>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fld label="Person *"><Inp placeholder="Your name" value={coUser} onChange={e=>setCoUser(e.target.value)}/></Fld>
@@ -595,7 +626,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
             <Btn sm v="ghost" onClick={addSlot}><Ico n="plus" s={12}/>Add Another</Btn>
           </div>
           {slots.map((sl,i)=>{
-            const sel=items.find(it=>it.name===sl.item);
+            const sel=items.find(it=>String(it.id)===String(sl.item));
             const maxQ=sel?.qty??0;
             const outOfStock=sel&&maxQ<=0;
             return(
@@ -611,7 +642,7 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
         </div>
         <div style={{borderTop:"1px solid var(--border)",paddingTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={submit} disabled={!canSubmit}><Ico n="check" s={14} col="#000"/>Confirm Checkout{valid.length>1?` (${valid.length} items)`:""}</Btn>
+          <Btn onClick={submit} disabled={!canSubmit||save.saving}><Ico n="check" s={14} col="#000"/>Confirm Checkout{valid.length>1?` (${valid.length} items)`:""}</Btn>
         </div>
       </div>
     </Modal>
@@ -620,10 +651,12 @@ const CheckoutModal = ({items,onClose,onAdd,preItem="",userName="",userEmail="",
 
 // ─── DELIVERY MODAL ──────────────────────────────────────────────────────────
 const DeliveryModal = ({onClose,onAdd,userName=""}) => {
+  const save=useSave(),deliveryId=useRef(crypto.randomUUID());
   const [f,setF]=useState({item:"",qty:"",unit:"boxes",from:"",receivedBy:userName,date:getToday(),tracking:""});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
-    <Modal onClose={onClose} title="Log Package Delivery">
+    <Modal onClose={onClose} title="Log Package Delivery" saving={save.saving}>
+      <SaveError error={save.error}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item / Package Name"><Inp placeholder="e.g. Intel RealSense D435" value={f.item} onChange={s("item")}/></Fld></div>
         <Fld label="Quantity"><Inp type="number" placeholder="0" value={f.qty} onChange={s("qty")}/></Fld>
@@ -635,20 +668,22 @@ const DeliveryModal = ({onClose,onAdd,userName=""}) => {
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{if(f.item&&f.qty){onAdd({id:uid(),...f,status:"Logged"});onClose();}}} disabled={!f.item||!f.qty}><Ico n="check" s={14} col="#000"/>Log Delivery</Btn>
+        <Btn onClick={()=>save.run(async()=>{await onAdd({id:deliveryId.current,...f,status:"Logged"});onClose();})} disabled={!f.item||!f.qty||save.saving}><Ico n="check" s={14} col="#000"/>Log Delivery</Btn>
       </div>
     </Modal>
   );
 };
 
 // ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────
-const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
-  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",serial:"",shared:false,consumable:false});
+const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel,onAddMany}) => {
+  const [f,setF]=useState({name:"",cat:categories[0]||"Other",qty:"",unit:"units",loc:"",desc:"",minQty:"0",img:"",link:"",serial:"",shared:false,consumable:false});
   const [displayId,setDisplayId]=useState(()=>genDisplayId(categories[0]||"Other",allItems));
   const [splitUnits,setSplitUnits]=useState(false);
   const [serials,setSerials]=useState([]);
   const [advanced,setAdvanced]=useState(false);
   const [submitting,setSubmitting]=useState(false);
+  const [saveError,setSaveError]=useState("");
+  const addIds=useRef(Array.from({length:200},()=>crypto.randomUUID()));
   const [warnNoLoc,setWarnNoLoc]=useState(false);
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
@@ -670,24 +705,24 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
     if(!f.name||!f.qty||submitting)return;
     if(!f.loc.trim()&&!warnNoLoc){setWarnNoLoc(true);return;}
     setWarnNoLoc(false);
-    setSubmitting(true);
+    setSubmitting(true);setSaveError("");
     const base={...f,minQty:isNaN(+f.minQty)?0:+f.minQty,status:"Available",usedBy:[]};
     try{
       if(splitUnits&&canSplit){
-        const results=await Promise.all(Array.from({length:n},(_,u)=>onAdd({...base,id:uid(),qty:1,serial:serials[u]||"",displayId:`${displayId}-${String(u+1).padStart(3,"0")}`})));
+        if(!Number.isInteger(n)||n>200)throw Error("Choose 1–200 whole units for individual tracking");
+        const results=await onAddMany({requestId:addIds.current[0],item:{...base,qty:n},serials});
         const firstId=results[0]; // server-confirmed ID of first unit
         if(firstId&&onShowLabel) onShowLabel({name:base.name,displayId:firstId,baseId:firstId.replace(/-\d{3}$/,""),count:results.filter(Boolean).length});
       } else {
-        const finalId=await onAdd({...base,id:uid(),qty:n,displayId});
+        const finalId=await onAdd({...base,id:addIds.current[0],qty:n,displayId});
         if(finalId&&onShowLabel) onShowLabel({name:base.name,displayId:finalId,count:1});
       }
-    } finally {
-      setSubmitting(false);
-      onClose();
-    }
+    onClose();
+    } catch(e) {setSaveError(e.message);} finally {setSubmitting(false);}
   };
   return(
     <Modal onClose={onClose} title="Add Item" dirty={f.name.trim()!==""||f.qty!==""} saving={submitting}>
+      <SaveError error={saveError}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}>
           <Fld label="Item Name"><Inp placeholder="e.g. UR5 Robot Arm" value={f.name} onChange={s("name")}/></Fld>
@@ -720,7 +755,8 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
           <Fld label="Location"><Inp placeholder="Room 3A / Workbench 2 / Shelf C1" value={f.loc} onChange={e=>{s("loc")(e);setWarnNoLoc(false);}} style={warnNoLoc&&!f.loc.trim()?{borderColor:"var(--amber)"}:{}}/></Fld>
           {warnNoLoc&&!f.loc.trim()&&<div style={{marginTop:-10,marginBottom:8,fontSize:11,color:"var(--amber)"}}>⚠ No location set — this item will be hard to find later. Press Add Item again to skip.</div>}
         </div>
-        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared equipment — quantity limits apply","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        <div style={{gridColumn:"1/-1"}}><LinkField value={f.link} onChange={s("link")}/></div>
         <div style={{gridColumn:"1/-1",marginBottom:4}}>
           <button onClick={()=>setAdvanced(v=>!v)} style={{background:"none",border:"none",color:"var(--dim)",fontSize:12,cursor:"pointer",padding:"2px 0",display:"flex",alignItems:"center",gap:4}}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{transform:advanced?"rotate(180deg)":"rotate(0deg)",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -774,8 +810,10 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel}) => {
 };
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
-const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) => {
-  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",status:item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
+const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin,onSplit}) => {
+  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",link:item.link||"",status:item._inventoryStatus||item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
+  const save=useSave();
+  const splitRequest=useRef(crypto.randomUUID());
   const [changed,setChanged]=useState(false);
   const s=k=>e=>{setF(p=>({...p,[k]:e.target.value}));setChanged(true);};
   const chk=k=>e=>{setF(p=>({...p,[k]:e.target.checked}));setChanged(true);};
@@ -786,14 +824,10 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
   const n=+f.qty||0;
   const canSplit=n>1&&!f.consumable;
   const baseId=f.displayId.replace(/-\d{3}$/,"");
-  const handleSplit=()=>{
-    const base={...item,...f,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable};
-    onSave({...base,qty:1,displayId:`${baseId}-001`});
-    for(let u=2;u<=n;u++) onAdd({...base,id:uid(),qty:1,status:"Available",usedBy:[],displayId:`${baseId}-${String(u).padStart(3,"0")}`});
-    onClose();
-  };
+  const handleSplit=()=>save.run(async()=>{await onSplit({itemId:String(item.id),item:{...item,...f,qty:Number(f.qty)},requestId:splitRequest.current});onClose();});
   return(
-    <Modal onClose={onClose} title="Edit Item" mw={560} dirty={changed}>
+    <Modal onClose={onClose} title="Edit Item" mw={560} dirty={changed} saving={save.saving}>
+      <SaveError error={save.error}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
@@ -805,7 +839,7 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
         <Fld label="Label ID" hint="ID on physical sticker"><Inp value={f.displayId} onChange={s("displayId")}/></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Serial/Product No."><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
         <div style={{gridColumn:"1/-1"}}><Fld label="Tags / Specs" hint="Press Enter or , to add — e.g. M3×8, stainless, pack of 50"><TagInput tags={f.desc?f.desc.split(",").map(t=>t.trim()).filter(Boolean):[]} onChange={ts=>{setF(p=>({...p,desc:ts.join(", ")}));setChanged(true);}}/></Fld></div>
-        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared — multiple users simultaneously","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>{CHKBOX("Shared equipment — quantity limits apply","shared")}{CHKBOX("Consumable — deduct qty, no checkout needed","consumable")}</div>
         {canSplit&&(
           <div style={{gridColumn:"1/-1",background:"var(--cyan-d)",border:"1px solid var(--cyan-m)",borderRadius:8,padding:"10px 14px"}}>
             {!splitConfirm?(
@@ -818,14 +852,15 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
                   Creates {n} items: <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-001</span> → <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-{String(n).padStart(3,"0")}</span>. This item becomes <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{baseId}-001</span> with qty 1.
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  <Btn sm onClick={handleSplit}><Ico n="check" s={12} col="#000"/>Confirm Split</Btn>
+                  <Btn sm disabled={save.saving} onClick={handleSplit}><Ico n="check" s={12} col="#000"/>Confirm Split</Btn>
                   <Btn v="ghost" sm onClick={()=>setSplitConfirm(false)}>Cancel</Btn>
                 </div>
               </div>
             )}
           </div>
         )}
-        <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
+        <div style={{gridColumn:"1/-1"}}><LinkField value={f.link} onChange={s("link")}/></div>
+          <div style={{gridColumn:"1/-1"}}><Fld label="Image"><ImageUpload value={f.img} onChange={v=>setF(p=>({...p,img:v}))}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",marginTop:4,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between"}}>
         <div>
@@ -834,14 +869,14 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
           ) : (
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{color:"var(--red)",fontSize:12}}>Are you sure?</span>
-              <Btn v="danger" sm onClick={()=>{onDelete(item.id);onClose();}}>Yes, delete</Btn>
+              <Btn v="danger" sm disabled={save.saving} onClick={()=>save.run(async()=>{await onDelete(item.id);onClose();})}>Yes, delete</Btn>
               <Btn v="ghost" sm onClick={()=>setConfirmDel(false)}>Cancel</Btn>
             </div>
           ))}
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={()=>{if(f.name&&f.qty){onSave({...item,...f,qty:+f.qty,minQty:isNaN(+f.minQty)?0:+f.minQty,shared:f.shared,consumable:f.consumable,displayId:f.displayId});onClose();}}} disabled={!f.name||!f.qty}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
+          <Btn onClick={()=>save.run(async()=>{await onSave({...item,...f,qty:+f.qty,minQty:Number(f.minQty)});onClose();})} disabled={!f.name||save.saving}><Ico n="check" s={14} col="#000"/>Save Changes</Btn>
         </div>
       </div>
     </Modal>
@@ -849,41 +884,84 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin}) 
 };
 
 // ─── PENDING ITEM STAGING MODAL (delivery → inventory) ───────────────────────
-const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
-  const [f,setF]=useState({name:order.item||"",cat:order.cat||categories[0]||"Other",qty:String(order.qty||""),unit:order.unit||"units",loc:"",desc:"",minQty:"0",serial:"",shared:false,consumable:false,img:""});
-  const [displayId,setDisplayId]=useState(()=>genDisplayId(order.cat||categories[0]||"Other",allItems));
-  const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-  const chk=k=>e=>setF(p=>({...p,[k]:e.target.checked}));
-  const onCatChange=e=>{setF(p=>({...p,cat:e.target.value}));setDisplayId(genDisplayId(e.target.value,allItems));};
-  return(
-    <Modal onClose={onClose} title="📦 Add Received Item to Inventory" mw={560}>
-      <p style={{color:"var(--sub)",fontSize:13,marginBottom:10}}>Order received! Fill in the missing details before it goes into inventory.</p>
-      <div style={{background:"var(--amber-d)",border:"1px solid #f5a62330",borderRadius:8,padding:"9px 12px",marginBottom:14,fontSize:12,color:"var(--amber)"}}>
-        <strong>Order qty:</strong> {order.qty} {order.unit} — adjust Qty &amp; Unit below to reflect what's actually going into inventory.
-        <span style={{color:"var(--sub)",fontStyle:"italic"}}> e.g. ordered 1 box → inventory qty 100, unit pcs</span>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
-        <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Label ID" hint="Print on physical sticker"><Inp value={displayId} onChange={e=>setDisplayId(e.target.value)}/></Fld>
-        <Fld label="Inventory Qty" hint="How many individual units are going in?"><Inp type="number" min="0" value={f.qty} onChange={s("qty")}/></Fld>
-        <Fld label="Inventory Unit" hint="Unit for each individual item"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
-        <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Location" hint="Required — where will this live?"><Inp placeholder="e.g. Room 3A / Shelf C1" value={f.loc} onChange={s("loc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Serial/Product No."><Inp placeholder="e.g. SN-2024-001 or product number" value={f.serial} onChange={s("serial")}/></Fld></div>
-        <div style={{gridColumn:"1/-1"}}><Fld label="Notes"><Inp value={f.desc} onChange={s("desc")}/></Fld></div>
-        <div style={{gridColumn:"1/-1",display:"flex",gap:20,flexWrap:"wrap",padding:"4px 0"}}>
-          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f.shared} onChange={chk("shared")} style={{accentColor:"var(--cyan)"}}/>Shared resource</label>
-          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--sub)"}}><input type="checkbox" checked={f.consumable} onChange={chk("consumable")} style={{accentColor:"var(--cyan)"}}/>Consumable</label>
-        </div>
-      </div>
-      <div style={{borderTop:"1px solid var(--border)",marginTop:16,paddingTop:16,display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn v="ghost" onClick={onClose}>Skip (add later)</Btn>
-        <Btn onClick={()=>{if(f.name){onConfirm({...f,displayId});onClose();}}} disabled={!f.name}><Ico n="plus" s={14} col="#000"/>Add to Inventory</Btn>
-      </div>
-    </Modal>
-  );
+const SaveError = ({error}) => error ? <div role="alert" className="save-error">{error}</div> : null;
+const useSave = () => {
+  const [saving,setSaving]=useState(false), [error,setError]=useState("");
+  const busy=useRef(false);
+  const run=async task=>{if(busy.current)return;busy.current=true;setSaving(true);setError("");try{await task();}catch(e){setError(e.message||"Save failed. Please retry.");}finally{busy.current=false;setSaving(false);}};
+  return {saving,error,run};
 };
+const labLocal = (date=new Date()) => {
+  const p=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(date).map(p=>[p.type,p.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+};
+const bookingTime = iso => new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(iso));
+const mergeRecords = (old, updates) => {const map=new Map(old.map(r=>[String(r.id),r]));updates.forEach(r=>map.set(String(r.id),r));return [...map.values()];};
+const creationTime = i => Date.parse(i.createdAt)||Number(i.id)||0;
+const matchesInventory = (i,query) => [i.name,i.loc,i.cat,i.desc,i.serial,i.displayId].some(v=>String(v??"").toLowerCase().includes(query.trim().toLowerCase()));
+const LinkField = ({value,onChange}) => <Fld label="Purchase link (optional)"><Inp type="url" placeholder="https://supplier.example/product" value={value||""} onChange={onChange}/></Fld>;
+
+const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
+  const [mode,setMode]=useState("new"),[itemId,setItemId]=useState(""),[replaceMetadata,setReplaceMetadata]=useState(false),[serials,setSerials]=useState([]);
+  const [f,setF]=useState({name:order.item,cat:order.cat||categories[0],qty:String(order.qty),unit:order.unit||"units",loc:"",minQty:0,desc:"",serial:"",shared:false,consumable:false,link:order.link||"",img:order.img||""});
+  const save=useSave(), s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const selected=allItems.find(i=>String(i.id)===itemId);
+  const choose=e=>{const id=e.target.value;setItemId(id);const it=allItems.find(i=>String(i.id)===id);if(it)setF(p=>({...p,unit:it.unit}));};
+  const submit=()=>save.run(async()=>{if(mode==="restock"&&!selected)throw Error("Choose an existing item");await onConfirm({mode,itemId,replaceMetadata,item:{...f,qty:Number(f.qty),minQty:Number(f.minQty)},serials});onClose();});
+  return <Modal title="Receive order" onClose={onClose} saving={save.saving} dirty mw={680}>
+    <p className="form-intro">{order.item} · ordered {order.qty} {order.unit}. Stock, delivery, and order status are saved together when you confirm.</p>
+    <SaveError error={save.error}/>
+    <Fld label="Add to inventory"><Sel value={mode} onChange={e=>setMode(e.target.value)}><option value="new">Create a new inventory item</option><option value="individual">Create individually labeled units</option><option value="restock">Restock an existing item</option></Sel></Fld>
+    {mode==="restock"&&<><Fld label="Existing item"><Sel value={itemId} onChange={choose}><option value="">Select an item and label…</option>{allItems.filter(i=>!isSubItem(i.displayId)).map(i=><option key={i.id} value={String(i.id)}>{i.name} · {i.displayId} · {i.loc} ({i.qty} {i.unit})</option>)}</Sel></Fld><p className="form-intro">Existing name, location, serial, and tracking settings are preserved.</p></>}
+    <div className="form-grid">
+      {mode!=="restock"&&<><Fld label="Item name"><Inp value={f.name} onChange={s("name")}/></Fld><Fld label="Category"><Sel value={f.cat} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld></>}
+      <Fld label="Inventory quantity" hint="Convert packs or boxes into inventory units"><Inp type="number" min="0.001" step="any" value={f.qty} onChange={s("qty")}/></Fld>
+      <Fld label="Inventory unit"><Inp value={f.unit} disabled={mode==="restock"} onChange={s("unit")}/></Fld>
+      {mode!=="restock"&&<><Fld label="Location (required)"><Inp value={f.loc} onChange={s("loc")}/></Fld><Fld label="Minimum stock"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld><Fld label="Notes"><Inp value={f.desc} onChange={s("desc")}/></Fld>
+        {mode==="new"&&<Fld label="Serial / product number"><Inp value={f.serial} onChange={s("serial")}/></Fld>}
+        <label><input type="checkbox" checked={f.shared} onChange={e=>setF(p=>({...p,shared:e.target.checked}))}/> Shared equipment (capacity limits still apply)</label>
+        {mode==="new"&&<label><input type="checkbox" checked={f.consumable} onChange={e=>setF(p=>({...p,consumable:e.target.checked}))}/> Consumable</label>}
+      </>}
+    </div>
+    {mode==="individual"&&Array.from({length:Math.min(200,Math.max(0,Math.floor(Number(f.qty)||0)))},(_,i)=><Fld key={i} label={`Serial — unit ${i+1}`}><Inp value={serials[i]||""} onChange={e=>setSerials(p=>{const a=[...p];a[i]=e.target.value;return a;})}/></Fld>)}
+    {mode==="restock"&&<label><input type="checkbox" checked={replaceMetadata} onChange={e=>setReplaceMetadata(e.target.checked)}/> Replace existing purchase link and image</label>}
+    {(mode!=="restock"||replaceMetadata)&&<><LinkField value={f.link} onChange={s("link")}/><Fld label="Item image"><ImageUpload value={f.img} onChange={img=>setF(p=>({...p,img}))}/></Fld></>}
+    {mode==="restock"&&!replaceMetadata&&<p className="form-intro">The order link and image only fill empty inventory fields.</p>}
+    <div className="form-actions"><Btn v="ghost" disabled={save.saving} onClick={onClose}>Cancel</Btn><Btn disabled={save.saving||!(Number(f.qty)>0)||(mode!=="restock"&&!f.loc.trim())} onClick={submit}>{save.saving?"Receiving…":"Confirm receipt"}</Btn></div>
+  </Modal>;
+};
+
+const ReservationModal = ({item,reservation,onClose,onSave}) => {
+  const [f,setF]=useState(()=>({startLocal:reservation?labLocal(new Date(reservation.start)):labLocal(new Date(Date.now()+5*60000)),endLocal:reservation?labLocal(new Date(reservation.end)):labLocal(new Date(Date.now()+65*60000)),qty:reservation?.qty||1,notes:reservation?.notes||"",groupEmails:reservation?.groupEmails||"",repeatUntil:"",weekly:false,scope:"one"}));
+  const requestId=useRef(crypto.randomUUID()),save=useSave(),s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const submit=()=>save.run(async()=>{if(f.weekly&&!f.repeatUntil)throw Error("Choose an end date for weekly repeats");await onSave(reservation?"updateReservation":"createReservation",{...f,itemId:String(item.id),id:reservation?.id,qty:Number(f.qty),repeatUntil:f.weekly?f.repeatUntil:"",requestId:requestId.current});onClose();});
+  return <Modal title={reservation?"Edit reservation":"Reserve equipment"} onClose={onClose} saving={save.saving} dirty mw={600}>
+    <p className="form-intro"><strong>{item.name}</strong> · {item.displayId} · {item.serial||item.loc}<br/>Times are in America/New_York. Capacity: {item.qty} {item.unit}.</p><SaveError error={save.error}/>
+    <div className="form-grid"><Fld label="Start"><Inp type="datetime-local" value={f.startLocal} onChange={s("startLocal")} disabled={!!reservation&&Date.parse(reservation.start)<=Date.now()}/></Fld><Fld label="End"><Inp type="datetime-local" value={f.endLocal} onChange={s("endLocal")}/></Fld><Fld label="Quantity"><Inp type="number" min="0.001" step="any" max={item.qty} value={f.qty} onChange={s("qty")}/></Fld><Fld label="Purpose / notes"><Inp value={f.notes} onChange={s("notes")}/></Fld></div>
+    {!reservation&&<><Fld label="Teammates (optional)" hint="Comma-separated lab emails; teammates may finish this booking early"><Inp value={f.groupEmails} onChange={s("groupEmails")}/></Fld><label><input type="checkbox" checked={f.weekly} onChange={e=>setF(p=>({...p,weekly:e.target.checked}))}/> Repeat weekly on this weekday</label>{f.weekly&&<Fld label="Repeat through" hint="Up to 52 occurrences; all dates must be available"><Inp type="date" value={f.repeatUntil} onChange={s("repeatUntil")}/></Fld>}</>}
+    {reservation?.seriesId&&Date.parse(reservation.start)>Date.now()&&<Fld label="Apply changes to"><Sel value={f.scope} onChange={s("scope")}><option value="one">This occurrence</option><option value="future">This and all following occurrences</option></Sel></Fld>}
+    <div className="form-actions"><Btn v="ghost" disabled={save.saving} onClick={onClose}>Cancel</Btn><Btn disabled={save.saving} onClick={submit}>{save.saving?"Saving…":reservation?"Save reservation":"Reserve"}</Btn></div>
+  </Modal>;
+};
+const ReservationList = ({reservations,items,user,isAdmin,onAction,onEdit,showHistory=false}) => {
+  const save=useSave(),[cancel,setCancel]=useState(null),[scope,setScope]=useState("one");
+  const requests=useRef({});
+  const action=(name,r,extra={})=>save.run(async()=>{const key=name+r.id+JSON.stringify(extra);requests.current[key] ||= crypto.randomUUID();await onAction(name,{id:r.id,requestId:requests.current[key],...extra});setCancel(null);});
+  const visible=reservations.filter(r=>showHistory||(r.status==="Booked"&&Date.parse(r.end)>Date.now())).sort((a,b)=>a.start.localeCompare(b.start));
+  return <div><SaveError error={save.error}/>{!visible.length&&<p className="form-intro">No reservations to show.</p>}{visible.map(r=>{
+    const item=items.find(i=>String(i.id)===String(r.itemId)),future=Date.parse(r.start)>Date.now(),active=!future&&Date.parse(r.end)>Date.now()&&r.status==="Booked",owner=isAdmin||r.email===user?.email,teammate=(r.groupEmails||"").split(",").includes(user?.email),ended=Date.parse(r.end)<=Date.now();
+    return <div className="reservation-row" key={r.id}><div><strong>{item?.name||"Archived equipment"}</strong> <CopyIdBadge id={item?.displayId}/><div>{r.user} · {r.qty} {item?.unit||"units"}{r.seriesId?" · Weekly":""}</div><div>{bookingTime(r.start)} → {bookingTime(r.end)}</div>{r.notes&&<div>{r.notes}</div>}<small>{r.status==="Booked"?(ended?"Completed":active?"In use":"Upcoming"):r.status}{r.syncState!=="Synced"?" · Calendar sync "+(r.syncState==="Error"?"delayed — retry scheduled":"pending"):" · Calendar synced"}</small></div>
+      <div className="form-actions">{r.status==="Booked"&&!ended&&owner&&item&&<Btn sm v="ghost" disabled={save.saving} onClick={()=>onEdit(item,r)}>Edit / extend</Btn>}{active&&(owner||teammate)&&<Btn sm disabled={save.saving} onClick={()=>action("finishReservation",r)}>Finish early</Btn>}{r.status==="Booked"&&!ended&&owner&&<Btn sm v="ghost" disabled={save.saving} onClick={()=>{setScope("one");setCancel(r);}}>Cancel booking</Btn>}</div>
+    </div>;
+  })}{cancel&&<Modal title="Cancel reservation" onClose={()=>setCancel(null)} saving={save.saving} mw={420}><p className="form-intro">Release this equipment booking?</p>{cancel.seriesId&&Date.parse(cancel.start)>Date.now()&&<Sel value={scope} onChange={e=>setScope(e.target.value)}><option value="one">This occurrence only</option><option value="future">This and all following occurrences</option></Sel>}<SaveError error={save.error}/><div className="form-actions"><Btn v="ghost" onClick={()=>setCancel(null)} disabled={save.saving}>Keep booking</Btn><Btn disabled={save.saving} onClick={()=>action("cancelReservation",cancel,{scope})}>Confirm cancellation</Btn></div></Modal>}</div>;
+};
+const ItemReservations = ({item,reservations,items,user,isAdmin,onAction,onEdit,enabled,blocked}) => {
+  const [older,setOlder]=useState([]),[cursor,setCursor]=useState(()=>Date.now()-30*86400000),history=useSave();
+  const loadOlder=()=>history.run(async()=>{const from=cursor-365*86400000;const rows=await API.listReservations(user.token,String(item.id),new Date(from).toISOString(),new Date(cursor).toISOString());setOlder(p=>mergeRecords(p,rows));setCursor(from);});
+  const records=mergeRecords(older,reservations.filter(r=>String(r.itemId)===String(item.id)));
+  return <section className="item-reservations"><h3>Reservations</h3>{blocked&&<p role="alert" className="save-error">Legacy checkout needs admin reconciliation before new bookings.</p>}{!enabled&&<p className="form-intro">Google Calendar scheduling has not been enabled by the lab administrator.</p>}{!item.consumable&&enabled&&<Btn disabled={blocked||["Broken","Maintenance"].includes(item.status)||item.qty<=0} onClick={()=>onEdit(item,null)}>Reserve this item</Btn>}<ReservationList reservations={records} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit} showHistory/><SaveError error={history.error}/><div className="form-actions"><span className="form-intro">History since {new Date(cursor).toLocaleDateString()}</span><Btn sm v="ghost" disabled={history.saving} onClick={loadOlder}>{history.saving?"Loading…":"Load older history"}</Btn></div></section>;
+};
+
 
 // ─── ORDER REQUEST MODAL (multi-item) ────────────────────────────────────────
 const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => {
@@ -892,30 +970,32 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
   const [urgency,setUrgency]   = useState("Normal");
   const [dateNeeded,setDate]   = useState(getToday());
   const [reason,setReason]     = useState("");
-  const [items,setItems]       = useState([{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:""}]);
+  const [items,setItems]       = useState([{id:crypto.randomUUID(),name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:"",img:""}]);
 
-  const addItem = () => setItems(p=>[...p,{name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:""}]);
+  const addItem = () => setItems(p=>[...p,{id:crypto.randomUUID(),name:"",qty:"",unit:"units",cat:categories[0]||"Other",price:"",link:"",img:""}]);
   const removeItem = i => setItems(p=>p.filter((_,j)=>j!==i));
   const upd = (i,field,val) => setItems(p=>p.map((it,j)=>j===i?{...it,[field]:val}:it));
 
-  const validItems = items.filter(it=>it.name.trim()&&it.qty&&it.link.trim());
-  const canSubmit  = store.trim() && validItems.length>0;
+  const validItems = items.filter(it=>it.name.trim()&&Number(it.qty)>0&&(!it.link||safeUrl(it.link)));
+  const canSubmit  = store.trim() && validItems.length>0 && validItems.length===items.length;
+  const save=useSave();
 
-  const submit = () => {
+  const submit = () => save.run(async() => {
     if(!canSubmit) return;
-    onAddMany(validItems.map((it,i)=>({
-      id: uid(), item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
+    await onAddMany(validItems.map((it,i)=>({
+      id: it.id, img:it.img, item:it.name.trim(), qty:+it.qty, unit:it.unit, cat:it.cat, price:it.price,
       store:store.trim(), link:it.link.trim(), urgency, date:dateNeeded, reason:reason.trim(),
       requestedBy:userName, requestedByEmail:userEmail, status:"Pending"
     })));
     onClose();
-  };
+  });
 
   const urgColors={Urgent:"var(--red)",High:"var(--amber)",Normal:"var(--blue)",Low:"var(--sub)"};
 
   return(
-    <Modal onClose={onClose} title="🛒 Request Order" mw={680} dirty={store.trim()!==""||items.some(it=>it.name.trim()!=="")}>
-      {/* ── Store + Link (required) ── */}
+    <Modal onClose={onClose} title="🛒 Request Order" mw={680} saving={save.saving} dirty={store.trim()!==""||items.some(it=>it.name.trim()!=="")}>
+      <SaveError error={save.error}/>
+      {/* Store and optional product links */}
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",marginBottom:14}}>
         <div style={{color:"var(--sub)",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:10}}>Store Info</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -979,6 +1059,7 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
                 ):null}
               </div>
             </div>
+            <Fld label="Product image (optional)"><ImageUpload value={it.img} onChange={v=>upd(i,"img",v)}/></Fld>
           </div>
         ))}
       </div>
@@ -990,7 +1071,7 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={submit} disabled={!canSubmit}><Ico n="cart" s={14} col="#000"/>Submit {validItems.length>1?`${validItems.length} Requests`:"Request"}</Btn>
+          <Btn onClick={submit} disabled={!canSubmit||save.saving}><Ico n="cart" s={14} col="#000"/>Submit {validItems.length>1?`${validItems.length} Requests`:"Request"}</Btn>
         </div>
       </div>
     </Modal>
@@ -998,29 +1079,23 @@ const OrderModal = ({onClose,onAddMany,userName="",userEmail="",categories}) => 
 };
 
 // ─── CONFIRM MODAL ───────────────────────────────────────────────────────────
-const ConfirmModal = ({msg,onConfirm,onClose}) => (
-  <Modal onClose={onClose} title="Confirm Action" mw={400}>
-    <p style={{color:"var(--sub)",fontSize:14,lineHeight:1.6,marginBottom:20}}>{msg}</p>
-    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-      <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-      <Btn v="danger" onClick={()=>{onConfirm();onClose();}}>Confirm</Btn>
-    </div>
-  </Modal>
-);
+const ConfirmModal = ({msg,onConfirm,onClose}) => {const save=useSave();return <Modal onClose={onClose} title="Confirm Action" mw={400} saving={save.saving}><p className="form-intro">{msg}</p><SaveError error={save.error}/><div className="form-actions"><Btn v="ghost" disabled={save.saving} onClick={onClose}>Cancel</Btn><Btn v="danger" disabled={save.saving} onClick={()=>save.run(async()=>{await onConfirm();onClose();})}>Confirm</Btn></div></Modal>;};
 
 // ─── GROUP DETAIL MODAL ─────────────────────────────────────────────────────
-const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,editLocked,categories,onAddUnit}) => {
+const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,editLocked,categories,onAddUnit,onView}) => {
   const [addingUnit,setAddingUnit] = React.useState(false);
   const [newSerial,setNewSerial] = React.useState("");
   const ac = getCatAccent(group.cat,categories||[]);
-  const handleAddUnit = () => {
+  const save=useSave(), unitId=useRef(crypto.randomUUID());
+  const handleAddUnit = () => save.run(async()=>{
     const maxIdx = Math.max(0,...group._items.map(u=>{const m=String(u.displayId||"").match(/-(\d{3})$/);return m?parseInt(m[1]):0;}));
     const nextDisplayId = `${group._baseId}-${String(maxIdx+1).padStart(3,"0")}`;
-    onAddUnit({id:uid(),name:group.name,cat:group.cat,qty:1,unit:group.unit||"units",loc:group.loc||"",desc:group.desc||"",minQty:group.minQty||0,img:group.img||"",status:"Available",usedBy:[],serial:newSerial.trim(),displayId:nextDisplayId,shared:group.shared||false,consumable:false});
-    setNewSerial(""); setAddingUnit(false);
-  };
+    await onAddUnit({id:unitId.current,name:group.name,cat:group.cat,qty:1,unit:group.unit||"units",loc:group.loc||"",desc:group.desc||"",minQty:group.minQty||0,img:group.img||"",link:group.link||"",status:"Available",usedBy:[],serial:newSerial.trim(),displayId:nextDisplayId,shared:group.shared||false,consumable:false});
+    unitId.current=crypto.randomUUID();setNewSerial(""); setAddingUnit(false);
+  });
   return(
-    <Modal onClose={onClose} title={`📦 ${group.name}`} mw={640}>
+    <Modal onClose={onClose} title={`📦 ${group.name}`} mw={640} saving={save.saving}>
+      <SaveError error={save.error}/>
       <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <span style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:4,padding:"2px 8px",color:"var(--cyan)",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.05em"}}>{group.displayId}</span>
         <span style={{color:"var(--purple)",fontSize:11,fontWeight:700}}>TRACKED UNITS · {group.qty} total</span>
@@ -1031,10 +1106,11 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
       <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
         {group._items.map((unit,i)=>{
           const inUse=toArr(unit.usedBy).length>0;
-          const activeCheckout=checkouts.find(c=>c.item===unit.name&&c.status==="Active"&&(!c.displayId||c.displayId===unit.displayId));
+          const activeCheckout=checkouts.find(c=>String(c.itemId)===String(unit.id)&&c.status==="Active");
           return(
             <div key={unit.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <div style={{minWidth:120}}>
+                {group._matchedIds&&group._matchedIds.length<group._items.length&&group._matchedIds.includes(String(unit.id))&&<small>Search match</small>}
                 <div style={{fontFamily:"'IBM Plex Mono',monospace",color:"var(--cyan)",fontSize:12,fontWeight:700,letterSpacing:"0.05em"}}>{unit.displayId}</div>
                 {unit.serial&&<div style={{color:"var(--dim)",fontSize:11,marginTop:2}}>S/N: {unit.serial}</div>}
               </div>
@@ -1044,12 +1120,7 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
                 {activeCheckout&&activeCheckout.ret&&<div style={{fontSize:11,color:"var(--dim)",marginTop:3}}>Due: {activeCheckout.ret}</div>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                {inUse&&activeCheckout&&(
-                  <Btn v="ghost" sm onClick={()=>{onReturn(activeCheckout.id);onClose();}}>Return</Btn>
-                )}
-                {!inUse&&(
-                  <Btn v="cyan" sm onClick={()=>{onClose();onQuickCheckout(unit.name);}}>Check Out</Btn>
-                )}
+                <Btn sm v="ghost" onClick={()=>{onClose();onView(unit);}}>Details / reserve</Btn>
                 <Btn v="ghost" sm onClick={()=>{if(editLocked){return;}onClose();onEdit(unit);}} disabled={editLocked} style={editLocked?{opacity:0.4,cursor:"not-allowed"}:{}}>
                   <Ico n={editLocked?"lock":"edit"} s={13}/>{editLocked?"":"Edit"}
                 </Btn>
@@ -1064,7 +1135,7 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
             Next: {group._baseId}-{String(Math.max(0,...group._items.map(u=>{const m=String(u.displayId||"").match(/-(\d{3})$/);return m?parseInt(m[1]):0;}))+1).padStart(3,"0")}
           </span>
           <Inp placeholder="Serial / Product No. (optional)" value={newSerial} onChange={e=>setNewSerial(e.target.value)} style={{flex:1,padding:"6px 10px",fontSize:13}}/>
-          <Btn sm onClick={handleAddUnit}><Ico n="check" s={12} col="#000"/>Add</Btn>
+          <Btn sm disabled={save.saving} onClick={handleAddUnit}><Ico n="check" s={12} col="#000"/>Add</Btn>
           <Btn v="ghost" sm onClick={()=>{setAddingUnit(false);setNewSerial("");}}>Cancel</Btn>
         </div>
       )}
@@ -1079,9 +1150,9 @@ const GroupDetail = ({group,checkouts,onClose,onEdit,onQuickCheckout,onReturn,ed
 };
 
 // ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────
-const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories,editLocked}) => {
+const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,categories,editLocked,reservationPanel,scheduling,canReturn}) => {
   const [confirmId,setConfirmId]=useState(null);
-  const hist=checkouts.filter(c=>c.item===item.name);
+  const hist=checkouts.filter(c=>String(c.itemId)===String(item.id));
   const ac=getCatAccent(item.cat,categories);
   const isLow=item.minQty>0&&item.qty<=item.minQty;
   return(
@@ -1099,7 +1170,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
           </div>
           <div style={{marginBottom:14}}><DescChips desc={item.desc}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Serial/Product No.",item.serial||"—"]].map(([k,v])=>(
+            {[["Location",item.loc||"—"],["Stock",`${item.qty} ${item.unit}`],["Available now",`${availableQuantity(item)} ${item.unit}`],["Min Stock",`${item.minQty} ${item.unit}`],["Serial/Product No.",item.serial||"—"]].map(([k,v])=>(
               <div key={k}>
                 <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace"}}>{k}</div>
                 <div style={{color:"var(--text)",fontSize:13}}>{v}</div>
@@ -1107,7 +1178,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
             ))}
           </div>
           <div style={{display:"flex",gap:8}}>
-            {item.status!=="Maintenance"&&<Btn onClick={()=>{onClose();onQuickCheckout(item.name);}}><Ico n="tag" s={14} col="#000"/>Quick Check Out</Btn>}
+            {!scheduling&&!item.consumable&&item.status!=="Maintenance"&&<Btn onClick={()=>{onClose();onQuickCheckout(item);}}><Ico n="tag" s={14} col="#000"/>Quick Check Out</Btn>}
             <Btn v="ghost" onClick={()=>{onClose();onEdit(item);}} disabled={editLocked} title={editLocked?"Editing is locked":"Edit item"} style={editLocked?{opacity:0.4,cursor:"not-allowed"}:{}}><Ico n={editLocked?"lock":"edit"} s={14}/>{editLocked?"Locked":"Edit"}</Btn>
           </div>
         </div>
@@ -1124,6 +1195,8 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
           </div>
         </div>
       )}
+      <CopyIdBadge id={item.displayId}/>{safeUrl(item.link)&&<p className="form-intro"><a href={safeUrl(item.link)} target="_blank" rel="noopener noreferrer">Purchase / reorder link ↗</a></p>}
+      {!item.consumable&&reservationPanel?.(item)}
       {hist.length>0&&(
         <div>
           <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'IBM Plex Mono',monospace",marginBottom:8}}>Checkout History</div>
@@ -1135,14 +1208,14 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
                 <span style={{color:"var(--text)",fontSize:13,flex:1}}>{c.user}</span>
                 <span style={{color:od?"var(--red)":"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>{c.out} → {c.ret||"—"}{od&&" OVERDUE"}</span>
                 <Badge status={od?"Overdue":c.status}/>
-                {c.status==="Active"&&<Btn v="ghost" sm onClick={()=>setConfirmId(c.id)}><Ico n="undo" s={12}/>Return</Btn>}
+                {c.status==="Active"&&canReturn?.(c)&&<Btn v="ghost" sm onClick={()=>setConfirmId(c.id)}><Ico n="undo" s={12}/>Return</Btn>}
               </div>
             );
           })}
         </div>
       )}
     </Modal>
-    {confirmId&&<ConfirmModal msg="Mark this item as returned?" onConfirm={()=>{onReturn(confirmId);onClose();}} onClose={()=>setConfirmId(null)}/>}
+    {confirmId&&<ConfirmModal msg="Mark this item as returned?" onConfirm={async()=>{await onReturn(confirmId);onClose();}} onClose={()=>setConfirmId(null)}/>}
     </>
   );
 };
@@ -1527,11 +1600,12 @@ const LoginPage = ({onSignIn}) => {
 const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
   const UNITS=["units","pcs","boxes","bottles","sets","rolls","kg","L","m"];
   const STATUSES=["Pending","Approved","Ordered","Received","Rejected"];
+  const save=useSave();
   const [f,setF]=useState({...order});
   const s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   return(
-    <Modal onClose={onClose} title="✏️ Edit Order Request" mw={640}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <Modal onClose={onClose} title="✏️ Edit Order Request" mw={640} saving={save.saving}>
+      <SaveError error={save.error}/><Fld label="Product image"><ImageUpload value={f.img||""} onChange={img=>setF(p=>({...p,img}))}/></Fld><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <Fld label="Store / Supplier *"><Inp value={f.store||""} onChange={s("store")}/></Fld>
         <Fld label="Urgency"><Sel value={f.urgency} onChange={s("urgency")}>{["Low","Normal","High","Urgent"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name *"><Inp value={f.item||""} onChange={s("item")}/></Fld></div>
@@ -1540,7 +1614,7 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
         <Fld label="Category"><Sel value={f.cat||categories[0]} onChange={s("cat")}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
         <Fld label="Unit Price" hint="Per unit, not total"><Inp placeholder="e.g. 12.99" value={f.price||""} onChange={s("price")}/></Fld>
         <div style={{gridColumn:"1/-1"}}>
-          <Fld label="Purchase Link *"><Inp value={f.link||""} onChange={s("link")}/></Fld>
+          <Fld label="Purchase Link (optional)"><Inp value={f.link||""} onChange={s("link")}/></Fld>
           {(f.link||"").includes("amazon.com")&&(f.link||"").length>60?(
             <span style={{fontSize:10,color:"var(--amber)",lineHeight:1.4,display:"block",marginTop:4}}>💡 Amazon tip: use <strong>Share → Copy link</strong> on the product page for a short URL like <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>a.co/d/…</span></span>
           ):(f.link||"").length>60?(
@@ -1548,12 +1622,12 @@ const EditOrderModal = ({order,onClose,onSave,isAdmin,categories}) => {
           ):null}
         </div>
         <Fld label="Date Needed By"><Inp type="date" value={f.date||""} onChange={s("date")}/></Fld>
-        {isAdmin&&<Fld label="Status (Admin only)"><Sel value={f.status} onChange={s("status")}>{STATUSES.map(st=><option key={st}>{st}</option>)}</Sel></Fld>}
+        <p className="form-intro">Status: {f.status}. Use the order workflow buttons to change status or receive stock.</p>
         <div style={{gridColumn:"1/-1"}}><Fld label="Reason / Notes"><Inp value={f.reason||""} onChange={s("reason")}/></Fld></div>
       </div>
       <div style={{borderTop:"1px solid var(--border)",paddingTop:14,marginTop:4,display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={()=>{onSave({...f,qty:+f.qty});onClose();}} disabled={!(f.store||"").trim()||(!(f.item||"").trim())||(!(f.link||"").trim())}>
+        <Btn onClick={()=>save.run(async()=>{await onSave({...f,qty:+f.qty});onClose();})} disabled={!(f.store||"").trim()||(!(f.item||"").trim())||save.saving||Number(f.qty)<=0}>
           <Ico n="check" s={14} col="#000"/>Save Changes
         </Btn>
       </div>
@@ -1624,13 +1698,39 @@ class ErrorBoundary extends React.Component {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
+const LegacyReconciliation = ({migration,items,checkouts,onSave}) => {
+  const save=useSave(),[target,setTarget]=useState(""),[itemId,setItemId]=useState(""),[note,setNote]=useState("");
+  const active=checkouts.filter(c=>c.status==="Active"), blocked=items.filter(i=>migration.blockedItemIds.includes(String(i.id)));
+  if(!active.length&&!blocked.length)return null;
+  return <details className="reservation-summary"><summary>Admin: legacy tracking needs review ({active.length} active checkouts, {blocked.length} blocked items)</summary><p className="form-intro">Confirm the physical equipment is back before closing an old checkout. History and original dates are retained. Items with active legacy checkouts cannot be reserved.</p><SaveError error={save.error}/><Fld label="Legacy checkout"><Sel value={target} onChange={e=>setTarget(e.target.value)}><option value="">Correct item status only</option>{active.map(c=><option key={c.id} value={c.id}>{c.item} · {c.user} · {c.out}</option>)}</Sel></Fld><Fld label="Verified physical item"><Sel value={itemId} onChange={e=>setItemId(e.target.value)}><option value="">Select exact label…</option>{items.map(i=><option key={i.id} value={i.id}>{i.displayId} · {i.name} · {i.serial||i.loc}</option>)}</Sel></Fld><Fld label="Reconciliation note"><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Checked physically; returned to shelf…"/></Fld><Btn disabled={save.saving||!itemId||!note.trim()} onClick={()=>save.run(async()=>{await onSave({checkoutId:target,itemId,note});setTarget("");setItemId("");setNote("");})}>Confirm returned / correct status</Btn><p className="form-intro">{migration.issues.filter(i=>i.checkoutId).length} historical records lack an unambiguous item reference; they remain preserved in the Checkouts sheet.</p></details>;
+};
+
 function LabInventory(){
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fetchingData, setFetchingData] = useState(false);
 
   const [tab,setTab] = useState("inventory");
-  const [items,setItems] = useState([]);
+  const [rawItems,setItems] = useState([]);
+  const [reservations,setReservations]=useState([]);
+  const [capabilities,setCapabilities]=useState({version:1,scheduling:false});
+  const [migration,setMigration]=useState({issues:[],blockedItemIds:[]});
+  const [booking,setBooking]=useState(null);
+  const [offline,setOffline]=useState(false);
+  const [pendingWrites,setPendingWrites]=useState(0);
+  const [lastSynced,setLastSynced]=useState(null);
+  const [clockNow,setClockNow]=useState(Date.now());
+  const mutationEpoch=useRef(0);
+  useEffect(()=>{const t=setInterval(()=>setClockNow(Date.now()),15000);return()=>clearInterval(t);},[]);
+  const items=useMemo(()=>rawItems.map(i=>{
+    if(!capabilities.scheduling||i.consumable)return i;
+    if(migration.blockedItemIds.includes(String(i.id))||["Maintenance","Broken"].includes(i.status))return {...i,availableQty:0};
+    const active=reservations.filter(r=>String(r.itemId)===String(i.id)&&r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow);
+    const reserved=active.reduce((n,r)=>n+Number(r.qty),0);
+    return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:reserved>=Number(i.qty)&&reserved>0?"In Use":"Available",usedBy:[...new Set(active.map(r=>r.user))]};
+  }),[rawItems,reservations,clockNow,capabilities.scheduling,migration]);
+  const applyExtras=data=>{setCapabilities(data.capabilities||{version:1,scheduling:false});setReservations(data.reservations||[]);setMigration(data.migration||{issues:[],blockedItemIds:[]});setOffline(false);setLastSynced(Date.now());};
+
   const [deliveries,setDeliv] = useState([]);
   const [checkouts,setCheckouts] = useState([]);
   const [orders,setOrders] = useState([]);
@@ -1728,8 +1828,9 @@ function LabInventory(){
       if (data && data.error === "Unauthorized") {
         setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){}
       }
-      if (data && data.error) {
-        console.error("[LabTrack] Backend error:", data.error, data.detail);
+      if (!data || data.error) {
+        setOffline(true);
+        console.error("[LabTrack] Backend error:", data?.error, data?.detail);
         try {
           const saved = localStorage.getItem("labtrack_data");
           if (saved) {
@@ -1741,6 +1842,7 @@ function LabInventory(){
           }
         } catch {}
       } else if (data && data.items) {
+        applyExtras(data);
         setItems(data.items);
         setDeliv(data.deliveries || []);
         setCheckouts(data.checkouts || []);
@@ -1765,34 +1867,26 @@ function LabInventory(){
   // Save data locally as fallback
   useEffect(()=>{
     if (!dataLoaded) return;
-    localStorage.setItem("labtrack_data", JSON.stringify({items, deliveries, checkouts, orders}));
+    try{localStorage.setItem("labtrack_data", JSON.stringify({items:rawItems, deliveries, checkouts, orders}));}catch(e){/* Photos may exceed localStorage quota; the sheet remains authoritative. */}
   },[items, deliveries, checkouts, orders, dataLoaded]);
 
-  // Auto-refresh: poll every 30s for changes from other users
+  // Ignore snapshots that started before a write or while a request was pending.
   useEffect(()=>{
-    if (!user || !dataLoaded || !APP_CONFIG.apps_script_url || user.token === "local") return;
-    const interval = setInterval(async ()=>{
-      try {
-        const data = await API.fetchAll(user.token);
-        if (data && !data.error && data.items) {
-          const now = Date.now(); const GRACE = 60000;
-          const lm = lastModified.current;
-          if (now - lm.items     > GRACE) setItems(data.items.filter(i=>!deletedItemIds.current.has(String(i.id))));
-          if (now - lm.deliveries > GRACE) setDeliv(data.deliveries || []);
-          if (now - lm.checkouts  > GRACE) setCheckouts(data.checkouts || []);
-          if (now - lm.orders     > GRACE) setOrders(data.orders || []);
-          if (data.userRole) setUserRole(data.userRole);
-          if (data.settings && data.settings.categories) {
-            try {
-              const sc = JSON.parse(data.settings.categories);
-              if (Array.isArray(sc) && sc.length > 0) { setCategories(sc); }
-            } catch {}
-          }
-        }
-      } catch {}
-    }, 30000);
-    return () => clearInterval(interval);
-  },[user, dataLoaded]);
+    if(!user||!dataLoaded||user.token==="local")return;
+    const refresh=async()=>{
+      if(apiRunning.current)return;
+      const epoch=mutationEpoch.current,data=await API.fetchAll(user.token);
+      if(epoch!==mutationEpoch.current||apiRunning.current)return;
+      if(!data||data.error){setOffline(true);if(data?.error==="Unauthorized")setSessionExpired(true);return;}
+      applyExtras(data);setItems(data.items||[]);setDeliv(data.deliveries||[]);setCheckouts(data.checkouts||[]);setOrders(data.orders||[]);
+      if(data.userRole)setUserRole(data.userRole);
+      if(data.settings?.categories){try{setCategories(JSON.parse(data.settings.categories));}catch{}}
+    };
+    const interval=setInterval(refresh,30000);
+    window.addEventListener("online",refresh);
+    return()=>{clearInterval(interval);window.removeEventListener("online",refresh);};
+  },[user,dataLoaded]);
+  useEffect(()=>{const id=new URLSearchParams(location.search).get("item");if(dataLoaded&&id){const item=items.find(i=>String(i.id)===id);if(item)setDetail(item);}},[dataLoaded]);
 
   // Reset page/limit when filters change
   useEffect(()=>{ setPage(0); setInvLimit(ITEMS_PER_PAGE); },[search, catF, sortBy]);
@@ -1842,26 +1936,21 @@ function LabInventory(){
   };
   const handleSignOut = () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
 
-  const handleSaveCategories = async (newCats) => {
-    setCategories(newCats);
-    if (APP_CONFIG.apps_script_url && user?.token !== "local") {
-      await API.post(user.token, "saveSettings", { key: "categories", value: JSON.stringify(newCats) });
-    }
-    addToast("success", "Categories updated");
-  };
+  const handleSaveCategories = async newCats => {await saveAction("saveSettings",{key:"categories",value:JSON.stringify(newCats)});setCategories(newCats);addToast("success","Categories saved");};
 
   // keyboard shortcuts
   useEffect(()=>{
     if (!user) return;
     const h=e=>{
       if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.tagName==="SELECT")return;
+      if(e.target.closest?.('[role="dialog"]'))return;
       if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);setLabelItem(null);}
       if(e.key==="n"||e.key==="N") setModal("delivery");
-      if(e.key==="c"||e.key==="C"){setPreItem("");setModal("checkout");}
+      if((e.key==="c"||e.key==="C")&&!capabilities.scheduling){setPreItem("");setModal("checkout");}
     };
     document.addEventListener("keydown",h);
     return()=>document.removeEventListener("keydown",h);
-  },[user]);
+  },[user,capabilities.scheduling]);
 
   // computed
   const lowStock = items.filter(i=>i.minQty>0&&i.qty<=i.minQty);
@@ -1870,13 +1959,14 @@ function LabInventory(){
 
   // handlers
   const postAction = (action, payload) => {
-    // Mark data type as locally modified → suppress poll override for 60s
+    // Track local writes; the mutation epoch prevents stale polling snapshots.
     const now = Date.now();
     if (/item/i.test(action)) lastModified.current.items = now;
     if (/checkout|return/i.test(action)) { lastModified.current.checkouts = now; lastModified.current.items = now; }
     if (/order/i.test(action)) lastModified.current.orders = now;
     if (/delivery/i.test(action)) lastModified.current.deliveries = now;
-    if (!APP_CONFIG.apps_script_url || user?.token === "local") return Promise.resolve(null);
+    if (!APP_CONFIG.apps_script_url || user?.token === "local") return Promise.resolve({error:"Offline",detail:"Connect to the lab backend to save."});
+    mutationEpoch.current++;setPendingWrites(n=>n+1);
     // Queue requests so rapid edits don't race in GAS
     const token = user.token;
     return new Promise(resolve => {
@@ -1891,8 +1981,10 @@ function LabInventory(){
               if (result?.error === "Unauthorized") { setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){} }
               if (result?.error === "NotMember") { setUser(null); localStorage.removeItem("labtrack_user"); setError("Your account is not authorized to access this lab's system."); }
               if (result?.error && result.error !== "Unauthorized" && result.error !== "NotMember") addToast("error", `Error: ${result.error} — ${result.detail||""}`);
+              if(!result||result.error)setOffline(true);else{setOffline(false);setLastSynced(Date.now());}
               req.resolve(result);
-            } catch(e) { req.resolve(null); }
+            } catch(e) {setOffline(true);req.resolve({error:"Connection failed",detail:e.message});}
+            finally{mutationEpoch.current++;setPendingWrites(n=>Math.max(0,n-1));}
           }
           apiRunning.current = false;
         })();
@@ -1900,38 +1992,24 @@ function LabInventory(){
     });
   };
 
-  const handleDelivery=async(d)=>{
-    setDeliv(p=>[d,...p]);
-    addToast("success",`Delivery logged: ${d.item}`);
-    await postAction("addDelivery", {delivery: d});
-  };
+  const saveAction=async(action,payload)=>{if(document.querySelector('[data-image-processing="true"]'))throw Error("Wait for image processing to finish before saving.");const result=await postAction(action,payload);if(!result||result.ok!==true)throw Error(result?.detail||result?.error||"Save was not confirmed. Check your connection and retry.");return result;};
+  const refreshNow=async()=>{const data=await API.fetchAll(user.token);if(data&&!data.error){applyExtras(data);setItems(data.items||[]);setOrders(data.orders||[]);setDeliv(data.deliveries||[]);setCheckouts(data.checkouts||[]);}};
+  const handleReservationAction=async(action,payload)=>{const result=await saveAction(action,payload);setReservations(p=>mergeRecords(p,result.reservations||[]));addToast("success",(result.reservations||[]).some(r=>r.syncState!=="Synced")?"Reservation saved; Calendar sync pending":"Reservation saved and synced");return result;};
+  const openBooking=(item,reservation)=>setBooking({item,reservation});
+  const reservationPanel=item=><ItemReservations key={item.id} item={item} reservations={reservations} items={items} user={user} isAdmin={effectiveRole==="admin"} onAction={handleReservationAction} onEdit={openBooking} enabled={capabilities.scheduling} blocked={migration.blockedItemIds.includes(String(item.id))}/>;
 
-  const handleCheckout=(c)=>{
-    const checkout={...c, checkedOutByEmail: user?.email||""};
-    setItems(prev=>prev.map(i=>i.name===checkout.item?{...i,status:i.shared?"Available":"In Use",usedBy:[...toArr(i.usedBy),checkout.user]}:i));
-    setCheckouts(p=>[checkout,...p]);
-    addToast("success",`${checkout.item} → ${checkout.user}`);
-    postAction("addCheckout", {checkout});
-  };
+  const handleDelivery=async delivery=>{await saveAction("addDelivery",{delivery});setDeliv(p=>mergeRecords(p,[delivery]));addToast("success","Delivery saved");};
+  const handleCheckout=async checkout=>{await saveAction("addCheckout",{checkout});await refreshNow();addToast("success","Checkout saved");};
 
+  const consumptionRequests=useRef({});
   const handleUseConsumable = async (itemId, qty) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    const item = items.find(i=>i.id===itemId); if(!item) return;
-    const updated = {...item, qty: Math.max(0, item.qty - qty)};
-    setItems(p=>p.map(i=>i.id===itemId?updated:i));
-    addToast("success",`Used ${qty} ${item.unit} of ${item.name}`);
-    await postAction("updateItem", {item: updated});
+    if(editLocked)return;
+    const key=String(itemId)+":"+qty;
+    consumptionRequests.current[key] ||= crypto.randomUUID();
+    try{const result=await saveAction("useConsumable",{itemId:String(itemId),qty,requestId:consumptionRequests.current[key]});setItems(p=>mergeRecords(p,[result.item]));delete consumptionRequests.current[key];addToast("success","Stock updated");}catch(e){addToast("error",e.message);}
   };
 
-  const handleReturn=async(coId)=>{
-    const co=checkouts.find(c=>c.id===coId); if(!co)return;
-    const now=new Date();
-    const nowStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    setCheckouts(p=>p.map(c=>c.id===coId?{...c,status:"Returned",ret:nowStr}:c));
-    setItems(p=>p.map(i=>i.name===co.item?{...i,status:"Available",usedBy:toArr(i.usedBy).filter(u=>u!==co.user)}:i));
-    addToast("success",`${co.item} returned`);
-    await postAction("returnItem", {checkoutId: coId});
-  };
+  const handleReturn=async checkoutId=>{await saveAction("returnItem",{checkoutId});await refreshNow();addToast("success","Return saved");};
 
   // effectiveRole: in admin preview mode, show UI as a regular member would see it
   const effectiveRole = previewMode ? "member" : userRole;
@@ -1944,60 +2022,27 @@ function LabInventory(){
     return grp.includes(user?.email||"");
   };
 
-  const handleBulkReturn=()=>{
-    const ids=[...selected];
-    const coMap=Object.fromEntries(checkouts.filter(c=>ids.includes(c.id)).map(c=>[c.id,c]));
-    setCheckouts(prev=>prev.map(c=>ids.includes(c.id)?{...c,status:"Returned"}:c));
-    setItems(prev=>{
-      let s=[...prev];
-      ids.forEach(id=>{const co=coMap[id];if(!co)return;s=s.map(i=>i.name===co.item?{...i,status:"Available",usedBy:toArr(i.usedBy).filter(u=>u!==co.user)}:i);});
-      return s;
-    });
-    setSelected(new Set());
-    addToast("success",`${ids.length} item${ids.length>1?"s":""} returned`);
-    ids.forEach(id=>postAction("returnItem",{checkoutId:id}));
-  };
+  const handleBulkReturn=async()=>{try{for(const id of selected)await handleReturn(id);setSelected(new Set());}catch(e){addToast("error",e.message);}};
 
-  const handleQuickCheckout=(itemName)=>{ setPreItem(itemName); setModal("checkout"); };
+  const handleQuickCheckout=(item)=>{
+    if(capabilities.scheduling){setBooking({item,reservation:null});return;}
+    setPreItem(String(item.id));setModal("checkout");
+  };
 
   const handleAddItem = async (item) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return null;}
-    setItems(p=>[item,...p]);
-    const res = await postAction("addItem", {item});
-    if(!res||res.error){
-      setItems(p=>p.filter(i=>i.id!==item.id)); // rollback optimistic add
-      if(!res) addToast("error",`Failed to save "${item.name}" — check your connection`);
-      return null;
-    }
-    addToast("success",`"${item.name}" added`);
-    const finalId = res.displayId || item.displayId;
-    if(res.displayId && res.displayId !== item.displayId)
-      setItems(p=>p.map(i=>i.id===item.id?{...i,displayId:res.displayId}:i));
-    return finalId;
+    if(editLocked)throw Error("Unlock editing before adding items");
+    const res=await saveAction("addItem",{item});
+    setItems(p=>mergeRecords(p,[res.item||{...item,displayId:res.displayId||item.displayId}]));
+    addToast("success",`"${item.name}" added`);return res.displayId||item.displayId;
   };
-
-  const handleUpdateItem = async (updatedItem) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    setItems(p=>p.map(i=>i.id===updatedItem.id?{...i,...updatedItem}:i));
-    addToast("success",`"${updatedItem.name}" updated`);
-    await postAction("updateItem", {item: updatedItem});
+  const handleAddItemMany=async payload=>{if(editLocked)throw Error("Unlock editing first");const result=await saveAction("addIndividualItems",payload);setItems(p=>mergeRecords(p,result.items));return result.items.map(i=>i.displayId);};
+  const handleSplitItem=async payload=>{const result=await saveAction("splitItem",payload);setItems(p=>mergeRecords(p,result.items));};
+  const handleUpdateItem = async (item) => {
+    if(editLocked)throw Error("Unlock editing before saving");
+    const result=await saveAction("updateItem",{item});setItems(p=>mergeRecords(p,[result.item||item]));addToast("success","Item saved");
   };
-
-  const handleDeleteItem = async (itemId) => {
-    if (userRole !== "admin") {
-      addToast("error", "Only admins can delete items. Contact a lab admin.");
-      return;
-    }
-    const deletedItem = items.find(i=>i.id===itemId);
-    deletedItemIds.current.add(String(itemId));
-    setItems(p=>p.filter(i=>i.id!==itemId));
-    addToast("success","Item deleted");
-    const result = await postAction("deleteItem", {itemId});
-    if (result && result.error === "Forbidden") {
-      deletedItemIds.current.delete(String(itemId));
-      if (deletedItem) setItems(p=>[deletedItem,...p]);
-      addToast("error", "Server rejected: " + (result.detail||"Not authorized"));
-    }
+  const handleDeleteItem = async itemId => {
+    await saveAction("deleteItem",{itemId});setItems(p=>p.filter(i=>String(i.id)!==String(itemId)));addToast("success","Item deleted");
   };
 
   const handleEditItem = (item) => {
@@ -2005,21 +2050,11 @@ function LabInventory(){
     setEditItem(item);
   };
 
-  const handleAddOrder = async (order) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    setOrders(p=>[order,...p]);
-    addToast("success",`Order request submitted: ${order.item}`);
-    await postAction("addOrder", {order});
+  const handleAddOrder = async order => {
+    if(editLocked)throw Error("Unlock editing before requesting an order");
+    const result=await saveAction("addOrder",{order});setOrders(p=>mergeRecords(p,[result.order||order]));
   };
-
-  const handleAddOrderMany = async (orders) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    setOrders(p=>[...orders,...p]);
-    addToast("success",`${orders.length} order request${orders.length>1?"s":""} submitted`);
-    for (const order of orders) {
-      await postAction("addOrder", {order});
-    }
-  };
+  const handleAddOrderMany = async list => {for(const order of list)await handleAddOrder(order);addToast("success","Order requests saved");};
 
   const handleSendDigest = async () => {
     const tid2 = addToast("info", "Sending digest to Slack…");
@@ -2045,60 +2080,33 @@ function LabInventory(){
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId, newStatus) => {
-    setOrders(p=>p.map(o=>o.id===orderId?{...o,status:newStatus}:o));
-    addToast("success",`Order marked as ${newStatus}`);
-    await postAction("updateOrderStatus", {orderId, status: newStatus});
+  const handleUpdateOrderStatus = async (orderId,status) => {
+    try{await saveAction("updateOrderStatus",{orderId,status});setOrders(p=>p.map(o=>o.id===orderId?{...o,status}:o));addToast("success",`Order marked ${status}`);}catch(e){addToast("error",e.message);}
   };
-
-  const handleUpdateOrder = async (order) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    setOrders(p=>p.map(o=>o.id===order.id?order:o));
-    addToast("success","Order updated");
-    await postAction("updateOrder", {order});
+  const handleUpdateOrder = async order => {if(editLocked)throw Error("Unlock editing before saving");const result=await saveAction("updateOrder",{order});setOrders(p=>mergeRecords(p,[result.order||order]));addToast("success","Order saved");};
+  const handleDeleteOrder = async orderId => {try{await saveAction("deleteOrder",{orderId});setOrders(p=>p.filter(o=>o.id!==orderId));addToast("success","Order deleted");}catch(e){addToast("error",e.message);}};
+  const handleOrderReceived = order => {
+    if(!capabilities.receiving){addToast("error","Deploy and migrate the updated backend before receiving orders.");return;}
+    setPendingItem(order);
   };
-
-  const handleDeleteOrder = async (orderId) => {
-    if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}
-    if (userRole !== "admin") {
-      addToast("error", "Only admins can delete orders.");
-      return;
-    }
-    setOrders(p=>p.filter(o=>o.id!==orderId));
-    addToast("success","Order request removed");
-    await postAction("deleteOrder", {orderId});
-  };
-
-  // Show staging modal immediately; sync to sheet in background
-  const handleOrderReceived = (order) => {
-    setPendingItem(order); // instant — no waiting for API
-    const delivery={id:uid(),item:order.item,qty:order.qty,unit:order.unit,from:"(Order #"+order.id+")",receivedBy:user?.name||"",date:getToday(),tracking:"",status:"Logged"};
-    handleDelivery(delivery);              // fire and forget
-    handleUpdateOrderStatus(order.id,"Received"); // fire and forget
-  };
-
-  const handleConfirmPendingItem = async (itemData) => {
-    const newItem = {id:uid(), status:"Available", usedBy:[], ...itemData, qty:+itemData.qty||0, minQty:isNaN(+itemData.minQty)?0:+itemData.minQty};
-    setItems(p=>[newItem,...p]);
-    addToast("success",`"${newItem.name}" added to inventory!`);
-    const res = await postAction("addItem", {item: newItem});
-    if(res?.displayId && res.displayId !== newItem.displayId)
-      setItems(p=>p.map(i=>i.id===newItem.id?{...i,displayId:res.displayId}:i));
+  const handleConfirmPendingItem = async payload => {
+    const result=await saveAction("receiveOrder",{...payload,orderId:String(pendingItem.id)});
+    setItems(p=>mergeRecords(p,result.items));setOrders(p=>mergeRecords(p,[result.order]));setDeliv(p=>mergeRecords(p,result.deliveries));addToast("success","Receipt saved; inventory updated");
   };
 
   // filtered & sorted inventory
   const filtered = useMemo(()=>{
     let f = items.filter(i=>{
-      const q=search.toLowerCase();
+      const q=search.trim().toLowerCase();
       const s = v => String(v==null?"":v).toLowerCase();
-      return(s(i.name).includes(q)||s(i.loc).includes(q)||s(i.cat).includes(q)||s(i.desc).includes(q)||s(i.serial).includes(q))
+      return matchesInventory(i,q)
         &&(catF==="All"||i.cat===catF);
     });
     // Sort
     const srt = v => String(v==null?"":v);
     if(sortBy==="name-az") f.sort((a,b)=>srt(a.name).localeCompare(srt(b.name)));
     else if(sortBy==="name-za") f.sort((a,b)=>srt(b.name).localeCompare(srt(a.name)));
-    else if(sortBy==="newest") f.sort((a,b)=>Number(b.id)-Number(a.id));
+    else if(sortBy==="newest") f.sort((a,b)=>creationTime(b)-creationTime(a));
     else if(sortBy==="qty-low") f.sort((a,b)=>a.qty-b.qty);
     else if(sortBy==="qty-high") f.sort((a,b)=>b.qty-a.qty);
     return f;
@@ -2112,7 +2120,7 @@ function LabInventory(){
       if (isSubItem(item.displayId) && !item.consumable) {
         const baseId = getBaseId(item.displayId);
         if (!groups[baseId]) {
-          const g = {_isGroup:true,_baseId:baseId,_items:[],id:baseId,name:item.name,cat:item.cat,loc:item.loc,desc:item.desc,img:item.img,unit:item.unit,displayId:baseId,shared:item.shared,consumable:false,minQty:item.minQty};
+          const g = {_isGroup:true,_baseId:baseId,_items:[],id:baseId,name:item.name,cat:item.cat,loc:item.loc,desc:item.desc,img:item.img,link:item.link,unit:item.unit,displayId:baseId,shared:item.shared,consumable:false,minQty:item.minQty};
           groups[baseId] = g;
           result.push(g);
         }
@@ -2122,20 +2130,22 @@ function LabInventory(){
       }
     });
     Object.values(groups).forEach(g=>{
+      g._matchedIds = g._items.map(i=>String(i.id));
+      g._items = items.filter(i=>isSubItem(i.displayId)&&getBaseId(i.displayId)===g._baseId&&!i.consumable);
       g.qty = g._items.length;
-      const inUseCount = g._items.filter(i=>toArr(i.usedBy).length>0).length;
+      const availableCount = g._items.filter(i=>availableQuantity(i)>0).length;
       g.usedBy = [...new Set(g._items.flatMap(i=>toArr(i.usedBy)))];
-      g.status = inUseCount===0?"Available":inUseCount===g._items.length?"In Use":"Partially In Use";
+      g.status = availableCount===g._items.length?"Available":availableCount===0?"Unavailable":"Partially Available";
     });
     return result;
-  },[filtered]);
+  },[filtered,items]);
 
   // Load-more sliced items
   const paginatedItems = displayItems.slice(0, invLimit);
 
   const pendingOrders = orders.filter(o=>o.status==="Pending").length;
-  const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
-  const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected").sort((a,b)=>Number(b.id)-Number(a.id));
+  const activeOrders = orders.filter(o=>o.status!=="Received"&&o.status!=="Rejected").sort((a,b)=>creationTime(b)-creationTime(a));
+  const receivedOrders = orders.filter(o=>o.status==="Received"||o.status==="Rejected").sort((a,b)=>creationTime(b)-creationTime(a));
   const ORDERS_PER_PAGE = 15;
   const filteredActiveOrders = activeOrders.filter(o=>{
     const q = orderSearch.toLowerCase();
@@ -2150,8 +2160,7 @@ function LabInventory(){
   const TABS=[
     {id:"inventory",l:"Inventory",n:"grid",count:items.length},
     {id:"orders",l:"Order Requests",n:"cart",count:activeOrders.length},
-    {id:"usage",l:"Usage",n:"users",count:activeOut.length},
-    {id:"calendar",l:"Calendar",n:"calendar",count:0},
+    ...(!capabilities.scheduling?[{id:"usage",l:"Legacy Usage",n:"users",count:activeOut.length},{id:"calendar",l:"Legacy Calendar",n:"calendar",count:0}]:[]),
   ];
 
   // Loading
@@ -2306,8 +2315,8 @@ function LabInventory(){
           <Stat label="Total Items" val={items.length} icon="box" ac="var(--cyan)" sub="in inventory"/>
           <Stat label="Categories" val={[...new Set(items.map(i=>i.cat))].length} icon="layers" ac="var(--purple)" sub="active types"/>
           <Stat label="Orders" val={activeOrders.length} icon="cart" ac="var(--amber)" sub="in pipeline"/>
-          <Stat label="Checked Out" val={activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
-          <Stat label="Overdue" val={overdues.length} icon="clock" ac={overdues.length?"var(--red)":"var(--green)"} sub="past return date" warn={overdues.length>0}/>
+          <Stat label={capabilities.scheduling?"In Use":"Checked Out"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow).length:activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
+          <Stat label={capabilities.scheduling?"Upcoming":"Overdue"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)>clockNow).length:overdues.length} icon="clock" ac={overdues.length?"var(--red)":"var(--green)"} sub={capabilities.scheduling?"scheduled occurrences":"past return date"} warn={!capabilities.scheduling&&overdues.length>0}/>
         </div>
 
         {/* Alert banners */}
@@ -2334,12 +2343,16 @@ function LabInventory(){
         )}
 
         {/* ════════ INVENTORY TAB ════════ */}
+        <div className="sync-status" role="status">{pendingWrites?`Saving ${pendingWrites} change(s)…`:offline?"Connection interrupted. Displayed data may be stale; unconfirmed changes are not saved.":lastSynced?`Synced ${new Date(lastSynced).toLocaleTimeString()}`:"Connecting…"}{offline&&<Btn sm v="ghost" onClick={refreshNow}>Refresh</Btn>}</div>
+        {capabilities.version<2&&<p className="save-error">Backend upgrade required for receiving with photos and purchase links. Existing inventory remains readable.</p>}
+        {capabilities.scheduling&&tab==="inventory"&&<section className="reservation-summary"><div className="section-heading"><h3>My reservations</h3><div className="form-actions"><a href={"https://calendar.google.com/calendar/u/0?cid="+encodeURIComponent(capabilities.calendarId)} target="_blank" rel="noopener noreferrer">Add lab calendar</a><a href={"https://calendar.google.com/calendar/u/0/r?cid="+encodeURIComponent(capabilities.calendarId)} target="_blank" rel="noopener noreferrer">Open Google Calendar</a></div></div><ReservationList reservations={reservations.filter(r=>r.email===user?.email||(r.groupEmails||"").split(",").includes(user?.email))} items={items} user={user} isAdmin={effectiveRole==="admin"} onAction={handleReservationAction} onEdit={openBooking}/></section>}
+        {effectiveRole==="admin"&&capabilities.version>=2&&<LegacyReconciliation migration={migration} items={rawItems} checkouts={checkouts} onSave={async payload=>{await saveAction("reconcileLegacy",payload);await refreshNow();}}/>}
         {tab==="inventory"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
               <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
-                <Inp placeholder="Search name, location, serial no..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
+                <Inp placeholder="Search name, location, serial or label ID…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
                 {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
               </div>
 
@@ -2377,7 +2390,7 @@ function LabInventory(){
                 ))}
               </div>
 
-              <Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}><Ico n="tag" s={14}/>Check Out</Btn>
+              {!capabilities.scheduling&&<Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}><Ico n="tag" s={14}/>Check Out</Btn>}
               <Btn onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("addItem");}}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
             </div>
 
@@ -2400,7 +2413,7 @@ function LabInventory(){
                 {paginatedItems.map((item,idx)=>{
                   const ac=getCatAccent(item.cat,categories);
                   if(item._isGroup){
-                    const availCount=item._items.filter(i=>!i.usedBy?.length).length;
+                    const availCount=item._items.filter(i=>availableQuantity(i)>0).length;
                     const inUseCount=item._items.length-availCount;
                     return(
                       <div key={item._baseId} className="card-item" onClick={()=>setGroupDetail(item)} style={{background:"var(--bg1)",border:"2px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`,cursor:"pointer"}}>
@@ -2426,7 +2439,7 @@ function LabInventory(){
                             </div>
                             <div style={{fontSize:11,textAlign:"right",lineHeight:1.4}}>
                               <div style={{color:"var(--green)",fontWeight:600}}>{availCount} avail</div>
-                              {inUseCount>0&&<div style={{color:"var(--amber)",fontWeight:600}}>{inUseCount} in use</div>}
+                              {inUseCount>0&&<div style={{color:"var(--amber)",fontWeight:600}}>{inUseCount} unavailable</div>}
                             </div>
                           </div>
                         </div>
@@ -2482,7 +2495,7 @@ function LabInventory(){
                     <tbody>
                       {paginatedItems.map((item,i)=>{
                         if(item._isGroup){
-                          const availCount=item._items.filter(it=>!it.usedBy?.length).length;
+                          const availCount=item._items.filter(it=>availableQuantity(it)>0).length;
                           const inUseCount=item._items.length-availCount;
                           return(
                             <tr key={item._baseId} className="row-hover" onClick={()=>setGroupDetail(item)} style={{borderBottom:i<paginatedItems.length-1?"1px solid var(--border)":"none",cursor:"pointer",transition:"background .15s"}}>
@@ -2490,7 +2503,7 @@ function LabInventory(){
                               <td style={{padding:"10px 16px"}}><span style={{color:getCatAccent(item.cat,categories),fontSize:12}}>{item.cat}</span></td>
                               <td style={{padding:"10px 16px",fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}}>{item.qty} <span style={{color:"var(--dim)",fontWeight:400}}>units</span></td>
                               <td style={{padding:"10px 16px",color:"var(--sub)",fontSize:12}}>{item.loc||"—"}</td>
-                              <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11}}><span style={{color:"var(--green)"}}>{availCount} avail</span>{inUseCount>0&&<span style={{color:"var(--amber)",marginLeft:6}}>{inUseCount} in use</span>}</td>
+                              <td style={{padding:"10px 16px",color:"var(--dim)",fontSize:11}}><span style={{color:"var(--green)"}}>{availCount} avail</span>{inUseCount>0&&<span style={{color:"var(--amber)",marginLeft:6}}>{inUseCount} unavailable</span>}</td>
                               <td style={{padding:"10px 16px"}}><Badge status={item.status}/></td>
                               <td style={{padding:"10px 16px"}}>{toArr(item.usedBy).length>0?<div style={{display:"flex",gap:4}}>{toArr(item.usedBy).slice(0,3).map(u=><MemberAvatar key={u} name={u} sz={24}/>)}</div>:<span style={{color:"var(--dim)"}}>—</span>}</td>
                             </tr>
@@ -2631,7 +2644,7 @@ function LabInventory(){
                           </div>
                           <div style={{flex:1,minWidth:200}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                              <span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Roboto',sans-serif"}}>{o.item}</span>
+                              {o.img&&<img src={o.img} alt="" style={{width:36,height:36,objectFit:"cover",borderRadius:6}}/>}<span style={{fontWeight:700,fontSize:15,color:"var(--text)",fontFamily:"'Roboto',sans-serif"}}>{o.item}</span>
                               <span style={{background:sc.bg,color:sc.col,border:`1px solid ${sc.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
                               <span style={{background:uc.bg,color:uc.col,border:`1px solid ${uc.col}30`,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace"}}>{o.urgency}</span>
                               {o.cat&&<span style={{color:getCatAccent(o.cat,categories),fontSize:11,fontFamily:"'IBM Plex Mono',monospace"}}>{o.cat}</span>}
@@ -2687,7 +2700,7 @@ function LabInventory(){
                         <span style={{fontWeight:600,fontSize:13,color:"var(--text)",flex:1}}>{o.item}</span>
                         <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:"var(--dim)"}}>{o.qty} {o.unit}</span>
                         <span style={{background:sc2.bg,color:sc2.col,border:`1px solid ${sc2.col}30`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace"}}>{o.status}</span>
-                        <Btn sm v="ghost" onClick={()=>handleDeleteOrder(o.id)}><Ico n="trash" s={12}/></Btn>
+                        {safeUrl(o.link)&&<a href={safeUrl(o.link)} target="_blank" rel="noopener noreferrer">Purchase link ↗</a>}{o.img&&<img src={o.img} alt={o.item} style={{width:38,height:38,objectFit:"cover",borderRadius:6}}/>}{effectiveRole==="admin"&&!o.receiptId&&<Btn sm v="ghost" onClick={()=>handleDeleteOrder(o.id)}><Ico n="trash" s={12}/></Btn>}
                       </div>
                     );
                   })}
@@ -2852,13 +2865,14 @@ function LabInventory(){
       )}
 
       {/* MODALS */}
+      {booking&&<ReservationModal item={booking.item} reservation={booking.reservation} onClose={()=>setBooking(null)} onSave={handleReservationAction}/>}
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
-      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items} onShowLabel={setLabelItem}/>}
+      {modal==="addItem" && <AddItemModal onAddMany={handleAddItemMany} onClose={()=>setModal(null)} onAdd={handleAddItem} categories={categories} allItems={items} onShowLabel={setLabelItem}/>}
       {labelItem&&<LabelModal item={labelItem} onClose={()=>setLabelItem(null)} onAddAnother={()=>{setLabelItem(null);setModal("addItem");}}/>}
       {modal==="order" && <OrderModal onClose={()=>setModal(null)} onAddMany={handleAddOrderMany} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}
       {modal==="manageCategories" && <ManageCategoriesModal categories={categories} onSave={handleSaveCategories} onClose={()=>setModal(null)}/>}
-      {editItem && <EditItemModal item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} onAdd={handleAddItem} categories={categories} isAdmin={effectiveRole==="admin"}/>}
+      {editItem && <EditItemModal onSplit={handleSplitItem} item={editItem} onClose={()=>setEditItem(null)} onSave={handleUpdateItem} onDelete={handleDeleteItem} onAdd={handleAddItem} categories={categories} isAdmin={effectiveRole==="admin"}/>}
       {editOrder && <EditOrderModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={handleUpdateOrder} isAdmin={effectiveRole==="admin"} categories={categories}/>}
       {modal==="emailText"&&<Modal onClose={()=>{setModal(null);setEmailText("");}} title="📧 Purchase Request Email Text" mw={700}>
         <p style={{color:"var(--sub)",fontSize:13,marginBottom:10}}>Select all and copy (Ctrl+A → Ctrl+C), then paste into your email.</p>
@@ -2871,11 +2885,9 @@ function LabInventory(){
       {modal==="help" && <Modal onClose={()=>setModal(null)} title="LabTrack — Help & Guide" mw={640}>
         <div style={{display:"flex",flexDirection:"column",gap:20,fontSize:13}}>
           {[
-            {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared items (e.g. toolboxes) stay Available when checked out — multiple people can use them simultaneously.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-000001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","When adding multiple cameras, laptops, or robots, check 'Track each unit individually' to create separate items with sub-IDs (e.g. CE-000042-001, CE-000042-002), each with its own serial number.","Click any item card to see full details, checkout history, and quick actions."]},
-            {icon:"tag",title:"Usage / Checkout Tab",color:"var(--blue)",items:["Use Check Out to assign a non-consumable, non-shared item to a person. Enter qty, dates, and optional notes.","Shared items can be checked out by multiple people at the same time and remain Available.","Consumable items do not appear in the checkout list — use the Use button on the card instead.","Mark items Returned when done. Overdue checkouts are highlighted in red.","Only the person who created the checkout, listed group members, or admins can return an item.","Group members: when checking out, optionally add teammates' emails (comma-separated) so they can also return the item.","Bulk Return lets you return multiple items at once."]},
-            {icon:"cart",title:"Order Requests Tab",color:"var(--amber)",items:["Submit purchase requests with store, item, link, qty, and price.","Only the person who submitted an order (or an admin) can edit it.","Select multiple orders with checkboxes → Copy Text generates a bullet-list (qty · item · link · price) with grand total — ready to paste into an email or message. Save to Sheet writes the same summary as a table to your Google Sheet.","Admins can move orders through: Pending → Approved → Ordered → Received.","When marked Received, a staging form opens — fill in location, label ID, and serial number before it is added to inventory.","Deliveries are automatically logged when an order is marked Received."]},
-            {icon:"calendar",title:"Calendar Tab",color:"var(--purple)",items:["Visual monthly calendar showing deliveries, active checkouts, and return due dates.","Color-coded: green = delivery, blue = checkout start, amber = return due.","Click any day to see all events on that date."]},
-            {icon:"layers",title:"Item Statuses",color:"var(--sub)",items:["🟢 Available — ready to use","🔵 In Use — checked out by one or more people","🟡 Maintenance — temporarily out of service","🔴 Broken — damaged or needs repair","⚠️ Low Stock — qty is at or below the Min Stock threshold (shown as a badge)"]},
+            {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared equipment uses quantity-based reservation limits like all other equipment.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-000001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","When adding multiple cameras, laptops, or robots, check 'Track each unit individually' to create separate items with sub-IDs (e.g. CE-000042-001, CE-000042-002), each with its own serial number.","Click any item card to see full details, checkout history, and quick actions."]},
+            {icon:"tag",title:"Equipment reservations",color:"var(--blue)",items:["Open an inventory item or a specific labeled unit, then choose Reserve this item.","Choose start/end times in America/New_York and a quantity. Weekly repeats require an end date; all occurrences are checked for conflicts.","Use My reservations or item details to edit, extend, cancel, or Finish early. Availability updates automatically at the end time.","Add the lab calendar to Google Calendar to see everyone's reservations. Manage bookings through LabTrack so capacity checks stay reliable.","Shared equipment follows the same quantity limits. Consumables use the Use button and are never reserved."]},
+            {icon:"cart",title:"Order requests and receiving",color:"var(--amber)",items:["Request items with optional purchase links and photos. Requesters and admins can edit requests.","Admins approve and order purchases. Receive opens a form for new items, individually labeled units, or restocking.","Confirm receipt saves stock, delivery history, and order status together. Cancel leaves everything unchanged.","Images and purchase links carry into inventory. A failed save keeps the form open for retry."]},
             {icon:"settings",title:"Settings (Admin only)",color:"var(--orange)",items:["Manage Categories — add, remove, or rename categories; set label ID prefix per category (e.g. RM for Robots & Motors).","Admins list — edit in the Settings tab of the Google Sheet (JSON array of emails).","Slack notifications — set slack_mode in Settings tab: all | important | digest | off.","Session expires after ~1 hour and auto-renews silently. If you see a red banner at the top, click Sign In Again."]},
           ].map(s=>(
             <div key={s.title}>
@@ -2885,8 +2897,8 @@ function LabInventory(){
           ))}
         </div>
       </Modal>}
-      {detail && <ItemDetail item={detail} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
-      {groupDetail && <GroupDetail group={groupDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories} onAddUnit={async (newUnit)=>{const fid=await handleAddItem(newUnit);setGroupDetail(p=>p?{...p,qty:(p.qty||0)+1,_items:[...(p._items||[]),{...newUnit,displayId:fid||newUnit.displayId}]}:p);}}/>}
+      {detail && !booking && <ItemDetail item={items.find(i=>String(i.id)===String(detail.id))||detail} reservationPanel={reservationPanel} scheduling={capabilities.scheduling} canReturn={canReturn} checkouts={checkouts} onClose={()=>setDetail(null)} onReturn={handleReturn} onQuickCheckout={handleQuickCheckout} onEdit={handleEditItem} categories={categories} editLocked={editLocked}/>}
+      {groupDetail && !booking && <GroupDetail group={{...groupDetail,_items:items.filter(i=>isSubItem(i.displayId)&&getBaseId(i.displayId)===groupDetail._baseId)}} onView={setDetail} checkouts={checkouts} onClose={()=>setGroupDetail(null)} onEdit={handleEditItem} onQuickCheckout={handleQuickCheckout} onReturn={handleReturn} editLocked={editLocked} categories={categories} onAddUnit={async (newUnit)=>{const fid=await handleAddItem(newUnit);setGroupDetail(p=>p?{...p,qty:(p.qty||0)+1,_items:[...(p._items||[]),{...newUnit,displayId:fid||newUnit.displayId}]}:p);}}/>}
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>

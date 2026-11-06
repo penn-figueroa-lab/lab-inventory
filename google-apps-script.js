@@ -21,25 +21,18 @@
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const ALLOWED_DOMAIN = "engineering.upenn.edu";
-const SLACK_WEBHOOK_URL = "YOUR_SLACK_WEBHOOK_URL_HERE";
+const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty("SLACK_WEBHOOK_URL") || "YOUR_SLACK_WEBHOOK_URL_HERE";
 
 // ─── SLACK HELPER ────────────────────────────────────────────────────────────
 // slack_mode in Settings tab: "all" | "important" | "digest" | "off"
 // "important" = only deletions, urgent/high orders, overdue returns
 // "digest" = queues to SlackQueue tab, sent by daily trigger (sendDailyDigest)
-function getSlackMode() {
-  try {
-    var s = getSheet("Settings");
-    if (!s) return "all";
-    var d = s.getDataRange().getValues();
-    for (var i = 1; i < d.length; i++) {
-      if (String(d[i][0]) === "slack_mode") return String(d[i][1]).trim() || "all";
-    }
-  } catch(e) {}
-  return "all";
-}
+function getSlackMode() { return String(readSettings_().slack_mode || "all").trim(); }
 
 function sendSlack(emoji, title, details, fields, priority) {
+  try { return sendSlackInternal_(emoji,title,details,fields,priority); } catch(e) { console.log("Slack notification failed (data saved): "+e.message); }
+}
+function sendSlackInternal_(emoji, title, details, fields, priority) {
   if (!SLACK_WEBHOOK_URL || SLACK_WEBHOOK_URL === "YOUR_SLACK_WEBHOOK_URL_HERE" || SLACK_WEBHOOK_URL === "") return;
   var mode = getSlackMode();
   if (mode === "off") return;
@@ -83,7 +76,7 @@ function getOverdueCheckouts_() {
   var sheet = getSheet("Checkouts");
   if (!sheet) return [];
   var data = sheetToJson(sheet);
-  var today = new Date().toISOString().slice(0,10);
+  var today = Utilities.formatDate(new Date(), "America/New_York", "yyyy-MM-dd");
   return data.filter(function(c){ return c.status==="Active" && c.ret && String(c.ret).slice(0,10) < today; });
 }
 
@@ -180,6 +173,12 @@ function sendDailyDigest() {
     blocks.push({ type: "section", text: { type: "mrkdwn", text: "✅ *Checkouts:* No overdue items" } });
   }
 
+  var upcomingReservations = rows_("Reservations").filter(function(r){ return r.status === "Booked" && r.end > new Date().toISOString() && r.start < new Date(Date.now()+86400000).toISOString(); });
+  if (upcomingReservations.length) {
+    var itemNames = {}; rows_("Items").forEach(function(i){ itemNames[String(i.id)] = i.name + " [" + i.displayId + "]"; });
+    blocks.push({type:"section",text:{type:"mrkdwn",text:"📅 *Equipment reservations — next 24 hours*\n"+upcomingReservations.slice(0,8).map(function(r){return "• *"+(itemNames[r.itemId]||r.itemId)+"* — "+r.user+" | "+localOf_(r.start)+" → "+localOf_(r.end)+" ET";}).join("\n")}});
+  }
+
   // ── Low stock ──
   if (lowStock.length > 0) {
     var lsText = lowStock.slice(0,6).map(function(i){
@@ -203,12 +202,13 @@ function sendDailyDigest() {
   blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "LabTrack · Auto-digest · " + now.toLocaleString("en-US",{timeZone:"America/New_York"}) + " ET" }] });
 
   try {
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
+    var digestResponse = UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
       method: "post", contentType: "application/json",
       payload: JSON.stringify({ text: "📊 LabTrack Daily Summary — " + dateStr, blocks: blocks }),
       muteHttpExceptions: true,
     });
-  } catch(e) { console.log("Digest send failed: " + e.message); }
+    if(digestResponse.getResponseCode() >= 300) throw new Error("Slack returned HTTP "+digestResponse.getResponseCode());
+  } catch(e) { console.log("Digest send failed: " + e.message); throw e; }
 
   // Clear queue
   if (queue && queuedRows.length > 0) {
@@ -305,7 +305,7 @@ function backupSpreadsheet() {
   if (settingsSheet) {
     var sData = settingsSheet.getDataRange().getValues();
     var found = false;
-    for (var j = 1; j < sData.length; j++) {
+    for (var j = sData.length - 1; j >= 0; j--) {
       if (String(sData[j][0]) === "last_backup") {
         settingsSheet.getRange(j + 1, 2).setValue(displayTime);
         found = true;
@@ -342,7 +342,7 @@ function verifyToken(token) {
       "https://oauth2.googleapis.com/tokeninfo?id_token=" + token
     );
     const payload = JSON.parse(resp.getContentText());
-    if (payload.hd !== ALLOWED_DOMAIN) return null;
+    if (payload.hd !== ALLOWED_DOMAIN || payload.aud !== "253618186533-8b7mt0hgcgdb4qlh8tg2admilfifuhgq.apps.googleusercontent.com" || String(payload.email_verified) !== "true") return null;
     return payload;
   } catch (e) {
     return null;
@@ -350,41 +350,8 @@ function verifyToken(token) {
 }
 
 // ─── ADMIN CHECK ─────────────────────────────────────────────────────────────
-function isAdmin(email) {
-  var settingsSheet = getSheet("Settings");
-  if (!settingsSheet) return false;
-  var data = settingsSheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === "admins") {
-      try {
-        var admins = JSON.parse(data[i][1]);
-        return Array.isArray(admins) && admins.indexOf(email) >= 0;
-      } catch(e) { return false; }
-    }
-  }
-  return false;
-}
-
-// ─── MEMBER CHECK ────────────────────────────────────────────────────────────
-// If "members" key exists in Settings with a non-empty array, only those emails
-// can access the system. If the key is absent or empty, all @engineering.upenn.edu
-// accounts are allowed (backward compatible).
-function isMember(email) {
-  var settingsSheet = getSheet("Settings");
-  if (!settingsSheet) return true;
-  var data = settingsSheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === "members") {
-      try {
-        var members = JSON.parse(data[i][1]);
-        if (!Array.isArray(members) || members.length === 0) return true;
-        return members.indexOf(email) >= 0;
-      } catch(e) { return true; }
-    }
-  }
-  return true; // key not set → allow all engineering accounts
-}
-
+function isAdmin(email) { return settingList_("admins").includes(email); }
+function isMember(email) { var members = settingList_("members"); return !members.length || members.includes(email); }
 // ─── DELETE LOG ──────────────────────────────────────────────────────────────
 function logDeletion(type, name, details, deletedBy) {
   var sheet = getOrCreateSheet("DeleteLog", ["date", "type", "name", "details", "deletedBy"]);
@@ -421,15 +388,15 @@ function getOrCreateSheet(name, headers) {
   return sheet;
 }
 
-function sheetToJson(sheet) {
+function sheetToJson(sheet, suppliedData) {
   if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
+  const data = suppliedData || sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   const headers = data[0];
   return data.slice(1).map(row => {
     const obj = {};
     headers.forEach((h, i) => {
-      let val = row[i];
+      let val = row[i] == null ? "" : row[i];
       if (h === "usedBy") {
         if (typeof val === "string") {
           try { val = JSON.parse(val); } catch(e) { val = []; }
@@ -438,10 +405,11 @@ function sheetToJson(sheet) {
         if (!Array.isArray(val)) val = [];
         else val = val.filter(function(x){ return x != null && x !== ""; });
       }
-      if (["qty", "minQty", "itemId"].includes(h) && val !== "") {
+      if (["qty", "minQty"].includes(h) && val !== "") {
         val = Number(val);
       }
-      if (h === "id") { val = String(val); }
+      if (["id", "itemId", "orderId", "receiptId"].includes(h)) { val = String(val); }
+      if (["shared", "consumable"].includes(h)) val = val === true || String(val).toLowerCase() === "true";
       // Ensure text fields are strings — Sheets auto-detects numbers in text cells
       // (e.g. a serial number "12345678" returns as the JS number 12345678)
       var textFields = ["name","loc","cat","desc","serial","unit","status","displayId","tags","item","store","requestedBy","reason","link","from","receivedBy","tracking"];
@@ -468,17 +436,13 @@ function sheetToJson(sheet) {
 
 function appendRow(sheetName, obj, headers) {
   const sheet = getSheet(sheetName);
-  const row = headers.map(h => {
-    const val = obj[h];
-    if (h === "usedBy" && Array.isArray(val)) return JSON.stringify(val);
-    return val !== undefined ? val : "";
-  });
+  const actual = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = actual.map(h => cellValue_(obj[h]));
   sheet.appendRow(row);
-  const lastRow = sheet.getLastRow();
-  const idCol = headers.indexOf("id");
-  if (idCol >= 0) {
-    sheet.getRange(lastRow, idCol + 1).setNumberFormat("@");
-  }
+  delete transactionalData_[sheetName];
+  ["id", "itemId", "serial", "displayId"].forEach(h => {
+    const col = actual.indexOf(h); if (col >= 0) sheet.getRange(sheet.getLastRow(), col + 1).setNumberFormat("@");
+  });
 }
 
 function jsonResponse(data) {
@@ -498,6 +462,8 @@ function idsMatch(sheetVal, targetId) {
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
 function doGet(e) {
+  transactionalData_ = {};
+  apiModifiedSheets_ = {};
   try {
     const token = (e && e.parameter && e.parameter.token) || "";
     const user = verifyToken(token);
@@ -508,21 +474,17 @@ function doGet(e) {
       return jsonResponse({ error: "NotMember", detail: "Your account is not authorized to access this lab's system. Contact a lab admin." });
     }
 
-    var settings = {};
-    var settingsSheet = getSheet("Settings");
-    if (settingsSheet) {
-      var sData = settingsSheet.getDataRange().getValues();
-      for (var i = 1; i < sData.length; i++) {
-        settings[String(sData[i][0])] = sData[i][1];
-      }
-    }
-
+    var settings = readSettings_();
+    if (e.parameter.action === "listReservations") return jsonResponse(listReservations_(e.parameter));
     return jsonResponse({
       items: sheetToJson(getSheet("Items")),
       deliveries: sheetToJson(getSheet("Deliveries")),
       checkouts: sheetToJson(getSheet("Checkouts")),
       orders: sheetToJson(getSheet("Orders")),
       settings: settings,
+      capabilities: capabilities_(),
+      reservations: currentReservations_(),
+      migration: migrationReport_(),
       userRole: isAdmin(user.email) ? "admin" : "member",
     });
   } catch (err) {
@@ -532,7 +494,11 @@ function doGet(e) {
 
 // ─── POST ────────────────────────────────────────────────────────────────────
 function doPost(e) {
+  transactionalData_ = {};
+  apiModifiedSheets_ = {};
+  var writeLock = LockService.getScriptLock();
   try {
+  writeLock.waitLock(30000);
   const body = JSON.parse(e.postData.contents);
   const user = verifyToken(body.token);
   if (!user) {
@@ -547,12 +513,19 @@ function doPost(e) {
   const userName = user.name || userEmail;
   const admin = isAdmin(userEmail);
 
+  var upgraded = handleV2_(action, body, user, admin);
+  if (upgraded !== null) return jsonResponse(upgraded);
+
   // ── Add Item ──────────────────────────────────────────────────────────────
   if (action === "addItem") {
-    var addLock = LockService.getScriptLock();
-    addLock.waitLock(10000);
-    try {
+    {
       const it = body.item;
+      it.id = requireId_(it.id);
+      it.createdAt = new Date().toISOString();
+      validateItem_(it);
+      if(it.link && !capabilities_().receiving) throw new Error("Run the V2 migration before saving purchase links");
+      var prior = sheetToJson(getSheet("Items")).find(x => String(x.id) === String(it.id));
+      if (prior) return jsonResponse({ok:true, displayId:prior.displayId, item:prior});
       // Always generate displayId server-side (inside the lock) to prevent collisions.
       const allItems = sheetToJson(getSheet("Items"));
       const isSubId = /^.+-\d{3}$/.test(String(it.displayId||""));
@@ -566,6 +539,8 @@ function doPost(e) {
         }));
         it.displayId = prefix + "-" + String(maxNum + 1).padStart(6, "0");
       } else {
+        const requestedBase=String(it.displayId).replace(/-\d{3}$/, "");
+        if(!allItems.some(i=>String(i.displayId||"").startsWith(requestedBase+"-"))) throw new Error("Use individual-unit creation to start a new labeled group.");
         // Sub-ID item (e.g. CE-000042-001): assign next available 3-digit suffix
         // for this base ID server-side so concurrent "Add Unit" calls can't collide.
         const baseId = String(it.displayId||"").replace(/-\d{3}$/, "");
@@ -583,20 +558,23 @@ function doPost(e) {
       ]);
       sendSlack("📦", "New Item Added: " + it.name, null, ["*Category*\n" + (it.cat||"—"), "*Qty*\n" + (it.qty||0) + " " + (it.unit||""), "*Location*\n" + (it.loc||"—"), "*Added by*\n" + userName]);
       logAudit(userName, userEmail, "AddItem", it.name + " | qty:" + (it.qty||0) + " " + (it.unit||"") + " | cat:" + (it.cat||"") + " | id:" + (it.displayId||""));
-      return jsonResponse({ ok: true, displayId: it.displayId });
-    } finally {
-      addLock.releaseLock();
+      return jsonResponse({ ok: true, displayId: it.displayId, item:it });
     }
   }
 
   // ── Update Item ───────────────────────────────────────────────────────────
   if (action === "updateItem") {
     const it = body.item;
+    validateMedia_(it);
+    var previous = sheetToJson(getSheet("Items")).find(x => String(x.id) === String(it.id));
+    if (!previous) throw new Error("Item not found");
+    validateItem_(Object.assign({}, previous, it));
+    protectReservations_(previous, it);
     const sheet = getSheet("Items");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
-    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial", "displayId", "shared", "consumable"];
+    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial", "displayId", "shared", "consumable", "link"];
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], it.id)) {
@@ -606,9 +584,12 @@ function doPost(e) {
           const col = headers.indexOf(f);
           if (col >= 0 && it[f] !== undefined) row[col] = it[f];
         });
-        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        if(capabilities_().receiving) {
+          const patch={};fields.forEach(f=>{if(it[f]!==undefined)patch[f]=it[f];});
+          atomicWrite_([{sheet:"Items",id:it.id,object:patch}]);
+        } else fields.forEach(f=>{const col=headers.indexOf(f);if(col>=0&&it[f]!==undefined)sheet.getRange(i+1,col+1).setValue(it[f]);});
         logAudit(userName, userEmail, "UpdateItem", (it.name||"") + " | id:" + (it.displayId||it.id||""));
-        return jsonResponse({ ok: true });
+        return jsonResponse({ ok: true, item:findId_("Items",it.id) });
       }
     }
     return jsonResponse({ error: "Item not found", detail: "No item with id " + it.id });
@@ -620,6 +601,7 @@ function doPost(e) {
       return jsonResponse({ error: "Forbidden", detail: "Only admins can delete items" });
     }
     const itemId = body.itemId;
+    assertNoReservations_(itemId);
     const sheet = getSheet("Items");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -644,6 +626,7 @@ function doPost(e) {
   // ── Add Delivery ──────────────────────────────────────────────────────────
   if (action === "addDelivery") {
     const d = body.delivery;
+    if(findId_("Deliveries",d.id)) return jsonResponse({ok:true});
     appendRow("Deliveries", d, [
       "id", "item", "qty", "unit", "from", "receivedBy", "date", "tracking", "status"
     ]);
@@ -654,11 +637,17 @@ function doPost(e) {
 
   // ── Add Checkout ──────────────────────────────────────────────────────────
   if (action === "addCheckout") {
+    if (capabilities_().scheduling) throw new Error("Please refresh LabTrack and use reservations.");
     const c = body.checkout;
+    if(findId_("Checkouts",c.id)) return jsonResponse({ok:true});
+    const chosen = resolveLegacyItem_(c.itemId, c.item);
+    if (!chosen) throw new Error("Select a specific item by label ID.");
+    if(liveReservations_().some(r=>String(r.itemId)===String(chosen.id)&&r.end>new Date().toISOString())) throw new Error("This item has reservations; use the updated scheduling workflow.");
+    c.itemId = String(chosen.id); c.checkedOutByEmail = userEmail;
     appendRow("Checkouts", c, [
       "id", "itemId", "item", "user", "out", "ret", "status", "checkedOutByEmail", "groupEmails"
     ]);
-    updateItemStatus(c.item, "In Use", c.user, "add");
+    updateItemStatus(c.itemId, "In Use", c.user, "add");
     sendSlack("🔑", "Item Checked Out: " + c.item, null, ["*Person*\n" + c.user, "*Date*\n" + (c.out||"—"), "*Return by*\n" + (c.ret||"—")]);
     logAudit(userName, userEmail, "Checkout", c.item + " → " + c.user + " | return by:" + (c.ret||"—"));
     return jsonResponse({ ok: true });
@@ -678,6 +667,7 @@ function doPost(e) {
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], coId)) {
+        if(data[i][statusCol] === "Returned") return jsonResponse({ok:true});
         const coEmailCol = headers.indexOf("checkedOutByEmail");
         const groupEmailsCol = headers.indexOf("groupEmails");
         const coEmail = coEmailCol >= 0 ? String(data[i][coEmailCol] || "") : "";
@@ -693,7 +683,9 @@ function doPost(e) {
         sheet.getRange(i + 1, statusCol + 1).setValue("Returned");
         const itemName = data[i][itemCol];
         const returnedUser = data[i][userCol];
-        updateItemStatus(itemName, "Available", returnedUser, "remove");
+        const oldItemId = headers.indexOf("itemId");
+        const resolved = resolveLegacyItem_(oldItemId >= 0 ? data[i][oldItemId] : "", itemName);
+        if (resolved) updateItemStatus(resolved.id, "Available", returnedUser, "remove");
         sendSlack("✅", "Item Returned: " + itemName, null, ["*Returned by*\n" + userName]);
         logAudit(userName, userEmail, "Return", itemName + " | originally checked out by:" + returnedUser);
         break;
@@ -705,6 +697,13 @@ function doPost(e) {
   // ── Add Order ─────────────────────────────────────────────────────────────
   if (action === "addOrder") {
     const o = body.order;
+    validateMedia_(o);
+    if(o.img && !capabilities_().receiving) throw new Error("Run the V2 migration before saving order images");
+    if (!String(o.item || "").trim() || !(Number(o.qty) > 0)) throw new Error("Item and positive quantity are required");
+    var priorOrder = sheetToJson(getSheet("Orders")).find(x => String(x.id) === String(o.id));
+    if (priorOrder) return jsonResponse({ok:true, order:priorOrder});
+    o.id = requireId_(o.id); o.createdAt = new Date().toISOString();
+    o.requestedByEmail = userEmail; o.requestedBy = userName; o.status = "Pending";
     appendRow("Orders", o, [
       "id", "store", "item", "link", "qty", "unit", "price", "cat", "requestedBy", "reason", "urgency", "date", "status", "requestedByEmail"
     ]);
@@ -714,19 +713,24 @@ function doPost(e) {
       ["*Qty*\n" + o.qty + " " + o.unit, "*Urgency*\n" + (o.urgency||"Normal"), "*Price*\n" + (o.price||"—"), "*Requested by*\n" + userName],
       (o.urgency==="Urgent"||o.urgency==="High")?"high":"normal");
     logAudit(userName, userEmail, "AddOrder", o.item + " | " + (o.store||"—") + " | qty:" + o.qty + " | urgency:" + (o.urgency||"Normal"));
-    return jsonResponse({ ok: true });
+    return jsonResponse({ ok: true, order:o });
   }
 
   // ── Update Order ──────────────────────────────────────────────────────────
   if (action === "updateOrder") {
     const o = body.order;
+    validateMedia_(o);
+    if(o.qty !== undefined && (!Number.isFinite(Number(o.qty)) || Number(o.qty)<=0)) throw new Error("Order quantity must be positive");
     const sheet = getSheet("Orders");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
-    const fields = ["store","item","link","qty","unit","price","cat","requestedBy","reason","urgency","date","status"];
+    const fields = ["store","item","link","qty","unit","price","cat","requestedBy","reason","urgency","date","img"];
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], o.id)) {
+        const oldStatus = data[i][headers.indexOf("status")];
+        if (oldStatus === "Received") throw new Error("Received orders are retained as purchase history; edit inventory metadata instead.");
+        if (o.status !== undefined && o.status !== oldStatus) throw new Error("Use the admin status action; receiving requires confirmation.");
         const reqEmailCol = headers.indexOf("requestedByEmail");
         const reqEmail = reqEmailCol >= 0 ? String(data[i][reqEmailCol] || "") : "";
         if (!admin && reqEmail && userEmail !== reqEmail) {
@@ -734,9 +738,12 @@ function doPost(e) {
         }
         var row = data[i].slice();
         fields.forEach(f => { const col = headers.indexOf(f); if (col >= 0 && o[f] !== undefined) row[col] = o[f]; });
-        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        if(capabilities_().receiving) {
+          const patch={};fields.forEach(f=>{if(o[f]!==undefined)patch[f]=o[f];});
+          atomicWrite_([{sheet:"Orders",id:o.id,object:patch}]);
+        } else fields.forEach(f=>{const col=headers.indexOf(f);if(col>=0&&o[f]!==undefined)sheet.getRange(i+1,col+1).setValue(o[f]);});
         logAudit(userName, userEmail, "UpdateOrder", (o.item||"") + " | store:" + (o.store||"—"));
-        return jsonResponse({ ok: true });
+        return jsonResponse({ ok: true, order:findId_("Orders",o.id) });
       }
     }
     return jsonResponse({ error: "Order not found" });
@@ -753,6 +760,8 @@ function doPost(e) {
 
   // ── Update Order Status ───────────────────────────────────────────────────
   if (action === "updateOrderStatus") {
+    if (!admin) return jsonResponse({error:"Forbidden", detail:"Only admins can change order status"});
+    if (!["Pending", "Approved", "Ordered", "Rejected"].includes(body.status)) throw new Error("Use Receive to add stock and mark an order received.");
     const orderId = body.orderId;
     const newStatus = body.status;
     const sheet = getSheet("Orders");
@@ -764,6 +773,7 @@ function doPost(e) {
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], orderId)) {
+        if (data[i][statusCol] === "Received") throw new Error("A received order cannot be reopened.");
         sheet.getRange(i + 1, statusCol + 1).setValue(newStatus);
         var orderItem = data[i][itemCol] || "";
         sendSlack("📋", "Order Status Updated: " + orderItem, null, ["*New Status*\n" + newStatus, "*Updated by*\n" + userName]);
@@ -780,6 +790,8 @@ function doPost(e) {
       return jsonResponse({ error: "Forbidden", detail: "Only admins can delete orders" });
     }
     const orderId = body.orderId;
+    const existingOrder = sheetToJson(getSheet("Orders")).find(x => String(x.id) === String(orderId));
+    if (existingOrder && existingOrder.receiptId) throw new Error("Received orders are retained for receipt history.");
     const sheet = getSheet("Orders");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -804,11 +816,12 @@ function doPost(e) {
       return jsonResponse({ error: "Forbidden", detail: "Only admins can change settings" });
     }
     const key = body.key;
+    if (["scheduling_enabled", "calendar_id", "schema_version"].includes(key)) throw new Error("Use the deployment setup functions to change scheduling configuration.");
     const value = body.value;
     var sheet = getOrCreateSheet("Settings", ["key", "value"]);
     var data = sheet.getDataRange().getValues();
     var found = false;
-    for (var i = 1; i < data.length; i++) {
+    for (var i = data.length - 1; i >= 0; i--) {
       if (String(data[i][0]) === String(key)) {
         sheet.getRange(i + 1, 2).setValue(value);
         found = true;
@@ -919,22 +932,22 @@ function doPost(e) {
 
   return jsonResponse({ error: "Unknown action: " + action });
   } catch (err) {
-    return jsonResponse({ error: "Server error", detail: err.message });
-  }
+    return jsonResponse({ error: "Request failed", detail: err.message });
+  } finally { writeLock.releaseLock(); }
 }
 
 // ─── Update item status & usedBy in Items sheet ──────────────────────────────
-function updateItemStatus(itemName, newStatus, userName, mode) {
+function updateItemStatus(itemId, newStatus, userName, mode) {
   const sheet = getSheet("Items");
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
-  const nameCol = headers.indexOf("name");
+  const nameCol = headers.indexOf("id");
   const statusCol = headers.indexOf("status");
   const usedByCol = headers.indexOf("usedBy");
 
   const sharedCol = headers.indexOf("shared");
   for (let i = 1; i < data.length; i++) {
-    if (data[i][nameCol] === itemName) {
+    if (String(data[i][nameCol]) === String(itemId)) {
       var row = data[i].slice();
       const isShared = sharedCol >= 0 && (data[i][sharedCol] === true || String(data[i][sharedCol]).toLowerCase() === "true");
       if (!(newStatus === "In Use" && isShared)) row[statusCol] = newStatus;
@@ -949,4 +962,389 @@ function updateItemStatus(itemName, newStatus, userName, mode) {
       break;
     }
   }
+}
+
+// ─── V2: additive schema, receipts and reservations ──────────────────────────
+const LAB_TZ = "America/New_York";
+const V2_HEADERS = {
+  Items: ["link", "createdAt"], Orders: ["img", "receiptId", "createdAt"], Deliveries: ["orderId", "receiptId"],
+  Receipts: ["id", "orderId", "itemIds", "quantities", "date", "email", "mode", "link", "img"],
+  Reservations: ["id", "requestId", "seriesId", "itemId", "qty", "user", "email", "groupEmails", "start", "end", "originalEnd", "status", "notes", "eventId", "syncState", "syncError", "updatedAt"],
+  Operations: ["id", "action", "result", "email", "date"]
+};
+function readSettings_() {
+  const sheet = getSheet("Settings"), out = {};
+  if (sheet) sheet.getDataRange().getValues().forEach(r => { if (r[0] && r[0] !== "key") out[String(r[0])] = r[1]; });
+  return out;
+}
+function settingList_(key) {
+  const value = readSettings_()[key];
+  if (!value) return [];
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Invalid " + key + " setting");
+  return parsed;
+}
+function setSetting_(key, value) {
+  const sheet = getOrCreateSheet("Settings", ["key", "value"]), rows = sheet.getDataRange().getValues();
+  for (let i = rows.length - 1; i >= 0; i--) if (String(rows[i][0]) === key) { sheet.getRange(i + 1, 2).setValue(value); return; }
+  sheet.appendRow([key, value]);
+}
+function capabilities_() {
+  const s = readSettings_();
+  return {version: Number(s.schema_version) || 1, receiving: Number(s.schema_version) >= 2,
+    scheduling: String(s.scheduling_enabled) === "true" && !!s.calendar_id, calendarId: String(s.calendar_id || ""), timeZone: LAB_TZ};
+}
+function requireV2_() { if (!capabilities_().receiving) throw new Error("Admin must run migrateLabTrackV2 before using this feature."); }
+function cellValue_(v) { return v == null ? "" : Array.isArray(v) ? JSON.stringify(v) : v; }
+function validateMedia_(obj) {
+  if (obj.link && !/^https?:\/\/[^\s]+$/i.test(String(obj.link))) throw new Error("Purchase link must be an http or https URL.");
+  if (obj.img && (!/^https?:\/\/[^\s]+$/i.test(String(obj.img)) && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(String(obj.img)))) throw new Error("Choose a valid image file or http/https image URL.");
+  if (String(obj.img || "").length > 49000) throw new Error("Image is too large. Please upload a smaller image.");
+}
+function validateItem_(it) {
+  validateMedia_(it);
+  if (!String(it.name || "").trim() || !Number.isFinite(Number(it.qty)) || Number(it.qty) < 0) throw new Error("Item name and nonnegative quantity are required.");
+  if (!Number.isFinite(Number(it.minQty || 0)) || Number(it.minQty || 0) < 0) throw new Error("Minimum stock must be nonnegative.");
+}
+// SpreadsheetApp caches reads separately from the advanced Sheets service.
+// Read-after-write uses the same API as writes, with a per-execution cache
+// invalidated after each commit. Initial reads stay on SpreadsheetApp so polling
+// does not consume the advanced API read quota. Never reuse a stale snapshot.
+let transactionalData_ = {};
+let apiModifiedSheets_ = {};
+function transactionalSheetData_(name) {
+  if (!transactionalData_[name]) {
+    SpreadsheetApp.flush();
+    transactionalData_[name] = apiModifiedSheets_[name]
+      ? Sheets.Spreadsheets.Values.get(SpreadsheetApp.getActiveSpreadsheet().getId(), "'" + name.replace(/'/g, "''") + "'", {valueRenderOption:"UNFORMATTED_VALUE",dateTimeRenderOption:"FORMATTED_STRING"}).values || []
+      : getSheet(name).getDataRange().getValues();
+  }
+  return transactionalData_[name];
+}
+function atomicWrite_(changes) {
+  // Each entry is {sheet, object, id?}. All values use explicit types: no formula injection.
+  const requests = changes.flatMap(c => {
+    const sheet = getSheet(c.sheet), data = transactionalSheetData_(c.sheet), headers = data[0];
+    const index = c.id == null ? -1 : data.findIndex((r, i) => i > 0 && String(r[headers.indexOf("id")]) === String(c.id));
+    if (c.id != null && index < 0) throw new Error(c.sheet + " record no longer exists");
+    const values = headers.map((h, i) => {
+      const value = cellValue_(c.object[h] === undefined && index >= 0 ? data[index][i] : c.object[h]);
+      const userEnteredValue = typeof value === "number" ? {numberValue: value} : typeof value === "boolean" ? {boolValue:value} : {stringValue:String(value)};
+      return {userEnteredValue};
+    });
+    if (index < 0) return [{appendCells:{sheetId:sheet.getSheetId(), rows:[{values}], fields:"userEnteredValue"}}];
+    return headers.flatMap((h,i)=>c.object[h]===undefined?[]:[{updateCells:{range:{sheetId:sheet.getSheetId(),startRowIndex:index,endRowIndex:index+1,startColumnIndex:i,endColumnIndex:i+1},rows:[{values:[values[i]]}],fields:"userEnteredValue"}}]);
+  });
+  if (requests.length) {
+    SpreadsheetApp.flush();
+    Sheets.Spreadsheets.batchUpdate({requests}, SpreadsheetApp.getActiveSpreadsheet().getId());
+    changes.forEach(c => { delete transactionalData_[c.sheet]; apiModifiedSheets_[c.sheet] = true; });
+  }
+}
+function auditChange_(user, action, details) {
+  return {sheet:"AuditLog", object:{date:new Date().toISOString(), user:user.name || user.email, email:user.email, action, details}};
+}
+function newId_() { return Utilities.getUuid().replace(/-/g, ""); }
+function rows_(name) { const sheet=getSheet(name); return sheet ? sheetToJson(sheet, transactionalSheetData_(name)) : []; }
+function findId_(name, id) { return rows_(name).find(r => String(r.id) === String(id)); }
+function requireId_(id) { if (!/^[a-zA-Z0-9_-]{1,100}$/.test(String(id || ""))) throw new Error("Missing or invalid request ID"); return String(id); }
+function operation_(id, action, user) {
+  const prior = findId_("Operations", requireId_(id));
+  if (!prior) return null;
+  if (prior.email !== user.email || prior.action !== action) throw new Error("Request ID already used");
+  return JSON.parse(prior.result);
+}
+function operationChange_(id, action, user, result) {
+  return {sheet:"Operations", object:{id, action, email:user.email, result:JSON.stringify(result), date:new Date().toISOString()}};
+}
+function nextLabel_(items, cat) {
+  const prefix = String(cat || "GEN").split(/[^a-zA-Z]+/).filter(Boolean).map(w=>w[0]).join("").slice(0,5).toUpperCase() || "GEN";
+  const max = Math.max(0, ...items.map(i=>{ const m=String(i.displayId||"").match(/(\d{6})(?:-\d{3})?$/); return m ? Number(m[1]) : 0; }));
+  return prefix + "-" + String(max+1).padStart(6,"0");
+}
+function receiveOrder_(body, user, admin) {
+  if (!admin) throw new Error("Only admins can receive orders");
+  const order = findId_("Orders", body.orderId);
+  if (!order) throw new Error("Order not found");
+  if (order.receiptId) {
+    const receipt = findId_("Receipts", order.receiptId);
+    return {ok:true, receipt, order, items:JSON.parse(receipt.itemIds).map(id=>findId_("Items", id)), deliveries:rows_("Deliveries").filter(d=>d.receiptId===order.receiptId)};
+  }
+  if (order.status !== "Ordered") throw new Error("Only an Ordered request can be received. Legacy Received requests require admin reconciliation.");
+  const f=body.item || {}, mode=body.mode || "new", receiptId=newId_(), items=rows_("Items"), changes=[], saved=[];
+  if (!["new","individual","restock"].includes(mode)) throw new Error("Invalid receiving mode");
+  if (!(Number(f.qty)>0) || !Number.isFinite(Number(f.qty))) throw new Error("Inventory quantity must be positive");
+  if (mode === "restock") {
+    const existing=findId_("Items",body.itemId);
+    if (!existing) throw new Error("Choose an existing inventory item");
+    if (f.unit !== existing.unit) throw new Error("Convert received quantity to the existing inventory unit: " + existing.unit);
+    if (/^.+-\d{6}-\d{3}$/.test(existing.displayId || "")) throw new Error("Individually labeled units cannot be restocked; create new individual units.");
+    const updated=Object.assign({},existing,{qty:Number(existing.qty)+Number(f.qty)});
+    if(body.replaceMetadata) { updated.link=f.link || ""; updated.img=f.img || ""; }
+    else { if(!updated.link) updated.link=order.link || ""; if(!updated.img) updated.img=order.img || ""; }
+    validateItem_(updated); saved.push(updated); changes.push({sheet:"Items",id:existing.id,object:updated});
+  } else {
+    if (!String(f.loc||"").trim()) throw new Error("Location is required");
+    const count=mode==="individual" ? Number(f.qty) : 1;
+    if (!Number.isInteger(count) || count<1 || count>200 || (mode==="individual" && f.consumable)) throw new Error("Individual tracking requires 1–200 non-consumable units");
+    const label=nextLabel_(items, f.cat || order.cat);
+    for(let i=0;i<count;i++) {
+      const item={id:newId_(),createdAt:new Date().toISOString(),name:String(f.name || order.item).trim(),cat:f.cat || order.cat,qty:mode==="individual"?1:Number(f.qty),unit:f.unit || order.unit,loc:String(f.loc).trim(),minQty:Number(f.minQty||0),img:f.img===undefined?order.img||"":f.img,link:f.link===undefined?order.link||"":f.link,desc:f.desc||"",status:"Available",usedBy:[],serial:mode==="individual"?(body.serials||[])[i]||"":f.serial||"",displayId:mode==="individual"?label+"-"+String(i+1).padStart(3,"0"):label,shared:!!f.shared,consumable:!!f.consumable};
+      validateItem_(item); saved.push(item); changes.push({sheet:"Items",object:item});
+    }
+  }
+  const delivery={id:newId_(),item:order.item,qty:Number(order.qty),unit:order.unit,from:order.store,receivedBy:user.name||user.email,date:Utilities.formatDate(new Date(),LAB_TZ,"yyyy-MM-dd"),tracking:body.tracking||"",status:"Logged",orderId:String(order.id),receiptId};
+  const receipt={id:receiptId,orderId:String(order.id),itemIds:JSON.stringify(saved.map(i=>String(i.id))),quantities:JSON.stringify(saved.map(i=>mode==="restock"?Number(f.qty):i.qty)),date:new Date().toISOString(),email:user.email,mode,link:order.link||"",img:order.img||""};
+  const updatedOrder=Object.assign({},order,{status:"Received",receiptId});
+  changes.push({sheet:"Orders",id:order.id,object:updatedOrder},{sheet:"Deliveries",object:delivery},{sheet:"Receipts",object:receipt},auditChange_(user,"ReceiveOrder",order.item+" | receipt:"+receiptId));
+  atomicWrite_(changes);
+  sendSlack("🚚","Order Received: "+order.item,null,["*Qty*\n"+order.qty+" "+order.unit,"*Received by*\n"+(user.name||user.email),"*Inventory labels*\n"+saved.map(i=>i.displayId).join(", ")]);
+  return {ok:true,receipt,order:updatedOrder,items:saved,deliveries:[delivery]};
+}
+function useConsumable_(body,user) {
+  const old=operation_(body.requestId,"useConsumable",user); if(old) return {ok:true,item:findId_("Items",old.itemId || old.item.id)};
+  const item=findId_("Items",body.itemId), qty=Number(body.qty);
+  if(!item || !item.consumable || !Number.isFinite(qty) || qty<=0 || qty>Number(item.qty)) throw new Error("Choose an available consumable quantity");
+  const updated=Object.assign({},item,{qty:Number(item.qty)-qty}), result={ok:true,item:updated};
+  atomicWrite_([{sheet:"Items",id:item.id,object:updated},auditChange_(user,"UseConsumable",item.name+" | used:"+qty+" | itemId:"+item.id),operationChange_(body.requestId,"useConsumable",user,{ok:true,itemId:String(item.id)})]);
+  return result;
+}
+
+// Wall time is resolved explicitly in the lab timezone. Reject nonexistent/ambiguous DST times.
+function localInstant_(local) {
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local||"")) throw new Error("Enter a date and time");
+  const base=Date.parse(local+":00Z"), matches=[];
+  for(let hours=4;hours<=5;hours++) {
+    const d=new Date(base+hours*3600000);
+    if(Utilities.formatDate(d,LAB_TZ,"yyyy-MM-dd'T'HH:mm")===local) matches.push(d.toISOString());
+  }
+  if(matches.length!==1) throw new Error("This time is ambiguous or unavailable at the daylight-saving transition; choose another time.");
+  return matches[0];
+}
+function shiftLocal_(local, days) { return new Date(Date.parse(local+":00Z")+days*86400000).toISOString().slice(0,16); }
+function localOf_(iso) { return Utilities.formatDate(new Date(iso),LAB_TZ,"yyyy-MM-dd'T'HH:mm"); }
+function buildOccurrences_(startLocal,endLocal,until) {
+  const first=localInstant_(startLocal), last=localInstant_(endLocal);
+  if(last<=first) throw new Error("End time must be after start time");
+  if(until && (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until<startLocal.slice(0,10))) throw new Error("Choose a repeat end date on or after the first booking");
+  if(until) localInstant_(until+"T12:00");
+  const out=[];
+  for(let n=0;n<53;n++) {
+    const s=shiftLocal_(startLocal,n*7), e=shiftLocal_(endLocal,n*7);
+    if(n && (!until || s.slice(0,10)>until)) break;
+    if(n===52) throw new Error("Weekly series may contain at most 52 occurrences");
+    out.push({start:localInstant_(s),end:localInstant_(e)});
+  }
+  return out;
+}
+function liveReservations_() { return rows_("Reservations").filter(r=>r.status==="Booked"); }
+function assertCapacity_(item,candidates,others) {
+  const intervals=others.concat(candidates).filter(r=>String(r.itemId)===String(item.id)&&r.status==="Booked");
+  const points=[];
+  intervals.forEach(r=>{points.push([Date.parse(r.start),Number(r.qty)]);points.push([Date.parse(r.end),-Number(r.qty)]);});
+  points.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  let used=0;
+  for(const p of points) { used+=p[1]; if(used>Number(item.qty)+1e-9) throw new Error("Booking conflict for "+(item.displayId||item.name)+" at "+localOf_(new Date(p[0]).toISOString())+". Available quantity would be exceeded."); }
+}
+function assertBookable_(item) {
+  if(!item || item.consumable || Number(item.qty)<=0 || ["Maintenance","Broken"].includes(item.status)) throw new Error("This item is not available for reservations");
+  const report=migrationReport_();
+  if(report.blockedItemIds.includes(String(item.id))) throw new Error("An admin must reconcile this item's legacy checkout before booking.");
+}
+function protectReservations_(old,patch) {
+  const bookings=liveReservations_().filter(r=>String(r.itemId)===String(old.id)&&r.end>new Date().toISOString());
+  if(!bookings.length) return;
+  const next=Object.assign({},old,patch);
+  if(next.consumable || ["Maintenance","Broken"].includes(next.status) || next.unit!==old.unit || next.displayId!==old.displayId) throw new Error("Resolve upcoming reservations before changing tracking, unit, label, or maintenance status.");
+  assertCapacity_(next,[],bookings);
+}
+function assertNoReservations_(id) {
+  if(liveReservations_().some(r=>String(r.itemId)===String(id)&&r.end>new Date().toISOString())) throw new Error("Cancel future reservations before deleting this item.");
+  if(rows_("Receipts").some(r=>JSON.parse(r.itemIds||"[]").includes(String(id)))) throw new Error("This item has receipt history; retain it with quantity zero or a maintenance status.");
+}
+function reservationOperation_(action,body,user,admin) {
+  if(!capabilities_().scheduling && !["cancelReservation","finishReservation"].includes(action)) throw new Error("Scheduling is not enabled yet");
+  const replay=operation_(body.requestId,action,user); if(replay) return Object.assign({},replay,{reservations:rows_("Reservations").filter(r=>replay.ids.includes(r.id))});
+  const all=rows_("Reservations"), now=new Date().toISOString(); let changed=[];
+  if(action==="createReservation") {
+    const item=findId_("Items",body.itemId); assertBookable_(item);
+    const qty=Number(body.qty); if(!Number.isFinite(qty)||qty<=0) throw new Error("Quantity must be positive");
+    if(/^.+-\d{6}-\d{3}$/.test(item.displayId||"")&&qty!==1) throw new Error("An individually labeled unit must be booked as one whole unit");
+    const dates=buildOccurrences_(body.startLocal,body.endLocal,body.repeatUntil||"");
+    if(dates[0].start<now) throw new Error("Start time must be in the future");
+    const group=String(body.groupEmails||"").split(",").map(s=>s.trim()).filter(Boolean);
+    if(group.some(e=>!e.endsWith("@"+ALLOWED_DOMAIN)||!isMember(e))) throw new Error("Teammates must be authorized lab members");
+    const seriesId=dates.length>1?newId_():"";
+    changed=dates.map(d=>({id:newId_(),requestId:body.requestId,seriesId,itemId:String(item.id),qty,user:user.name||user.email,email:user.email,groupEmails:group.join(","),start:d.start,end:d.end,originalEnd:d.end,status:"Booked",notes:String(body.notes||"").slice(0,2000),syncState:"Pending",syncError:"",updatedAt:now}));
+    assertCapacity_(item,changed,all.filter(r=>r.end>now));
+  } else {
+    const target=all.find(r=>r.id===String(body.id));
+    if(!target) throw new Error("Reservation not found");
+    const teammate=String(target.groupEmails||"").split(",").includes(user.email);
+    if(!admin && target.email!==user.email && !(action==="finishReservation"&&teammate)) throw new Error("Only the owner or admin can change this reservation");
+    if(target.status!=="Booked" || target.end<=now) throw new Error("Past or cancelled reservations cannot be changed");
+    if(action==="finishReservation" && !(target.start<now&&now<target.end)) throw new Error("Only an active booking can finish early");
+    if(body.scope==="future"&&target.start<=now) throw new Error("Select an upcoming occurrence to change the future series");
+    const targets=body.scope==="future" && target.seriesId && action!=="finishReservation" ? all.filter(r=>r.seriesId===target.seriesId&&r.start>=target.start&&r.start>now&&r.status==="Booked") : [target];
+    if(!targets.length) throw new Error("No future occurrences to change");
+    if(action==="updateReservation" && target.start<=now && body.scope==="future") throw new Error("Edit an upcoming occurrence to change the future series");
+    let dayShift=0;
+    if(action==="updateReservation") dayShift=Math.round((Date.parse(body.startLocal.slice(0,10)+"T00:00Z")-Date.parse(localOf_(target.start).slice(0,10)+"T00:00Z"))/86400000);
+    changed=targets.map(r=>{
+      const n=Object.assign({},r,{syncState:"Pending",syncError:"",updatedAt:now});
+      if(action==="cancelReservation") n.status="Cancelled";
+      if(action==="finishReservation") { n.end=now; n.status="Finished"; }
+      if(action==="updateReservation") {
+        const originalLocal=localOf_(r.start);
+        const baseDate=shiftLocal_(originalLocal,dayShift).slice(0,10);
+        const durationDays=Math.round((Date.parse(body.endLocal.slice(0,10)+"T00:00Z")-Date.parse(body.startLocal.slice(0,10)+"T00:00Z"))/86400000);
+        n.start=localInstant_(baseDate+"T"+body.startLocal.slice(11));
+        n.end=localInstant_(shiftLocal_(baseDate+"T"+body.endLocal.slice(11),durationDays));
+        if(n.end<=n.start || n.end<=now || (r.start>now&&n.start<=now) || (r.start<=now&&n.start!==r.start)) throw new Error("Choose valid future times; an active booking's start cannot change");
+        n.qty=Number(body.qty); if(!Number.isFinite(n.qty)||n.qty<=0) throw new Error("Quantity must be positive");
+        n.notes=String(body.notes||"").slice(0,2000); n.originalEnd=n.end;
+      }
+      return n;
+    });
+    if(action==="updateReservation") { const item=findId_("Items",target.itemId); assertBookable_(item); if(/^.+-\d{6}-\d{3}$/.test(item.displayId||"")&&changed.some(r=>r.qty!==1)) throw new Error("An individually labeled unit requires quantity one"); assertCapacity_(item,changed,all.filter(r=>!targets.some(t=>t.id===r.id)&&r.end>now)); }
+  }
+  changed.forEach(r=>{if(!r.eventId) r.eventId="lt"+r.id;});
+  const result={ok:true,ids:changed.map(r=>r.id),syncState:"Pending"};
+  atomicWrite_(changed.map(r=>({sheet:"Reservations",id:action==="createReservation"?undefined:r.id,object:r})).concat([operationChange_(body.requestId,action,user,result),auditChange_(user,action,changed.length+" occurrence(s) | "+changed.map(r=>r.id).join(","))]));
+  // Durable rows are committed before external calls. Failure cannot erase a booking.
+  syncCalendarRows_(changed.slice(0,10));
+  sendSlack("📅",action==="createReservation"?"Equipment Reserved":"Reservation Updated",null,["*By*\n"+(user.name||user.email),"*Occurrences*\n"+changed.length,"*Item*\n"+(findId_("Items",changed[0].itemId)||{}).name]);
+  return Object.assign({},result,{reservations:rows_("Reservations").filter(r=>result.ids.includes(r.id))});
+}
+function syncCalendarRows_(rows) {
+  const calendarId=readSettings_().calendar_id;
+  if(!calendarId) return;
+  for(const r of rows) {
+    try {
+      const item=findId_("Items",r.itemId)||{name:"Archived equipment",displayId:r.itemId};
+      if(r.status==="Cancelled") {
+        try { Calendar.Events.remove(calendarId,r.eventId); } catch(e) { if(!/404|410|not found|gone/i.test(e.message)) throw e; }
+      } else {
+        const event={summary:item.name+" ["+item.displayId+"] — "+r.user,location:item.loc||"",description:"Booked in LabTrack\nQuantity: "+r.qty+" "+(item.unit||"")+"\nSerial: "+(item.serial||"—")+"\nOwner: "+r.email+"\nTeammates: "+(r.groupEmails||"—")+"\n"+(r.notes||"")+"\nManage in LabTrack: https://penn-figueroa-lab.github.io/lab-inventory/?item="+encodeURIComponent(r.itemId),start:{dateTime:r.start,timeZone:LAB_TZ},end:{dateTime:r.end,timeZone:LAB_TZ},extendedProperties:{private:{labtrackId:r.id,itemId:r.itemId}},transparency:"opaque"};
+        try { Calendar.Events.get(calendarId,r.eventId); Calendar.Events.patch(event,calendarId,r.eventId); }
+        catch(e) { if(!/404|not found/i.test(e.message)) throw e; Calendar.Events.insert(Object.assign({id:r.eventId},event),calendarId); }
+      }
+      atomicWrite_([{sheet:"Reservations",id:r.id,object:{syncState:"Synced",syncError:""}}]);
+    } catch(e) { atomicWrite_([{sheet:"Reservations",id:r.id,object:{syncState:"Error",syncError:String(e.message).slice(0,500)}}]); }
+  }
+}
+function syncReservationsToCalendar() {
+  transactionalData_ = {};
+  apiModifiedSheets_ = {};
+  const lock=LockService.getScriptLock(); if(!lock.tryLock(1000)) return;
+  try { if(readSettings_().calendar_id) syncCalendarRows_(rows_("Reservations").filter(r=>r.syncState!=="Synced").slice(0,20)); } finally {lock.releaseLock();}
+}
+function currentReservations_() {
+  const now=Date.now(), from=new Date(now-30*86400000).toISOString(), to=new Date(now+366*86400000).toISOString();
+  return rows_("Reservations").filter(r=>r.end>=from&&r.start<=to);
+}
+function listReservations_(args) {
+  const from=new Date(args.from), to=new Date(args.to);
+  if(!Number.isFinite(+from)||!Number.isFinite(+to)||to<=from||to-from>367*86400000) throw new Error("Reservation reads require a range of at most 367 days");
+  return {ok:true,reservations:rows_("Reservations").filter(r=>(!args.itemId||String(r.itemId)===String(args.itemId))&&r.end>=from.toISOString()&&r.start<=to.toISOString())};
+}
+function resolveLegacyItem_(id,name) {
+  const items=rows_("Items"); if(id) return items.find(i=>String(i.id)===String(id));
+  const matches=items.filter(i=>i.name===name); return matches.length===1?matches[0]:null;
+}
+function migrationReport_() {
+  const items=rows_("Items"), checkouts=rows_("Checkouts"), issues=[], blocked=new Set();
+  checkouts.forEach(c=>{
+    const matches=c.itemId?items.filter(i=>String(i.id)===String(c.itemId)):items.filter(i=>i.name===c.item);
+    if(!c.itemId||matches.length!==1) issues.push({checkoutId:c.id,item:c.item,status:c.status,reason:!c.itemId?"Missing item ID":"Missing item",candidateIds:matches.map(i=>i.id)});
+    // An active legacy checkout remains blocked until explicitly reconciled, even with a unique name.
+    if(c.status==="Active") matches.forEach(i=>blocked.add(String(i.id)));
+  });
+  items.filter(i=>i.status==="In Use"||(i.usedBy||[]).length).forEach(i=>{blocked.add(String(i.id));issues.push({itemId:i.id,item:i.name,reason:"Legacy availability requires reconciliation"});});
+  return {issues,blockedItemIds:Array.from(blocked)};
+}
+function handleV2_(action,body,user,admin) {
+  const actions=["addIndividualItems","splitItem","receiveOrder","useConsumable","createReservation","updateReservation","cancelReservation","finishReservation","reconcileLegacy"];
+  if(!actions.includes(action)) return null;
+  requireV2_();
+  if(action==="addIndividualItems"||action==="splitItem") return individualItems_(action,body,user);
+  if(action==="receiveOrder") return receiveOrder_(body,user,admin);
+  if(action==="useConsumable") return useConsumable_(body,user);
+  if(action==="reconcileLegacy") {
+    if(!admin) throw new Error("Admin only");
+    const item=findId_("Items",body.itemId); if(!item) throw new Error("Item not found");
+    const changes=[auditChange_(user,"ReconcileLegacy",JSON.stringify({itemId:body.itemId,checkoutId:body.checkoutId||"",note:body.note}))];
+    if(!String(body.note||"").trim()) throw new Error("Record the reason for reconciliation");
+    if(body.checkoutId) { const co=findId_("Checkouts",body.checkoutId); if(!co||co.status!=="Active") throw new Error("Active checkout not found"); changes.push({sheet:"Checkouts",id:co.id,object:{itemId:String(item.id),status:"Returned"}}); }
+    if(rows_("Checkouts").some(c=>c.status==="Active"&&String(c.id)!==String(body.checkoutId)&&(String(c.itemId)===String(item.id)||(!c.itemId&&c.item===item.name)))) throw new Error("Other active legacy checkouts for this item must be resolved first");
+    changes.push({sheet:"Items",id:item.id,object:{status:item.status==="In Use"?"Available":item.status,usedBy:[]}}); atomicWrite_(changes);
+    return {ok:true,migration:migrationReport_()};
+  }
+  return reservationOperation_(action,body,user,admin);
+}
+
+// Run from the Apps Script editor on staging first. These do not run automatically.
+function migrateLabTrackV2() {
+  transactionalData_ = {};
+  apiModifiedSheets_ = {};
+  const lock=LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    settingList_("members"); settingList_("admins"); // Fail before migration if access configuration is malformed.
+    Object.keys(V2_HEADERS).forEach(name=>{
+      let sheet=getSheet(name);
+      if(!sheet) { if(["Items","Orders","Deliveries"].includes(name)) throw new Error("Missing production tab: "+name); sheet=getOrCreateSheet(name,V2_HEADERS[name]); }
+      const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+      if(!headers.includes("id") || new Set(headers.filter(Boolean)).size!==headers.filter(Boolean).length) throw new Error("Invalid or duplicate headers in "+name);
+      const missing=V2_HEADERS[name].filter(h=>!headers.includes(h));
+      if(missing.length) sheet.getRange(1,headers.length+1,1,missing.length).setValues([missing]);
+    });
+    getOrCreateSheet("AuditLog",["date","user","email","action","details"]);
+    setSetting_("schema_version",2);
+    if(readSettings_().scheduling_enabled===undefined) setSetting_("scheduling_enabled","false");
+    Logger.log(JSON.stringify(migrationReport_(),null,2));
+    return migrationReport_();
+  } finally {lock.releaseLock();}
+}
+function setupLabEquipmentCalendar() {
+  requireV2_();
+  let id=readSettings_().calendar_id;
+  if(!id) { id=Calendar.Calendars.insert({summary:"Lab Equipment",timeZone:LAB_TZ,description:"Equipment reservations managed through LabTrack. Make booking changes in LabTrack."}).id; setSetting_("calendar_id",id); }
+  Calendar.Calendars.get(id);
+  const members=Array.from(new Set(settingList_("members").concat(settingList_("admins"))));
+  // Never make the calendar public or domain-wide implicitly.
+  if(!members.length) throw new Error("Set an explicit members/admins list before sharing the equipment calendar");
+  const rules=Calendar.Acl.list(id).items||[];
+  members.forEach(email=>{if(!rules.some(r=>r.scope&&r.scope.value===email)) Calendar.Acl.insert({role:"reader",scope:{type:"user",value:email}},id,{sendNotifications:false});});
+  if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==="syncReservationsToCalendar")) ScriptApp.newTrigger("syncReservationsToCalendar").timeBased().everyMinutes(5).create();
+  Logger.log("Calendar prepared; scheduling is still disabled: "+id);
+  return id;
+}
+function enableLabScheduling() {
+  requireV2_(); const id=readSettings_().calendar_id; if(!id) throw new Error("Run setupLabEquipmentCalendar first");
+  Calendar.Calendars.get(id);
+  setSetting_("scheduling_enabled","true");
+  Logger.log(JSON.stringify(migrationReport_())); // affected assets stay blocked until reconciled
+}
+function disableLabScheduling() { setSetting_("scheduling_enabled","false"); }
+
+function individualItems_(action,body,user) {
+  const replay=operation_(body.requestId,action,user);
+  if(replay) return {ok:true,items:replay.ids.map(id=>findId_("Items",id))};
+  const old=action==="splitItem"?findId_("Items",body.itemId):null;
+  if(action==="splitItem"&&!old) throw new Error("Item not found");
+  if(old) {
+    if(liveReservations_().some(r=>r.itemId===String(old.id)&&r.end>new Date().toISOString()) || migrationReport_().blockedItemIds.includes(String(old.id))) throw new Error("Resolve active use and reservations before splitting units");
+    if(rows_("Receipts").some(r=>JSON.parse(r.itemIds||"[]").includes(String(old.id)))) throw new Error("Received items with receipt history must retain their inventory unit; use individual tracking when receiving new stock.");
+    if(/^.+-\d{6}-\d{3}$/.test(old.displayId||"")) throw new Error("This item is already individually tracked");
+  }
+  const base=Object.assign({},old||{},body.item), count=Number(base.qty);
+  validateItem_(base);
+  if(!Number.isInteger(count)||count<1||count>200||base.consumable) throw new Error("Individual tracking requires 1–200 whole non-consumable units");
+  if(old&&count!==Number(old.qty)) throw new Error("Save quantity changes before splitting units");
+  const label=old&&old.displayId?old.displayId:nextLabel_(rows_("Items"),base.cat);
+  const created=Array.from({length:count},(_,i)=>Object.assign({},base,{id:old&&i===0?String(old.id):newId_(),createdAt:old&&i===0?old.createdAt||"":new Date().toISOString(),qty:1,displayId:label+"-"+String(i+1).padStart(3,"0"),serial:(body.serials||[])[i]||(old&&i===0?old.serial||"":""),status:"Available",usedBy:[]}));
+  const result={ok:true,ids:created.map(i=>i.id)};
+  atomicWrite_(created.map((item,i)=>({sheet:"Items",id:old&&i===0?old.id:undefined,object:item})).concat([operationChange_(body.requestId,action,user,result),auditChange_(user,action,base.name+" | units:"+count)]));
+  sendSlack("📦","Individual Units Added: "+base.name,null,["*Units*\n"+count,"*By*\n"+(user.name||user.email)]);
+  return {ok:true,items:created};
 }
