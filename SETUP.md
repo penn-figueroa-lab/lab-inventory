@@ -30,6 +30,7 @@ For real-service staging checks, append `tests/staging-smoke.gs` only to the cop
 - **Lab Equipment** calendar created with reader access for listed members/admins; scheduling enabled. Calendar ID: `c_05604e51f96495822a2585cba47a47088f1fb07a58208dd3c1463c835cce0a24@group.calendar.google.com`.
 - Legacy records remain intact: 53 checkout rows lack item IDs. **ANR EMG** (`1773314303669`) and **1TB External Hard Drive** (`1792137195350`) remain blocked for booking until an admin verifies physical availability and reconciles them. Historical candidate matches were not automatically applied.
 - Validation passed: 28 backend tests, JSX validation, browser workflows, signed-in desktop/mobile staging checks, real concurrent booking/receipt requests, purchase-summary generation, and actual Sheets/Calendar failure recovery with stable event IDs. Production Slack test messages were not sent. Calendar sharing with another member's signed-in account still needs that member's acceptance check.
+- Post-deployment signed-in reads verified all 372 inventory records, all 53 historical checkouts, scheduling enabled, and exactly the two expected blocked assets. The published page loaded successfully and label search retained full group totals. No synthetic inventory or bookings were written to production.
 
 The isolated [staging spreadsheet](https://docs.google.com/spreadsheets/d/1kloonas4QZVYbyMHI4vEhUTcTssKJ6BBcN2GL3gp_2o/edit) and **Lab Equipment — Staging** calendar remain available for follow-up checks. Staging Slack is off.
 

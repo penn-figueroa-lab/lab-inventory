@@ -1727,7 +1727,7 @@ function LabInventory(){
     if(migration.blockedItemIds.includes(String(i.id))||["Maintenance","Broken"].includes(i.status))return {...i,availableQty:0};
     const active=reservations.filter(r=>String(r.itemId)===String(i.id)&&r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow);
     const reserved=active.reduce((n,r)=>n+Number(r.qty),0);
-    return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:reserved>=Number(i.qty)&&reserved>0?"In Use":"Available",usedBy:[...new Set(active.map(r=>r.user))]};
+    return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:Number(i.qty)<=0?"Unavailable":reserved>=Number(i.qty)?"In Use":reserved>0?"Partially Available":"Available",usedBy:[...new Set(active.map(r=>r.user))]};
   }),[rawItems,reservations,clockNow,capabilities.scheduling,migration]);
   const applyExtras=data=>{setCapabilities(data.capabilities||{version:1,scheduling:false});setReservations(data.reservations||[]);setMigration(data.migration||{issues:[],blockedItemIds:[]});setOffline(false);setLastSynced(Date.now());};
 
@@ -2420,7 +2420,7 @@ function LabInventory(){
                         <div style={{position:"relative"}}>
                           <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
                           <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
-                          <div style={{position:"absolute",top:10,right:10}}><Badge status={item.status}/></div>
+                          <div style={{position:"absolute",top:40,right:10}}><Badge status={item.status}/></div>
                           <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
                             <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
                           </div>
@@ -2452,7 +2452,7 @@ function LabInventory(){
                       <div style={{position:"relative"}}>
                         <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
                         <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
-                        <div style={{position:"absolute",top:10,right:10}}><Badge status={isLow?"Low Stock":item.status}/></div>
+                        <div style={{position:"absolute",top:40,right:10}}><Badge status={isLow?"Low Stock":item.status}/></div>
                         <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
                           <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
                         </div>
