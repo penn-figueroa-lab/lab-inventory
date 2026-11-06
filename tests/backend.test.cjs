@@ -33,3 +33,21 @@ test('individually labeled units cannot be booked fractionally',()=>{const h=har
 test('receipt retries and Calendar readback ignore stale SpreadsheetApp snapshots',()=>{const h=harness({staleSpreadsheetReads:true});h.order();h.context.sheetToJson(h.db.Orders);const user={email:'admin@engineering.upenn.edu',name:'Admin'};const first=h.context.receiveOrder_(received(),user,true);const retry=h.context.receiveOrder_(received(),user,true);assert.equal(first.receipt.id,retry.receipt.id);assert.equal(h.rows('Receipts').length,1);const b=ok(h.post('createReservation',booking({itemId:first.items[0].id})));assert.equal(b.reservations[0].syncState,'Synced');});
 
 test('stock operation ledger excludes image payloads and retries return current stock',()=>{const h=harness();h.item({consumable:true,qty:10,img:'https://example.com/image.jpg'});ok(h.post('useConsumable',{itemId:'item1',qty:2,requestId:'stock-one'}));ok(h.post('useConsumable',{itemId:'item1',qty:3,requestId:'stock-two'}));const replay=ok(h.post('useConsumable',{itemId:'item1',qty:2,requestId:'stock-one'}));assert.equal(replay.item.qty,5);assert.ok(h.rows('Operations').every(r=>!r.result.includes('image.jpg')));});
+
+test('confirmed active checkout transfers atomically with original owner and inclusive return date',()=>{
+ const h=harness();h.context.Session={getActiveUser:()=>({getEmail:()=> 'admin@engineering.upenn.edu'})};
+ h.item({qty:2,status:'In Use',usedBy:['Lily']});h.add('Checkouts',{id:'old-lily',item:'Robot',user:'Lily',checkedOutByEmail:'member@engineering.upenn.edu',out:'2026-11-03 23:01',ret:'2030-05-01',status:'Active'});
+ const options={spreadsheetId:'test-sheet',checkoutId:'old-lily',itemId:'item1'};
+ h.fault.batch=true;assert.throws(()=>h.context.convertConfirmedCheckoutToReservation(options));assert.equal(h.rows('Checkouts')[0].status,'Active');assert.equal(h.rows('Reservations').length,0);
+ h.fault.batch=false;h.fault.calendar=true;const r=h.context.convertConfirmedCheckoutToReservation(options);assert.equal(r.reservation.qty,2);assert.equal(r.reservation.email,'member@engineering.upenn.edu');assert.equal(r.reservation.end,'2030-05-02T04:00:00.000Z');assert.equal(r.reservation.syncState,'Error');assert.equal(h.rows('Checkouts')[0].out,'2026-11-03 23:01');assert.equal(h.rows('Checkouts')[0].status,'Transferred');assert.equal(h.context.migrationReport_().blockedItemIds.length,0);
+ h.fault.calendar=false;h.context.syncReservationsToCalendar();h.context.convertConfirmedCheckoutToReservation(options);assert.equal(h.rows('Reservations').length,1);assert.equal(h.events.size,1);
+});
+test('checkout transfers reject non-admins, duplicate names and guessed identities',()=>{
+ const h=harness();h.context.Session={getActiveUser:()=>({getEmail:()=> 'member@engineering.upenn.edu'})};h.item();h.add('Checkouts',{id:'old',item:'Robot',user:'Lily',checkedOutByEmail:'unknown@other.edu',out:'2026-11-03 23:01',ret:'2030-05-01',status:'Active'});const o={spreadsheetId:'test-sheet',checkoutId:'old',itemId:'item1'};
+ assert.throws(()=>h.context.convertConfirmedCheckoutToReservation(o),/administrator/);h.context.Session={getActiveUser:()=>({getEmail:()=> 'admin@engineering.upenn.edu'})};assert.throws(()=>h.context.convertConfirmedCheckoutToReservation(o),/authorized email/);h.item({id:'item2'});assert.throws(()=>h.context.convertConfirmedCheckoutToReservation(o),/Duplicate names/);assert.equal(h.rows('Reservations').length,0);
+});
+test('confirmed indefinite loans block booking and deletion until an explicit return',()=>{
+ const h=harness();h.context.Session={getActiveUser:()=>({getEmail:()=> 'admin@engineering.upenn.edu'})};h.item({status:'In Use'});h.context.recordConfirmedIndefiniteLoan({spreadsheetId:'test-sheet',itemId:'item1',borrower:'Shafagh',note:'Confirmed by lab admin'});
+ assert.equal(h.context.migrationReport_().blockedItemIds.length,0);assert.ok(h.post('createReservation',booking()).error);assert.ok(h.post('deleteItem',{itemId:'item1'}).error);assert.equal(h.rows('Items')[0].usedBy[0],'Shafagh');
+ ok(h.post('updateItem',{item:{id:'item1',status:'Available'}}));assert.equal(h.rows('Items')[0].usedBy.length,0);ok(h.post('createReservation',booking()));assert.equal(h.rows('Reservations').length,1);
+});

@@ -78,10 +78,62 @@ button:disabled{opacity:.55;cursor:not-allowed;}
 .section-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
 .sync-status{font-size:12px;color:var(--sub);padding:10px 0;display:flex;gap:12px;align-items:center;}
 @media(max-width:640px){.form-grid{grid-template-columns:1fr;}main{padding:12px!important;}header{padding:10px!important;flex-wrap:wrap;}input,select,textarea{max-width:100%;min-width:0;}[role=dialog]{max-width:calc(100vw - 20px)!important;}table{font-size:12px;} .form-actions button{min-height:40px;} .reservation-row{display:block;}}
+
+/* Equipment workspace */
+:root{--bg0:#0b1018;--bg1:#111923;--bg2:#192330;--bg3:#222f40;--border:#293647;--text:#edf2f8;--sub:#adbacb;--cyan:#62d9cb;--green:#80d6af;--blue:#91baff;}
+html.light{--bg0:#f4f7fa;--bg1:#fff;--bg2:#f0f4f8;--bg3:#e4ebf2;--border:#dce4ec;--text:#1d2c3d;--sub:#53667a;--cyan:#087d76;--green:#26744f;--blue:#315f9f;}
+.status-badge{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:4px 7px;font-size:11px;font-weight:500;line-height:1.25;white-space:nowrap;}
+.status-badge::before{content:'';width:5px;height:5px;background:currentColor;border-radius:50%;flex-shrink:0;}
+.inventory-intro{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:6px 0 22px;flex-wrap:wrap;}
+.inventory-intro h1{font-size:27px;letter-spacing:-.7px;font-weight:600;}
+.inventory-intro p{color:var(--sub);font-size:14px;margin-top:5px;}
+.schedule-panel{border:1px solid var(--border);border-radius:16px;background:var(--bg1);margin:12px 0 22px;overflow:hidden;}
+.schedule-head{padding:18px 20px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;}
+.schedule-head h3{font-size:16px;font-weight:600;}
+.schedule-head p{color:var(--sub);font-size:12px;margin-top:4px;}
+.segmented{display:flex;gap:3px;padding:3px;background:var(--bg0);border:1px solid var(--border);border-radius:9px;}
+.segmented button{background:transparent;border:0;color:var(--sub);padding:7px 11px;border-radius:6px;cursor:pointer;font:500 12px 'Outfit',sans-serif;}
+.segmented button[aria-pressed=true]{background:var(--bg3);color:var(--text);}
+.schedule-content{padding:0 20px 18px;}
+.schedule-empty{display:flex;align-items:center;gap:12px;padding:12px 0;color:var(--sub);font-size:13px;}
+.calendar-tools{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12px;margin:14px 0;}
+.calendar-frame{display:block;width:100%;height:570px;border:0;background:#fff;border-radius:10px;}
+.calendar-help{color:var(--sub);font-size:12px;line-height:1.6;margin-top:10px;}
+.category-filters{display:flex;align-items:center;gap:7px;flex-wrap:wrap;width:100%;padding:3px 0 6px;}
+.category-filters button{border:1px solid transparent;border-radius:8px;padding:8px 11px;background:var(--bg1);color:var(--sub);font:500 12px 'Outfit',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+.category-filters button[aria-pressed=true]{background:var(--cyan-d);border-color:var(--cyan-m);color:var(--cyan);}
+.category-filters .filter-count{font-size:10px;opacity:.75;}
+.equipment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:18px;}
+.equipment-card{background:var(--bg1);border:1px solid var(--border);border-radius:15px;overflow:hidden;display:flex;flex-direction:column;}
+.card-item:hover{transform:translateY(-2px);box-shadow:0 8px 24px #0002;border-color:var(--border-hi)!important;}
+.equipment-image{height:155px;background:#f1f4f7;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.equipment-image img{width:100%;height:100%;object-fit:contain;padding:12px;mix-blend-mode:multiply;}
+.equipment-placeholder{height:100%;width:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--bg2),var(--bg3));color:var(--sub);}
+.equipment-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:9px;}
+.equipment-category{font-size:11px;color:var(--sub);}
+.equipment-title{font:600 15px/1.4 'Outfit',sans-serif;color:var(--text);text-align:left;border:0;background:none;cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.equipment-meta{color:var(--sub);font-size:12px;display:flex;align-items:center;gap:6px;min-height:18px;}
+.equipment-availability{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:12px;margin-top:auto;flex-wrap:wrap;}
+.equipment-availability strong{font-size:15px;font-weight:600;}
+.equipment-availability small{font-size:11px;color:var(--sub);}
+.equipment-booking{font-size:11px;line-height:1.5;color:var(--blue);background:var(--blue-d);border-radius:7px;padding:7px 9px;}
+.equipment-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;}
+.image-credit{font-size:10px;color:var(--sub);}
+.equipment-picker{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto;margin:14px 0;}
+.equipment-choice{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--border);background:var(--bg2);color:var(--text);padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;}
+.equipment-choice>div{flex:1;min-width:0;}.equipment-choice strong{display:block;font-size:14px;}.equipment-choice small{display:block;color:var(--sub);font-size:11px;margin-top:4px;}
+.reservation-row{background:var(--bg1);border-radius:10px;padding:12px 14px;gap:10px;line-height:1.65;}
+.reservation-row small{color:var(--sub);font-size:11px;}.reservation-row .form-actions{margin:0;}
+.lab-stat{background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;flex:1;min-width:120px;display:flex;align-items:center;gap:12px;}
+.lab-stat .stat-value{font:600 25px 'Outfit',sans-serif;color:var(--text);}.lab-stat .stat-label{font-size:11px;color:var(--sub);}.lab-stat .stat-sub{font-size:10px;color:var(--dim);}
+@media(max-width:640px){.equipment-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}.equipment-image{height:125px;}.equipment-body{padding:12px;gap:8px;}.equipment-title{font-size:13px;}.equipment-availability{align-items:flex-start;flex-direction:column;}.equipment-footer button{padding:7px 9px!important;}.category-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:10px;}.category-filters button{flex-shrink:0;}.schedule-head{padding:16px;}.schedule-content{padding:0 16px 16px;}.calendar-frame{height:540px;}.inventory-intro h1{font-size:23px;}.lab-stat{padding:10px;min-width:95px;gap:8px;}.lab-stat svg{display:none;}.lab-stat .stat-value{font-size:21px;}}
+@media(max-width:360px){.equipment-grid{grid-template-columns:1fr;}}
+
 </style>
 </head>
 <body>
 <div id="root"></div>
+<script src="image-catalog.js"></script>
 <script type="text/babel" data-presets="react">
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
@@ -123,6 +175,7 @@ const STATUS_C = {
   "In Use":     {bg:"var(--blue-d)",  t:"var(--blue)",   b:"#4da6ff28"},
   "Unavailable":{bg:"var(--amber-d)",t:"var(--amber)",b:"#f5a62328"},
   "Partially Available":{bg:"var(--amber-d)",t:"var(--amber)",b:"#f5a62328"},
+  "On loan":    {bg:"var(--blue-d)", t:"var(--blue)", b:"#4da6ff28"},
   "Maintenance":{bg:"var(--amber-d)", t:"var(--amber)",  b:"#f5a62328"},
   "Broken":     {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
   "Low Stock":  {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
@@ -132,7 +185,7 @@ const STATUS_C = {
   "Overdue":    {bg:"var(--red-d)",   t:"var(--red)",    b:"#ff4d6a28"},
 };
 
-const availableQuantity = item => item.availableQty ?? (["In Use","Maintenance","Broken"].includes(item.status)?0:Number(item.qty));
+const availableQuantity = item => item.availableQty ?? (["In Use","Maintenance","Broken","On loan"].includes(item.status)?0:Number(item.qty));
 
 // ─── IMAGE COMPRESSION ──────────────────────────────────────────────────────
 const compressImage = (file) => new Promise((resolve,reject) => {
@@ -148,6 +201,7 @@ const compressImage = (file) => new Promise((resolve,reject) => {
 
 // ─── SVG ICONS ───────────────────────────────────────────────────────────────
 const P = {
+  map:'<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1116 0z"/><circle cx="12" cy="10" r="3"/>',
   box:'<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
   truck:'<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
   users:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
@@ -227,7 +281,7 @@ const API = {
 // ─── ATOMS ───────────────────────────────────────────────────────────────────
 const Badge = ({status}) => {
   const c = STATUS_C[status]||STATUS_C["Available"];
-  return <span style={{background:c.bg,color:c.t,border:`1px solid ${c.b}`,padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",whiteSpace:"nowrap"}}>{status}</span>;
+  return <span className="status-badge" style={{background:c.bg,color:c.t}}>{status==="Partially Available"?"Limited availability":status}</span>;
 };
 const MemberAvatar = ({name,sz=32}) => {
   if (!name || typeof name !== "string") return null;
@@ -811,7 +865,7 @@ const AddItemModal = ({onClose,onAdd,categories,allItems,onShowLabel,onAddMany})
 
 // ─── EDIT ITEM MODAL ─────────────────────────────────────────────────────────
 const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin,onSplit}) => {
-  const [f,setF]=useState({name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",link:item.link||"",status:item._inventoryStatus||item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
+  const [f,setF]=useState({loanBorrower:toArr(item.usedBy).join(", "),name:item.name,cat:item.cat,qty:String(item.qty),unit:item.unit,loc:item.loc||"",desc:item.desc||"",minQty:String(item.minQty??0),img:item.img||"",link:item.link||"",status:item._inventoryStatus||item.status,serial:item.serial||"",shared:item.shared||false,consumable:item.consumable||false,displayId:item.displayId||""});
   const save=useSave();
   const splitRequest=useRef(crypto.randomUUID());
   const [changed,setChanged]=useState(false);
@@ -831,7 +885,8 @@ const EditItemModal = ({item,onClose,onSave,onDelete,onAdd,categories,isAdmin,on
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"1/-1"}}><Fld label="Item Name"><Inp value={f.name} onChange={s("name")}/></Fld></div>
         <Fld label="Category"><Sel value={f.cat} onChange={onCatChange}>{categories.map(c=><option key={c}>{c}</option>)}</Sel></Fld>
-        <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","In Use","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
+        <Fld label="Status"><Sel value={f.status} onChange={s("status")}>{["Available","On loan","Maintenance","Broken","Low Stock"].map(st=><option key={st}>{st}</option>)}</Sel></Fld>
+        {f.status==="On loan"&&<div style={{gridColumn:"1/-1"}}><Fld label="Borrower" hint="Unavailable until explicitly returned; choose Available after the equipment is back"><Inp value={f.loanBorrower} onChange={s("loanBorrower")}/></Fld></div>}
         <Fld label="Quantity"><Inp type="number" min="0" value={f.qty} onChange={s("qty")}/></Fld>
         <Fld label="Unit"><Sel value={f.unit} onChange={s("unit")}>{["units","pcs","boxes","bottles","sets","racks","rolls","kg","L","m"].map(u=><option key={u}>{u}</option>)}</Sel></Fld>
         <Fld label="Min Stock Alert"><Inp type="number" min="0" value={f.minQty} onChange={s("minQty")}/></Fld>
@@ -931,6 +986,58 @@ const PendingItemModal = ({order,allItems,categories,onClose,onConfirm}) => {
   </Modal>;
 };
 
+const imageReference = item => (window.LABTRACK_IMAGE_SOURCES||{})[item.img];
+const ImageCredit = ({item}) => {const source=imageReference(item);return source?<a className="image-credit" href={source.page} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}>{source.kind==="generic"?"Reference photo · appearance may vary":"Product reference photo"} ↗</a>:null;};
+const EquipmentImage = ({item}) => {
+  const [failed,setFailed]=useState(false);useEffect(()=>setFailed(false),[item.img]);
+  return item.img&&!failed?<img src={item.img} alt={item.name} loading="lazy" onError={()=>setFailed(true)}/>:<div className="equipment-placeholder" aria-label="Photo not available"><Ico n={item.cat==="Robots & Motors"?"layers":item.cat==="Sensors & Vision"?"camera":item.cat==="Wiring & Networking"?"link":"box"} s={42}/></div>;
+};
+const EquipmentCard = ({item,reservation,clockNow,scheduling,blocked,onView,onReserve,onUse}) => {
+  const units=item._items||[item],available=units.reduce((n,i)=>n+availableQuantity(i),0),low=item.minQty>0&&item.qty<=item.minQty;
+  const active=reservation&&Date.parse(reservation.start)<=clockNow;
+  const canBook=units.some(i=>!i.consumable&&Number(i.qty)>0&&!blocked.includes(String(i.id))&&!["Maintenance","Broken","On loan"].includes(i.status));
+  const shortTime=iso=>new Date(iso).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+  const status=low?"Low Stock":item.status;
+  return <article className="card-item equipment-card" onClick={onView}>
+    <div className="equipment-image"><EquipmentImage item={item}/></div>
+    <div className="equipment-body">
+      <div className="equipment-category">{item.cat}{item._isGroup?" · Tracked units":item.consumable?" · Consumable":""}</div>
+      <button className="equipment-title" onClick={e=>{e.stopPropagation();onView();}}>{item.name}</button>
+      <div><CopyIdBadge id={item.displayId}/></div>
+      <div className="equipment-meta"><Ico n="map" s={12}/><span>{item.loc||"Location not recorded"}</span></div>
+      {item.serial&&<div className="equipment-meta">S/N {item.serial}</div>}
+      <ImageCredit item={item}/>
+      {units.some(i=>i.status==="On loan")&&<div className="equipment-booking"><strong>On loan</strong> · {[...new Set(units.filter(i=>i.status==="On loan").flatMap(i=>toArr(i.usedBy)))].join(", ")||"Borrower not recorded"}<br/>Until returned</div>}
+      {reservation&&<div className="equipment-booking"><strong>{active?"In use":"Next reservation"}</strong> · {reservation.user}<br/>{active?"Until "+shortTime(reservation.end):shortTime(reservation.start)} ET</div>}
+      <div className="equipment-availability"><div><strong>{scheduling&&!item.consumable?available:item.qty}</strong> <small>{scheduling&&!item.consumable?`of ${item.qty} available`:item.unit||"units"}</small></div><Badge status={status}/></div>
+      <div className="equipment-footer"><span className="equipment-category">{item.shared?"Shared equipment":item._isGroup?`${item._items.length} physical units`:""}</span>{item.consumable?<Btn sm v="ghost" onClick={e=>{e.stopPropagation();onUse();}}>Use stock</Btn>:scheduling?<Btn sm v="ghost" disabled={!canBook} onClick={e=>{e.stopPropagation();onReserve();}}>{item._isGroup?"Choose unit":"Reserve"}<Ico n="chevR" s={12}/></Btn>:<Btn sm v="ghost" onClick={e=>{e.stopPropagation();onView();}}>Details</Btn>}</div>
+    </div>
+  </article>;
+};
+const EquipmentPicker = ({items,blocked,onClose,onSelect}) => {
+  const [query,setQuery]=useState("");const matches=items.filter(i=>!i.consumable&&matchesInventory(i,query)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  return <Modal title="Choose equipment to reserve" onClose={onClose} mw={650}><p className="form-intro">Select the exact item or physical unit. You can book future time even if it is in use now.</p><Fld label="Find equipment"><Inp autoFocus placeholder="Name, label, serial or location…" value={query} onChange={e=>setQuery(e.target.value)}/></Fld><div className="equipment-picker">{matches.map(i=>{const reason=blocked.includes(String(i.id))?"Availability needs review":["Maintenance","Broken","On loan"].includes(i.status)?i.status:Number(i.qty)<=0?"No stock":null;return <button className="equipment-choice" key={i.id} disabled={!!reason} onClick={()=>onSelect(i)}><Ico n="box" s={20}/><div><strong>{i.name}</strong><small>{i.displayId} · {i.serial||i.loc||"Location not recorded"}</small></div>{reason?<small>{reason}</small>:<Badge status={i.status}/>}</button>;})}{!matches.length&&<p className="form-intro">No equipment matches this search.</p>}</div></Modal>;
+};
+const CheckoutHistory = ({checkouts}) => {
+  const [query,setQuery]=useState(""),[limit,setLimit]=useState(20);
+  const active=checkouts.filter(c=>c.status==="Active");
+  const rows=checkouts.filter(c=>[c.item,c.user,c.out,c.ret,c.status].some(v=>String(v||"").toLowerCase().includes(query.trim().toLowerCase())));
+  return <div>{active.length>0&&<div className="equipment-booking" style={{marginTop:14}}>Checkouts awaiting transfer: {active.map(c=>`${c.item} · ${c.user}`).join("; ")}. An admin must verify their return before releasing the equipment.</div>}<details style={{marginTop:14,fontSize:13,color:"var(--sub)"}}><summary style={{cursor:"pointer"}}>Checkout history · {checkouts.length} records</summary><p className="form-intro">Original checkout records are retained below. Records without an item ID are shown by their recorded name; they have not been assigned to a physical unit.</p><Fld label="Search earlier checkouts"><Inp value={query} onChange={e=>{setQuery(e.target.value);setLimit(20);}} placeholder="Item, person, date or status…"/></Fld>{rows.slice(0,limit).map(c=><div className="reservation-row" key={c.id}><div><strong>{c.item}</strong><div>{c.user}{c.qty?` · ${c.qty} units`:""}</div><div>Checked out: {c.out||"Not recorded"}{c.ret?` · Expected return: ${c.ret}`:""}</div><small>{c.status}{!c.itemId?" · Physical unit not linked":""}</small></div></div>)}{!rows.length&&<p className="form-intro">No matching checkout records.</p>}{rows.length>limit&&<Btn sm v="ghost" onClick={()=>setLimit(n=>n+20)}>Show more history</Btn>}</details></div>;
+};
+const EquipmentSchedule = ({reservations,checkouts,items,user,isAdmin,calendarId,onAction,onEdit}) => {
+  const [scope,setScope]=useState("lab"),[calendar,setCalendar]=useState(false),[expanded,setExpanded]=useState(false),[calendarMode,setCalendarMode]=useState(()=>window.matchMedia("(max-width:640px)").matches?"AGENDA":"WEEK");
+  const mine=reservations.filter(r=>r.email===user?.email||(r.groupEmails||"").split(",").includes(user?.email));
+  const rows=scope==="mine"?mine:reservations,active=reservations.filter(r=>Date.parse(r.start)<=Date.now());
+  const calendarUrl="https://calendar.google.com/calendar/embed?"+new URLSearchParams({src:calendarId,ctz:"America/New_York",mode:calendarMode,showTitle:"0",showPrint:"0",showCalendars:"0",showTz:"1"});
+  return <section className="schedule-panel" aria-label="Equipment schedule"><div className="schedule-head"><div><h3>Equipment schedule</h3><p>{active.length} in use now{items.some(i=>i.status==="On loan")?` · ${items.filter(i=>i.status==="On loan").length} on loan`:""} · {reservations.length-active.length} upcoming · Eastern time</p></div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><div className="segmented" aria-label="Reservation scope"><button aria-pressed={scope==="lab"} onClick={()=>{setScope("lab");setExpanded(false);}}>All lab</button><button aria-pressed={scope==="mine"} onClick={()=>{setScope("mine");setExpanded(false);}}>My reservations {mine.length>0?`(${mine.length})`:""}</button></div><Btn sm v="ghost" aria-expanded={calendar} onClick={()=>setCalendar(v=>!v)}><Ico n="calendar" s={14}/>{calendar?"Hide calendar":"View calendar"}</Btn></div></div>
+    <div className="schedule-content">{!rows.length?<div className="schedule-empty"><Ico n="calendar" s={24}/><span>{scope==="mine"?"You have no upcoming reservations.":"No equipment is reserved yet."} Choose equipment to plan your next session.</span></div>:<ReservationList reservations={expanded?rows:rows.slice(0,4)} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit}/>}{rows.length>4&&<Btn sm v="ghost" onClick={()=>setExpanded(v=>!v)}>{expanded?"Show fewer":`Show all ${rows.length} reservations`}</Btn>}
+      {scope==="lab"&&items.filter(i=>i.status==="On loan").map(i=><div className="reservation-row" key={i.id}><div><strong>{i.name}</strong> <CopyIdBadge id={i.displayId}/><div>On loan to {toArr(i.usedBy).join(", ")} · Until returned</div><small>No scheduled return date. This unit cannot be reserved.</small></div></div>)}
+      {checkouts.length>0&&<CheckoutHistory checkouts={checkouts}/>}
+      {calendar&&<div><div className="calendar-tools"><div className="segmented" aria-label="Calendar view">{["WEEK","MONTH","AGENDA"].map(v=><button key={v} aria-pressed={calendarMode===v} onClick={()=>setCalendarMode(v)}>{v==="WEEK"?"Week":v==="MONTH"?"Month":"Agenda"}</button>)}</div><a href={"https://calendar.google.com/calendar/u/0?cid="+encodeURIComponent(calendarId)} target="_blank" rel="noopener noreferrer">Add lab calendar ↗</a><a href={"https://calendar.google.com/calendar/u/0/r?cid="+encodeURIComponent(calendarId)} target="_blank" rel="noopener noreferrer">Open Google Calendar ↗</a></div><iframe title="Lab Equipment Google Calendar" className="calendar-frame" src={calendarUrl} loading="lazy"/><p className="calendar-help">This calendar is shared with lab members. If Google asks you to sign in or the calendar is blank, open Google Calendar with your lab account. The reservation list above always shows LabTrack bookings, including updates waiting to sync. Create and change bookings here in LabTrack.</p></div>}
+    </div>
+  </section>;
+};
+
 const ReservationModal = ({item,reservation,onClose,onSave}) => {
   const [f,setF]=useState(()=>({startLocal:reservation?labLocal(new Date(reservation.start)):labLocal(new Date(Date.now()+5*60000)),endLocal:reservation?labLocal(new Date(reservation.end)):labLocal(new Date(Date.now()+65*60000)),qty:reservation?.qty||1,notes:reservation?.notes||"",groupEmails:reservation?.groupEmails||"",repeatUntil:"",weekly:false,scope:"one"}));
   const requestId=useRef(crypto.randomUUID()),save=useSave(),s=k=>e=>setF(p=>({...p,[k]:e.target.value}));
@@ -959,7 +1066,7 @@ const ItemReservations = ({item,reservations,items,user,isAdmin,onAction,onEdit,
   const [older,setOlder]=useState([]),[cursor,setCursor]=useState(()=>Date.now()-30*86400000),history=useSave();
   const loadOlder=()=>history.run(async()=>{const from=cursor-365*86400000;const rows=await API.listReservations(user.token,String(item.id),new Date(from).toISOString(),new Date(cursor).toISOString());setOlder(p=>mergeRecords(p,rows));setCursor(from);});
   const records=mergeRecords(older,reservations.filter(r=>String(r.itemId)===String(item.id)));
-  return <section className="item-reservations"><h3>Reservations</h3>{blocked&&<p role="alert" className="save-error">Legacy checkout needs admin reconciliation before new bookings.</p>}{!enabled&&<p className="form-intro">Google Calendar scheduling has not been enabled by the lab administrator.</p>}{!item.consumable&&enabled&&<Btn disabled={blocked||["Broken","Maintenance"].includes(item.status)||item.qty<=0} onClick={()=>onEdit(item,null)}>Reserve this item</Btn>}<ReservationList reservations={records} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit} showHistory/><SaveError error={history.error}/><div className="form-actions"><span className="form-intro">History since {new Date(cursor).toLocaleDateString()}</span><Btn sm v="ghost" disabled={history.saving} onClick={loadOlder}>{history.saving?"Loading…":"Load older history"}</Btn></div></section>;
+  return <section className="item-reservations"><h3>Reservations</h3>{blocked&&<p role="alert" className="save-error">Legacy checkout needs admin reconciliation before new bookings.</p>}{!enabled&&<p className="form-intro">Google Calendar scheduling has not been enabled by the lab administrator.</p>}{!item.consumable&&enabled&&<Btn disabled={blocked||["Broken","Maintenance","On loan"].includes(item.status)||item.qty<=0} onClick={()=>onEdit(item,null)}>Reserve this item</Btn>}<ReservationList reservations={records} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit} showHistory/><SaveError error={history.error}/><div className="form-actions"><span className="form-intro">History since {new Date(cursor).toLocaleDateString()}</span><Btn sm v="ghost" disabled={history.saving} onClick={loadOlder}>{history.saving?"Loading…":"Load older history"}</Btn></div></section>;
 };
 
 
@@ -1160,7 +1267,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
     <Modal onClose={onClose} title="" mw={640}>
       <div style={{display:"flex",gap:20,marginBottom:22,flexWrap:"wrap"}}>
         <div style={{position:"relative",flexShrink:0}}>
-          <img src={item.img||`https://placehold.co/200x148/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:200,height:148,objectFit:"cover",borderRadius:12,border:"1px solid var(--border)",display:"block"}}/>
+          <div style={{width:200,maxWidth:"100%",flexShrink:0}}><div className="equipment-image" style={{borderRadius:12}}><EquipmentImage item={item}/></div><ImageCredit item={item}/></div>
         </div>
         <div style={{flex:1,minWidth:200}}>
           <h3 style={{margin:"0 0 8px",fontSize:19,fontFamily:"'Roboto',sans-serif",fontWeight:800}}>{item.name}</h3>
@@ -1221,18 +1328,7 @@ const ItemDetail = ({item,checkouts,onClose,onReturn,onQuickCheckout,onEdit,cate
 };
 
 // ─── STAT CARD ───────────────────────────────────────────────────────────────
-const Stat=({label,val,icon,ac,sub,warn})=>(
-  <div style={{background:"var(--bg1)",border:`1px solid ${warn?"#ff4d6a30":"var(--border)"}`,borderLeft:`3px solid ${ac}`,borderRadius:14,padding:"17px 20px",flex:1,minWidth:130}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-      <div>
-        <div style={{color:"var(--dim)",fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'IBM Plex Mono',monospace",marginBottom:5}}>{label}</div>
-        <div style={{color:ac,fontFamily:"'Roboto',sans-serif",fontSize:34,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em",textShadow:`0 0 24px ${ac}33`}}>{val}</div>
-        {sub&&<div style={{color:"var(--dim)",fontSize:11,marginTop:3}}>{sub}</div>}
-      </div>
-      <Ico n={icon} s={20} col={ac}/>
-    </div>
-  </div>
-);
+const Stat=({label,val,icon,ac,sub,warn})=>(<div className="lab-stat"><Ico n={icon} s={20} col={warn?"var(--red)":ac}/><div><div className="stat-label">{label}</div><span className="stat-value">{val}</span> {sub&&<span className="stat-sub">{sub}</span>}</div></div>);
 
 // ─── PAGINATION ──────────────────────────────────────────────────────────────
 const Pagination = ({total, page, setPage}) => {
@@ -1716,6 +1812,7 @@ function LabInventory(){
   const [capabilities,setCapabilities]=useState({version:1,scheduling:false});
   const [migration,setMigration]=useState({issues:[],blockedItemIds:[]});
   const [booking,setBooking]=useState(null);
+  const [showEquipmentPicker,setShowEquipmentPicker]=useState(false);
   const [offline,setOffline]=useState(false);
   const [pendingWrites,setPendingWrites]=useState(0);
   const [lastSynced,setLastSynced]=useState(null);
@@ -1725,7 +1822,7 @@ function LabInventory(){
   const items=useMemo(()=>rawItems.map(i=>{
     if(!capabilities.scheduling||i.consumable)return i;
     if(migration.blockedItemIds.includes(String(i.id)))return {...i,_inventoryStatus:i.status,availableQty:0,status:"Unavailable"};
-    if(["Maintenance","Broken"].includes(i.status))return {...i,availableQty:0};
+    if(["Maintenance","Broken","On loan"].includes(i.status))return {...i,availableQty:0};
     const active=reservations.filter(r=>String(r.itemId)===String(i.id)&&r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow);
     const reserved=active.reduce((n,r)=>n+Number(r.qty),0);
     return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:Number(i.qty)<=0?"Unavailable":reserved>=Number(i.qty)?"In Use":reserved>0?"Partially Available":"Available",usedBy:[...new Set(active.map(r=>r.user))]};
@@ -1947,7 +2044,7 @@ function LabInventory(){
       if(e.target.closest?.('[role="dialog"]'))return;
       if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);setLabelItem(null);}
       if(e.key==="n"||e.key==="N") setModal("delivery");
-      if((e.key==="c"||e.key==="C")&&!capabilities.scheduling){setPreItem("");setModal("checkout");}
+      if(e.key==="c"||e.key==="C"){if(capabilities.scheduling)setShowEquipmentPicker(true);else{setPreItem("");setModal("checkout");}}
     };
     document.addEventListener("keydown",h);
     return()=>document.removeEventListener("keydown",h);
@@ -2095,13 +2192,17 @@ function LabInventory(){
     setItems(p=>mergeRecords(p,result.items));setOrders(p=>mergeRecords(p,[result.order]));setDeliv(p=>mergeRecords(p,result.deliveries));addToast("success","Receipt saved; inventory updated");
   };
 
+  const upcomingReservations=useMemo(()=>reservations.filter(r=>r.status==="Booked"&&Date.parse(r.end)>clockNow).sort((a,b)=>a.start.localeCompare(b.start)),[reservations,clockNow]);
+  const reservedItemIds=useMemo(()=>new Set([...upcomingReservations.map(r=>String(r.itemId)),...items.filter(i=>i.status==="On loan").map(i=>String(i.id))]),[upcomingReservations,items]);
+  const reservationFor=item=>{const ids=new Set((item._items||[item]).map(i=>String(i.id)));return upcomingReservations.find(r=>ids.has(String(r.itemId)));};
+
   // filtered & sorted inventory
   const filtered = useMemo(()=>{
     let f = items.filter(i=>{
       const q=search.trim().toLowerCase();
       const s = v => String(v==null?"":v).toLowerCase();
       return matchesInventory(i,q)
-        &&(catF==="All"||i.cat===catF);
+        &&(catF==="All"||(catF==="Reserved"?reservedItemIds.has(String(i.id)):i.cat===catF));
     });
     // Sort
     const srt = v => String(v==null?"":v);
@@ -2111,7 +2212,7 @@ function LabInventory(){
     else if(sortBy==="qty-low") f.sort((a,b)=>a.qty-b.qty);
     else if(sortBy==="qty-high") f.sort((a,b)=>b.qty-a.qty);
     return f;
-  },[items, search, catF, sortBy]);
+  },[items, search, catF, sortBy,reservedItemIds]);
 
   // Group sub-ID items (track-individually, non-consumable) under one display entry
   const displayItems = useMemo(()=>{
@@ -2311,12 +2412,13 @@ function LabInventory(){
       {!fetchingData && (
       <main style={{padding:"24px",maxWidth:1360,margin:"0 auto"}}>
 
+        {tab==="inventory"&&<div className="inventory-intro"><div><h1>Your lab, in view.</h1><p>Find equipment, plan experiments, and keep stock moving.</p></div>{capabilities.scheduling&&<Btn onClick={()=>setShowEquipmentPicker(true)}><Ico n="calendar" s={16}/>Reserve equipment</Btn>}</div>}
         {/* Stats */}
         <div style={{display:"flex",gap:12,marginBottom:overdues.length||lowStock.length?16:24,flexWrap:"wrap"}}>
           <Stat label="Total Items" val={items.length} icon="box" ac="var(--cyan)" sub="in inventory"/>
           <Stat label="Categories" val={[...new Set(items.map(i=>i.cat))].length} icon="layers" ac="var(--purple)" sub="active types"/>
           <Stat label="Orders" val={activeOrders.length} icon="cart" ac="var(--amber)" sub="in pipeline"/>
-          <Stat label={capabilities.scheduling?"In Use":"Checked Out"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow).length:activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
+          <Stat label={capabilities.scheduling?"In Use":"Checked Out"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow).length+items.filter(i=>i.status==="On loan").length:activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
           <Stat label={capabilities.scheduling?"Upcoming":"Overdue"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)>clockNow).length:overdues.length} icon="clock" ac={overdues.length?"var(--red)":"var(--green)"} sub={capabilities.scheduling?"scheduled occurrences":"past return date"} warn={!capabilities.scheduling&&overdues.length>0}/>
         </div>
 
@@ -2346,8 +2448,9 @@ function LabInventory(){
         {/* ════════ INVENTORY TAB ════════ */}
         <div className="sync-status" role="status">{pendingWrites?`Saving ${pendingWrites} change(s)…`:offline?"Connection interrupted. Displayed data may be stale; unconfirmed changes are not saved.":lastSynced?`Synced ${new Date(lastSynced).toLocaleTimeString()}`:"Connecting…"}{offline&&<Btn sm v="ghost" onClick={refreshNow}>Refresh</Btn>}</div>
         {capabilities.version<2&&<p className="save-error">Backend upgrade required for receiving with photos and purchase links. Existing inventory remains readable.</p>}
-        {capabilities.scheduling&&tab==="inventory"&&<section className="reservation-summary"><div className="section-heading"><h3>My reservations</h3><div className="form-actions"><a href={"https://calendar.google.com/calendar/u/0?cid="+encodeURIComponent(capabilities.calendarId)} target="_blank" rel="noopener noreferrer">Add lab calendar</a><a href={"https://calendar.google.com/calendar/u/0/r?cid="+encodeURIComponent(capabilities.calendarId)} target="_blank" rel="noopener noreferrer">Open Google Calendar</a></div></div><ReservationList reservations={reservations.filter(r=>r.email===user?.email||(r.groupEmails||"").split(",").includes(user?.email))} items={items} user={user} isAdmin={effectiveRole==="admin"} onAction={handleReservationAction} onEdit={openBooking}/></section>}
-        {effectiveRole==="admin"&&capabilities.version>=2&&<LegacyReconciliation migration={migration} items={rawItems} checkouts={checkouts} onSave={async payload=>{await saveAction("reconcileLegacy",payload);await refreshNow();}}/>}
+        {capabilities.scheduling&&tab==="inventory"&&<EquipmentSchedule reservations={upcomingReservations} checkouts={checkouts} items={items} user={user} isAdmin={effectiveRole==="admin"} calendarId={capabilities.calendarId} onAction={handleReservationAction} onEdit={openBooking}/>}
+
+        {effectiveRole==="admin"&&capabilities.version>=2&&(migration.blockedItemIds.length>0||activeOut.length>0)&&<LegacyReconciliation migration={migration} items={rawItems} checkouts={checkouts} onSave={async payload=>{await saveAction("reconcileLegacy",payload);await refreshNow();}}/>}
         {tab==="inventory"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
             <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -2357,21 +2460,13 @@ function LabInventory(){
                 {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
               </div>
 
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                {["All",...categories].map(c=>{
-                  const count=c==="All"?items.length:items.filter(i=>i.cat===c).length;
-                  if(count===0&&c!=="All")return null;
-                  const isSel=catF===c;
-                  const ac=getCatAccent(c,categories);
-                  return(
-                    <button key={c} onClick={()=>setCatF(c)} style={{background:isSel?(c==="All"?"var(--bg4)":`${ac}18`):"var(--bg2)",color:isSel?(c==="All"?"var(--text)":ac):"var(--sub)",border:`1px solid ${isSel?(c==="All"?"var(--border-hi)":ac):"var(--border)"}`,borderRadius:20,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif",transition:"all .15s",display:"flex",alignItems:"center",gap:4}}>
-                      {c}{c!=="All"&&<span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,opacity:.7}}>{count}</span>}
-                    </button>
-                  );
+              <div className="category-filters" aria-label="Inventory filters">
+                {["All",...(capabilities.scheduling?["Reserved"]:[]),...categories].map(c=>{
+                  const count=c==="All"?items.length:c==="Reserved"?reservedItemIds.size:items.filter(i=>i.cat===c).length;
+                  if(!count&&c!=="All"&&c!=="Reserved")return null;
+                  return <button key={c} aria-pressed={catF===c} onClick={()=>setCatF(c)}>{c==="Reserved"&&<Ico n="calendar" s={13}/ >}{c==="Reserved"?"Checked out / reserved":c}<span className="filter-count">{count}</span></button>;
                 })}
-                {effectiveRole==="admin"&&<button onClick={()=>setModal("manageCategories")} title="Manage Categories (admin only)" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:20,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
-                  <Ico n="settings" s={13} col="var(--dim)"/>
-                </button>}
+                {effectiveRole==="admin"&&<button onClick={()=>setModal("manageCategories")} aria-label="Manage categories"><Ico n="settings" s={14}/></button>}
               </div>
 
               {/* Sort */}
@@ -2410,77 +2505,8 @@ function LabInventory(){
               </div>
             ):view==="grid"?(
               <ErrorBoundary>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(238px,1fr))",gap:14}}>
-                {paginatedItems.map((item,idx)=>{
-                  const ac=getCatAccent(item.cat,categories);
-                  if(item._isGroup){
-                    const availCount=item._items.filter(i=>availableQuantity(i)>0).length;
-                    const inUseCount=item._items.length-availCount;
-                    return(
-                      <div key={item._baseId} className="card-item" onClick={()=>setGroupDetail(item)} style={{background:"var(--bg1)",border:"2px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`,cursor:"pointer"}}>
-                        <div style={{position:"relative"}}>
-                          <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
-                          <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
-                          <div style={{position:"absolute",top:40,right:10}}><Badge status={item.status}/></div>
-                          <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
-                            <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
-                          </div>
-                        </div>
-                        <div style={{padding:"11px 14px 13px"}}>
-                          <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
-                          <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
-                            <CopyIdBadge id={item.displayId}/>
-                            <span style={{color:"var(--purple)",fontSize:10}}>TRACKED UNITS</span>
-                          </div>
-                          <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}</div>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                              <span style={{color:ac,fontFamily:"'Roboto',sans-serif",fontSize:24,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
-                              <span style={{color:"var(--dim)",fontSize:11}}>units</span>
-                            </div>
-                            <div style={{fontSize:11,textAlign:"right",lineHeight:1.4}}>
-                              <div style={{color:"var(--green)",fontWeight:600}}>{availCount} avail</div>
-                              {inUseCount>0&&<div style={{color:"var(--amber)",fontWeight:600}}>{inUseCount} unavailable</div>}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                  const isLow=item.minQty>0&&item.qty<=item.minQty;
-                  return(
-                    <div key={item.id} className="card-item" onClick={()=>setDetail(item)} style={{background:"var(--bg1)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",animation:`fadeUp .3s ease ${Math.min(idx,.8)*0.04}s both`}}>
-                      <div style={{position:"relative"}}>
-                        <img src={item.img||`https://placehold.co/280x112/141b24/3d5068?text=${encodeURIComponent(item.cat)}`} alt={item.name} style={{width:"100%",height:112,objectFit:"cover",display:"block"}}/>
-                        <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(transparent,var(--bg1))"}}/>
-                        <div style={{position:"absolute",top:40,right:10}}><Badge status={isLow?"Low Stock":item.status}/></div>
-                        <div style={{position:"absolute",top:10,left:10,background:"rgba(7,9,15,.78)",borderRadius:7,padding:"3px 8px"}}>
-                          <span style={{color:ac,fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.08em"}}>{(item.cat||"").toUpperCase()}</span>
-                        </div>
-                      </div>
-                      <div style={{padding:"11px 14px 13px"}}>
-                        <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:2,fontFamily:"'Roboto',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
-                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:4,fontFamily:"'IBM Plex Mono',monospace",display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <CopyIdBadge id={item.displayId}/>
-                          {item.shared&&<span style={{color:"var(--purple)",fontSize:10}}>SHARED</span>}
-                          {item.consumable&&<span style={{color:"var(--amber)",fontSize:10}}>CONSUMABLE</span>}
-                        </div>
-                        <div style={{color:"var(--dim)",fontSize:11,marginBottom:10,fontFamily:"'IBM Plex Mono',monospace"}}>{item.loc||"—"}{item.serial?` · S/N: ${item.serial}`:""}</div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                            <span style={{color:isLow?"var(--red)":ac,fontFamily:"'Roboto',sans-serif",fontSize:24,fontWeight:900,lineHeight:1,letterSpacing:"-0.02em"}}>{item.qty}</span>
-                            <span style={{color:"var(--dim)",fontSize:11}}>{item.unit}</span>
-                          </div>
-                          {item.consumable?(
-                            <button onClick={e=>{e.stopPropagation();if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}const n=parseInt(window.prompt(`How many ${item.unit} used? (max ${item.qty})`,"1"));if(!isNaN(n)&&n>0)handleUseConsumable(item.id,Math.min(n,item.qty));}} style={{background:editLocked?"var(--bg3)":"var(--amber-d)",color:editLocked?"var(--dim)":"var(--amber)",border:"1px solid #f5a62330",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:editLocked?"not-allowed":"pointer"}}>Use</button>
-                          ):toArr(item.usedBy).length>0?(
-                            <div style={{display:"flex"}}>{toArr(item.usedBy).slice(0,3).map((u,i)=><div key={u} style={{marginLeft:i>0?-8:0,zIndex:3-i}}><MemberAvatar name={u} sz={24}/></div>)}</div>
-                          ):null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="equipment-grid">
+                {paginatedItems.map(item=><EquipmentCard key={item._baseId||item.id} item={item} reservation={reservationFor(item)} clockNow={clockNow} scheduling={capabilities.scheduling} blocked={migration.blockedItemIds} onView={()=>item._isGroup?setGroupDetail(item):setDetail(item)} onReserve={()=>item._isGroup?setGroupDetail(item):openBooking(item,null)} onUse={()=>{if(editLocked){addToast("error","Unlock editing before using stock");return;}const n=Number(window.prompt(`How many ${item.unit} used? (max ${item.qty})`,"1"));if(Number.isFinite(n)&&n>0)handleUseConsumable(item.id,Math.min(n,item.qty));}}/>)}
               </div>
               </ErrorBoundary>
             ):(
@@ -2866,6 +2892,7 @@ function LabInventory(){
       )}
 
       {/* MODALS */}
+      {showEquipmentPicker&&!booking&&<EquipmentPicker items={items} blocked={migration.blockedItemIds} onClose={()=>setShowEquipmentPicker(false)} onSelect={item=>{setShowEquipmentPicker(false);openBooking(item,null);}}/>}
       {booking&&<ReservationModal item={booking.item} reservation={booking.reservation} onClose={()=>setBooking(null)} onSave={handleReservationAction}/>}
       {modal==="delivery" && <DeliveryModal onClose={()=>setModal(null)} onAdd={handleDelivery} userName={user?.name||""}/>}
       {modal==="checkout" && <CheckoutModal items={items} onClose={()=>setModal(null)} onAdd={handleCheckout} preItem={preItem} userName={user?.name||""} userEmail={user?.email||""} categories={categories}/>}

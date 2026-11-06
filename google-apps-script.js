@@ -568,13 +568,19 @@ function doPost(e) {
     validateMedia_(it);
     var previous = sheetToJson(getSheet("Items")).find(x => String(x.id) === String(it.id));
     if (!previous) throw new Error("Item not found");
+    delete it.usedBy;
+    if((it.status||previous.status)==="On loan") {
+      const borrower=String(it.loanBorrower===undefined?(previous.usedBy||[]).join(", "):it.loanBorrower).trim();
+      if(!borrower) throw new Error("Record who has this equipment on loan");
+      it.usedBy=[borrower];
+    } else if(previous.status==="On loan"&&it.status) it.usedBy=[];
     validateItem_(Object.assign({}, previous, it));
     protectReservations_(previous, it);
     const sheet = getSheet("Items");
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idCol = headers.indexOf("id");
-    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial", "displayId", "shared", "consumable", "link"];
+    const fields = ["name", "cat", "qty", "unit", "loc", "minQty", "img", "desc", "status", "serial", "displayId", "shared", "consumable", "link", "usedBy"];
 
     for (let i = 1; i < data.length; i++) {
       if (idsMatch(data[i][idCol], it.id)) {
@@ -1147,7 +1153,7 @@ function assertCapacity_(item,candidates,others) {
   for(const p of points) { used+=p[1]; if(used>Number(item.qty)+1e-9) throw new Error("Booking conflict for "+(item.displayId||item.name)+" at "+localOf_(new Date(p[0]).toISOString())+". Available quantity would be exceeded."); }
 }
 function assertBookable_(item) {
-  if(!item || item.consumable || Number(item.qty)<=0 || ["Maintenance","Broken"].includes(item.status)) throw new Error("This item is not available for reservations");
+  if(!item || item.consumable || Number(item.qty)<=0 || ["Maintenance","Broken","On loan"].includes(item.status)) throw new Error("This item is not available for reservations");
   const report=migrationReport_();
   if(report.blockedItemIds.includes(String(item.id))) throw new Error("An admin must reconcile this item's legacy checkout before booking.");
 }
@@ -1155,10 +1161,11 @@ function protectReservations_(old,patch) {
   const bookings=liveReservations_().filter(r=>String(r.itemId)===String(old.id)&&r.end>new Date().toISOString());
   if(!bookings.length) return;
   const next=Object.assign({},old,patch);
-  if(next.consumable || ["Maintenance","Broken"].includes(next.status) || next.unit!==old.unit || next.displayId!==old.displayId) throw new Error("Resolve upcoming reservations before changing tracking, unit, label, or maintenance status.");
+  if(next.consumable || ["Maintenance","Broken","On loan"].includes(next.status) || next.unit!==old.unit || next.displayId!==old.displayId) throw new Error("Resolve upcoming reservations before changing tracking, unit, label, or maintenance status.");
   assertCapacity_(next,[],bookings);
 }
 function assertNoReservations_(id) {
+  if((findId_("Items",id)||{}).status==="On loan") throw new Error("Record the return of this loan before deleting the item.");
   if(liveReservations_().some(r=>String(r.itemId)===String(id)&&r.end>new Date().toISOString())) throw new Error("Cancel future reservations before deleting this item.");
   if(rows_("Receipts").some(r=>JSON.parse(r.itemIds||"[]").includes(String(id)))) throw new Error("This item has receipt history; retain it with quantity zero or a maintenance status.");
 }
@@ -1260,8 +1267,54 @@ function migrationReport_() {
     // An active legacy checkout remains blocked until explicitly reconciled, even with a unique name.
     if(c.status==="Active") matches.forEach(i=>blocked.add(String(i.id)));
   });
-  items.filter(i=>i.status==="In Use"||(i.usedBy||[]).length).forEach(i=>{blocked.add(String(i.id));issues.push({itemId:i.id,item:i.name,reason:"Legacy availability requires reconciliation"});});
+  items.filter(i=>i.status!=="On loan"&&(i.status==="In Use"||(i.usedBy||[]).length)).forEach(i=>{blocked.add(String(i.id));issues.push({itemId:i.id,item:i.name,reason:"Legacy availability requires reconciliation"});});
   return {issues,blockedItemIds:Array.from(blocked)};
+}
+
+// Editor-only, explicit administrator migrations. Original checkout dates and
+// identity are retained; no guessed email aliases or historical unit matching.
+function confirmedMigration_(options,work) {
+  transactionalData_={}; apiModifiedSheets_={};
+  const email=Session.getActiveUser().getEmail();
+  if(!email||!isAdmin(email)) throw new Error("Run this migration as a listed administrator in the Apps Script editor");
+  if(!options||options.spreadsheetId!==SpreadsheetApp.getActiveSpreadsheet().getId()) throw new Error("Confirm the exact spreadsheet ID");
+  const lock=LockService.getScriptLock();lock.waitLock(30000);
+  try {requireV2_();return work({email,name:email});} finally {lock.releaseLock();}
+}
+function convertConfirmedCheckoutToReservation(options) {
+  return confirmedMigration_(options,user=>{
+    if(!capabilities_().scheduling) throw new Error("Enable the shared calendar first");
+    const requestId="checkout-transfer-"+requireId_(options.checkoutId),action="TransferCheckout";
+    const replay=operation_(requestId,action,user);
+    if(replay) return {ok:true,reservation:findId_("Reservations",replay.id)};
+    const co=findId_("Checkouts",options.checkoutId),item=findId_("Items",options.itemId);
+    if(!co||co.status!=="Active"||!item) throw new Error("An active checkout and exact inventory item are required");
+    if(co.itemId?String(co.itemId)!==String(item.id):String(co.item).trim()!==String(item.name).trim()) throw new Error("Checkout does not match the confirmed item");
+    if(!co.itemId&&rows_("Items").filter(i=>String(i.name).trim()===String(co.item).trim()).length!==1) throw new Error("Duplicate names require a separately verified physical-unit link");
+    if(item.consumable||Number(item.qty)<=0||["Maintenance","Broken","On loan"].includes(item.status)) throw new Error("Item cannot be reserved");
+    if(rows_("Checkouts").some(c=>c.id!==co.id&&c.status==="Active"&&(c.itemId===item.id||String(c.item).trim()===String(item.name).trim()))) throw new Error("Other active checkouts must be reconciled first");
+    if(!co.checkedOutByEmail||!co.checkedOutByEmail.endsWith("@"+ALLOWED_DOMAIN)||!isMember(co.checkedOutByEmail)) throw new Error("Checkout owner must have an exact authorized email; do not infer aliases");
+    const parse=(value,end)=>{const v=String(value||"").trim();if(/^\d{4}-\d{2}-\d{2}$/.test(v)){if(!end)throw new Error("A start time is required");return localInstant_(shiftLocal_(v+"T00:00",1));}const m=v.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})$/);if(!m)throw new Error("Checkout dates need explicit correction");return localInstant_(m[1]+"T"+m[2].padStart(2,"0")+":"+m[3]);};
+    const start=parse(co.out,false),end=parse(co.ret,true),now=new Date().toISOString();
+    if(end<=start||end<=now) throw new Error("Confirm a valid future return date before transferring an active checkout");
+    // Legacy checkout had no quantity field and made the entire stock unavailable.
+    // Preserve that capacity until its owner/admin explicitly adjusts the booking.
+    const id=newId_(),reservation={id,requestId,seriesId:"",itemId:String(item.id),qty:Number(item.qty),user:co.user,email:co.checkedOutByEmail,groupEmails:String(co.groupEmails||""),start,end,originalEnd:end,status:"Booked",notes:"Transferred from checkout "+co.id+". Original checkout: "+co.out+"; return: "+co.ret+". A date-only return includes the entire return day. Original checkout reserved all recorded units; quantity preserved.",eventId:"lt"+id,syncState:"Pending",syncError:"",updatedAt:now};
+    assertCapacity_(item,[reservation],liveReservations_());
+    atomicWrite_([{sheet:"Reservations",object:reservation},{sheet:"Checkouts",id:co.id,object:{itemId:String(item.id),status:"Transferred"}},{sheet:"Items",id:item.id,object:{status:"Available",usedBy:[]}},operationChange_(requestId,action,user,{id}),auditChange_(user,action,JSON.stringify({checkoutId:co.id,itemId:item.id,reservationId:id,start,end,qty:reservation.qty}))]);
+    syncCalendarRows_([reservation]);
+    return {ok:true,reservation:findId_("Reservations",id)};
+  });
+}
+function recordConfirmedIndefiniteLoan(options) {
+  return confirmedMigration_(options,user=>{
+    const item=findId_("Items",options.itemId),borrower=String(options.borrower||"").trim(),note=String(options.note||"").trim();
+    if(!item||item.consumable||!borrower||!note) throw new Error("Exact equipment, borrower and confirmation note required");
+    if(rows_("Checkouts").some(c=>c.status==="Active"&&(c.itemId===item.id||String(c.item).trim()===String(item.name).trim()))) throw new Error("Transfer or resolve the active checkout first");
+    protectReservations_(item,{status:"On loan"});
+    atomicWrite_([{sheet:"Items",id:item.id,object:{status:"On loan",usedBy:[borrower]}},auditChange_(user,"ConfirmIndefiniteLoan",JSON.stringify({itemId:item.id,borrower,note}))]);
+    return {ok:true,item:findId_("Items",item.id)};
+  });
 }
 function handleV2_(action,body,user,admin) {
   const actions=["addIndividualItems","splitItem","receiveOrder","useConsumable","createReservation","updateReservation","cancelReservation","finishReservation","reconcileLegacy"];
