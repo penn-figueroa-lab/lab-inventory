@@ -129,6 +129,45 @@ html.light{--bg0:#f4f7fa;--bg1:#fff;--bg2:#f0f4f8;--bg3:#e4ebf2;--border:#dce4ec
 @media(max-width:640px){.equipment-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}.equipment-image{height:125px;}.equipment-body{padding:12px;gap:8px;}.equipment-title{font-size:13px;}.equipment-availability{align-items:flex-start;flex-direction:column;}.equipment-footer button{padding:7px 9px!important;}.category-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:10px;}.category-filters button{flex-shrink:0;}.schedule-head{padding:16px;}.schedule-content{padding:0 16px 16px;}.calendar-frame{height:540px;}.inventory-intro h1{font-size:23px;}.lab-stat{padding:10px;min-width:95px;gap:8px;}.lab-stat svg{display:none;}.lab-stat .stat-value{font-size:21px;}}
 @media(max-width:360px){.equipment-grid{grid-template-columns:1fr;}}
 
+/* Compact navigation and inventory controls */
+:root{--on-accent:#071b19;}html.light{--on-accent:#fff;}
+.btn-primary svg{color:inherit!important;}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan)!important;outline-offset:2px;}
+.header-tools{position:relative;font-size:12px;}
+.header-tools>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:9px 12px;border:1px solid var(--border);border-radius:8px;color:var(--sub);}
+.header-tools>summary::-webkit-details-marker{display:none;}
+.header-tools-panel{position:absolute;right:0;top:calc(100% + 8px);width:260px;max-width:calc(100vw - 24px);padding:12px;display:flex;flex-wrap:wrap;gap:8px;border:1px solid var(--border);border-radius:12px;background:var(--bg1);box-shadow:0 12px 36px #0003;}
+.header-tools-panel>button{width:100%;min-height:36px;gap:10px!important;text-align:left;font:500 12px 'Outfit',sans-serif;}
+.header-tools-panel>div:last-child{width:100%;margin-top:4px;}
+summary:focus-visible{outline:3px solid var(--cyan);outline-offset:3px;border-radius:4px;}
+.lab-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--border);border-radius:12px;background:var(--bg1);margin-bottom:12px;}
+.lab-stats .lab-stat{background:none;border:0;border-radius:0;min-width:0;padding:12px 18px;gap:10px;}
+.lab-stats .lab-stat+.lab-stat{border-left:1px solid var(--border);}
+.lab-stats .stat-value{font-size:22px;}
+.inventory-toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.inventory-search{position:relative;flex:1;min-width:260px;}
+.category-filters{order:2;border-bottom:1px solid var(--border);padding:4px 0 12px;}
+.category-filters button{background:transparent;}
+.schedule-panel{border-radius:12px;margin:8px 0 20px;}
+.schedule-head{padding:14px 16px;}
+.schedule-head h3{font-size:15px;}
+.schedule-content{padding:0 16px 14px;}
+.schedule-empty{padding:3px 0 5px;font-size:12px;line-height:1.5;}
+.schedule-empty svg{display:none;}
+.reservation-notes{font-size:12px;color:var(--sub);margin:4px 0;}
+.reservation-notes summary{cursor:pointer;width:fit-content;}
+.reservation-notes p{white-space:pre-wrap;overflow-wrap:anywhere;padding:6px 0;max-width:65ch;}
+.equipment-meta{overflow-wrap:anywhere;}
+html.light{--amber:#8b5909;--red:#b72e43;--purple:#7550a0;--orange:#9b4e20;}
+@media(max-width:640px){
+  header{gap:8px!important;}header>div:first-child{gap:8px!important;}.header-tools>summary{padding:8px;font-size:11px;}
+  .inventory-intro{margin:4px 0 16px;gap:12px;}.inventory-intro p{font-size:12px;}.inventory-intro h1{font-size:22px;}
+  .lab-stats .lab-stat{padding:10px 6px;}.lab-stats .stat-value{font-size:19px;}.lab-stats .stat-label{font-size:10px;}.lab-stats .stat-sub{display:none;}
+  .inventory-search{flex-basis:100%;min-width:0;}.schedule-head{gap:10px;}.schedule-head>div:last-child{gap:6px!important;}
+  .segmented button{padding:7px 8px;}.sync-status{padding:6px 0;}.equipment-footer{flex-wrap:wrap;}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important;}}
+
 </style>
 </head>
 <body>
@@ -307,13 +346,13 @@ const Fld = ({label,hint,children}) => { const id=React.useId(); return (
 );};
 const Btn = ({children,onClick,v="primary",style,disabled,sm,...rest}) => {
   const VS={
-    primary:{background:"var(--cyan)",color:"#000",border:"none"},
+    primary:{background:"var(--cyan)",color:"var(--on-accent)",border:"none"},
     ghost:{background:"transparent",color:"var(--sub)",border:"1px solid var(--border)"},
     danger:{background:"var(--red-d)",color:"var(--red)",border:"1px solid #ff4d6a30"},
     success:{background:"var(--green-d)",color:"var(--green)",border:"1px solid #00e67630"},
     amber:{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62330"},
   };
-  return <button type="button" {...rest} disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
+  return <button type="button" className={v==="primary"?"btn-primary":undefined} {...rest} disabled={disabled} onClick={onClick} style={{...VS[v],borderRadius:8,padding:sm?"5px 11px":"9px 18px",fontSize:sm?11:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Outfit',sans-serif",transition:"all .15s",whiteSpace:"nowrap",...style}}>{children}</button>;
 };
 
 // ─── MODAL SHELL ─────────────────────────────────────────────────────────────
@@ -1022,15 +1061,15 @@ const CheckoutHistory = ({checkouts}) => {
   const [query,setQuery]=useState(""),[limit,setLimit]=useState(20);
   const active=checkouts.filter(c=>c.status==="Active");
   const rows=checkouts.filter(c=>[c.item,c.user,c.out,c.ret,c.status].some(v=>String(v||"").toLowerCase().includes(query.trim().toLowerCase())));
-  return <div>{active.length>0&&<div className="equipment-booking" style={{marginTop:14}}>Checkouts awaiting transfer: {active.map(c=>`${c.item} · ${c.user}`).join("; ")}. An admin must verify their return before releasing the equipment.</div>}<details style={{marginTop:14,fontSize:13,color:"var(--sub)"}}><summary style={{cursor:"pointer"}}>Checkout history · {checkouts.length} records</summary><p className="form-intro">Original checkout records are retained below. Records without an item ID are shown by their recorded name; they have not been assigned to a physical unit.</p><Fld label="Search earlier checkouts"><Inp value={query} onChange={e=>{setQuery(e.target.value);setLimit(20);}} placeholder="Item, person, date or status…"/></Fld>{rows.slice(0,limit).map(c=><div className="reservation-row" key={c.id}><div><strong>{c.item}</strong><div>{c.user}{c.qty?` · ${c.qty} units`:""}</div><div>Checked out: {c.out||"Not recorded"}{c.ret?` · Expected return: ${c.ret}`:""}</div><small>{c.status}{!c.itemId?" · Physical unit not linked":""}</small></div></div>)}{!rows.length&&<p className="form-intro">No matching checkout records.</p>}{rows.length>limit&&<Btn sm v="ghost" onClick={()=>setLimit(n=>n+20)}>Show more history</Btn>}</details></div>;
+  return <div>{active.length>0&&<div className="equipment-booking" style={{marginTop:14}}>Checkouts awaiting transfer: {active.map(c=>`${c.item} · ${c.user}`).join("; ")}. An admin must verify their return before releasing the equipment.</div>}<details style={{marginTop:14,fontSize:13,color:"var(--sub)"}}><summary style={{cursor:"pointer"}}>Checkout history · {checkouts.length} records</summary><p className="form-intro">Original checkout records are retained below. Records without an item ID are shown by their recorded name; they have not been assigned to a physical unit.</p><Fld label="Search earlier checkouts"><Inp value={query} onChange={e=>{setQuery(e.target.value);setLimit(20);}} placeholder="Item, person, date or status…"/></Fld>{rows.slice(0,limit).map(c=><div className="reservation-row" key={c.id}><div><strong>{c.item}</strong><div>{c.user}{c.qty?` · ${c.qty} units`:""}</div><div>Checked out: {c.out||"Not recorded"}{c.ret?` · ${c.status==="Returned"?"Returned":"Expected return"}: ${c.ret}`:""}</div><small>{c.status}{!c.itemId?" · Physical unit not linked":""}</small></div></div>)}{!rows.length&&<p className="form-intro">No matching checkout records.</p>}{rows.length>limit&&<Btn sm v="ghost" onClick={()=>setLimit(n=>n+20)}>Show more history</Btn>}</details></div>;
 };
 const EquipmentSchedule = ({reservations,checkouts,items,user,isAdmin,calendarId,onAction,onEdit}) => {
-  const [scope,setScope]=useState("lab"),[calendar,setCalendar]=useState(false),[expanded,setExpanded]=useState(false),[calendarMode,setCalendarMode]=useState(()=>window.matchMedia("(max-width:640px)").matches?"AGENDA":"WEEK");
+  const [scope,setScope]=useState("mine"),[calendar,setCalendar]=useState(false),[expanded,setExpanded]=useState(false),[calendarMode,setCalendarMode]=useState(()=>window.matchMedia("(max-width:640px)").matches?"AGENDA":"WEEK");
   const mine=reservations.filter(r=>r.email===user?.email||(r.groupEmails||"").split(",").includes(user?.email));
   const rows=scope==="mine"?mine:reservations,active=reservations.filter(r=>Date.parse(r.start)<=Date.now());
   const calendarUrl="https://calendar.google.com/calendar/embed?"+new URLSearchParams({src:calendarId,ctz:"America/New_York",mode:calendarMode,showTitle:"0",showPrint:"0",showCalendars:"0",showTz:"1"});
-  return <section className="schedule-panel" aria-label="Equipment schedule"><div className="schedule-head"><div><h3>Equipment schedule</h3><p>{active.length} in use now{items.some(i=>i.status==="On loan")?` · ${items.filter(i=>i.status==="On loan").length} on loan`:""} · {reservations.length-active.length} upcoming · Eastern time</p></div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><div className="segmented" aria-label="Reservation scope"><button aria-pressed={scope==="lab"} onClick={()=>{setScope("lab");setExpanded(false);}}>All lab</button><button aria-pressed={scope==="mine"} onClick={()=>{setScope("mine");setExpanded(false);}}>My reservations {mine.length>0?`(${mine.length})`:""}</button></div><Btn sm v="ghost" aria-expanded={calendar} onClick={()=>setCalendar(v=>!v)}><Ico n="calendar" s={14}/>{calendar?"Hide calendar":"View calendar"}</Btn></div></div>
-    <div className="schedule-content">{!rows.length?<div className="schedule-empty"><Ico n="calendar" s={24}/><span>{scope==="mine"?"You have no upcoming reservations.":"No equipment is reserved yet."} Choose equipment to plan your next session.</span></div>:<ReservationList reservations={expanded?rows:rows.slice(0,4)} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit}/>}{rows.length>4&&<Btn sm v="ghost" onClick={()=>setExpanded(v=>!v)}>{expanded?"Show fewer":`Show all ${rows.length} reservations`}</Btn>}
+  return <section className="schedule-panel" aria-label="Equipment schedule"><div className="schedule-head"><div><h3>Equipment schedule</h3><p>{active.length} in use now{items.some(i=>i.status==="On loan")?` · ${items.filter(i=>i.status==="On loan").length} on loan`:""} · {reservations.length-active.length} upcoming · Eastern time</p></div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><div className="segmented" aria-label="Reservation scope"><button aria-pressed={scope==="mine"} onClick={()=>{setScope("mine");setExpanded(false);}}>My reservations {mine.length>0?`(${mine.length})`:""}</button><button aria-pressed={scope==="lab"} onClick={()=>{setScope("lab");setExpanded(false);}}>All lab</button></div><Btn sm v="ghost" aria-expanded={calendar} onClick={()=>setCalendar(v=>!v)}><Ico n="calendar" s={14}/>{calendar?"Hide calendar":"View calendar"}</Btn></div></div>
+    <div className="schedule-content">{!rows.length?<div className="schedule-empty"><Ico n="calendar" s={24}/><span>{scope==="mine"?"You have no upcoming reservations.":"No equipment is reserved yet."} Select Reserve equipment to book a session.</span></div>:<ReservationList reservations={expanded?rows:rows.slice(0,4)} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit}/>}{rows.length>4&&<Btn sm v="ghost" onClick={()=>setExpanded(v=>!v)}>{expanded?"Show fewer":`Show all ${rows.length} reservations`}</Btn>}
       {scope==="lab"&&items.filter(i=>i.status==="On loan").map(i=><div className="reservation-row" key={i.id}><div><strong>{i.name}</strong> <CopyIdBadge id={i.displayId}/><div>On loan to {toArr(i.usedBy).join(", ")} · Until returned</div><small>No scheduled return date. This unit cannot be reserved.</small></div></div>)}
       {checkouts.length>0&&<CheckoutHistory checkouts={checkouts}/>}
       {calendar&&<div><div className="calendar-tools"><div className="segmented" aria-label="Calendar view">{["WEEK","MONTH","AGENDA"].map(v=><button key={v} aria-pressed={calendarMode===v} onClick={()=>setCalendarMode(v)}>{v==="WEEK"?"Week":v==="MONTH"?"Month":"Agenda"}</button>)}</div><a href={"https://calendar.google.com/calendar/u/0?cid="+encodeURIComponent(calendarId)} target="_blank" rel="noopener noreferrer">Add lab calendar ↗</a><a href={"https://calendar.google.com/calendar/u/0/r?cid="+encodeURIComponent(calendarId)} target="_blank" rel="noopener noreferrer">Open Google Calendar ↗</a></div><iframe title="Lab Equipment Google Calendar" className="calendar-frame" src={calendarUrl} loading="lazy"/><p className="calendar-help">This calendar is shared with lab members. If Google asks you to sign in or the calendar is blank, open Google Calendar with your lab account. The reservation list above always shows LabTrack bookings, including updates waiting to sync. Create and change bookings here in LabTrack.</p></div>}
@@ -1057,7 +1096,7 @@ const ReservationList = ({reservations,items,user,isAdmin,onAction,onEdit,showHi
   const visible=reservations.filter(r=>showHistory||(r.status==="Booked"&&Date.parse(r.end)>Date.now())).sort((a,b)=>a.start.localeCompare(b.start));
   return <div><SaveError error={save.error}/>{!visible.length&&<p className="form-intro">No reservations to show.</p>}{visible.map(r=>{
     const item=items.find(i=>String(i.id)===String(r.itemId)),future=Date.parse(r.start)>Date.now(),active=!future&&Date.parse(r.end)>Date.now()&&r.status==="Booked",owner=isAdmin||r.email===user?.email,teammate=(r.groupEmails||"").split(",").includes(user?.email),ended=Date.parse(r.end)<=Date.now();
-    return <div className="reservation-row" key={r.id}><div><strong>{item?.name||"Archived equipment"}</strong> <CopyIdBadge id={item?.displayId}/><div>{r.user} · {r.qty} {item?.unit||"units"}{r.seriesId?" · Weekly":""}</div><div>{bookingTime(r.start)} → {bookingTime(r.end)}</div>{r.notes&&<div>{r.notes}</div>}<small>{r.status==="Booked"?(ended?"Completed":active?"In use":"Upcoming"):r.status}{r.syncState!=="Synced"?" · Calendar sync "+(r.syncState==="Error"?"delayed — retry scheduled":"pending"):" · Calendar synced"}</small></div>
+    return <div className="reservation-row" key={r.id}><div><strong>{item?.name||"Archived equipment"}</strong> <CopyIdBadge id={item?.displayId}/><div>{r.user} · {r.qty} {item?.unit||"units"}{r.seriesId?" · Weekly":""}</div><div>{bookingTime(r.start)} → {bookingTime(r.end)}</div>{r.notes&&<details className="reservation-notes"><summary>Booking notes</summary><p>{r.notes}</p></details>}<small>{r.status==="Booked"?(ended?"Completed":active?"In use":"Upcoming"):r.status}{r.syncState!=="Synced"?" · Calendar sync "+(r.syncState==="Error"?"delayed — retry scheduled":"pending"):" · Calendar synced"}</small></div>
       <div className="form-actions">{r.status==="Booked"&&!ended&&owner&&item&&<Btn sm v="ghost" disabled={save.saving} onClick={()=>onEdit(item,r)}>Edit / extend</Btn>}{active&&(owner||teammate)&&<Btn sm disabled={save.saving} onClick={()=>action("finishReservation",r)}>Finish early</Btn>}{r.status==="Booked"&&!ended&&owner&&<Btn sm v="ghost" disabled={save.saving} onClick={()=>{setScope("one");setCancel(r);}}>Cancel booking</Btn>}</div>
     </div>;
   })}{cancel&&<Modal title="Cancel reservation" onClose={()=>setCancel(null)} saving={save.saving} mw={420}><p className="form-intro">Release this equipment booking?</p>{cancel.seriesId&&Date.parse(cancel.start)>Date.now()&&<Sel value={scope} onChange={e=>setScope(e.target.value)}><option value="one">This occurrence only</option><option value="future">This and all following occurrences</option></Sel>}<SaveError error={save.error}/><div className="form-actions"><Btn v="ghost" onClick={()=>setCancel(null)} disabled={save.saving}>Keep booking</Btn><Btn disabled={save.saving} onClick={()=>action("cancelReservation",cancel,{scope})}>Confirm cancellation</Btn></div></Modal>}</div>;
@@ -2282,15 +2321,15 @@ function LabInventory(){
       {/* HEADER */}
       <header style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,position:"sticky",top:0,zIndex:200}}>
         <div style={{display:"flex",alignItems:"center",gap:13}}>
-          <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#00d4c8,#004d4a)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 18px rgba(0,212,200,.3)",flexShrink:0}}>
+          <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#00d4c8,#004d4a)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"none",flexShrink:0}}>
             <Ico n="layers" s={18} col="var(--bg0)"/>
           </div>
           <div>
             <div style={{fontFamily:"'Roboto',sans-serif",fontWeight:900,fontSize:16,letterSpacing:"-0.02em"}}>LabTrack</div>
-            <div style={{color:"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>robotics · inventory · v4.0</div>
+            <div style={{color:"var(--dim)",fontSize:10,fontFamily:"'IBM Plex Mono',monospace"}}>Figueroa Lab</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <details className="header-tools" onKeyDown={e=>{if(e.key==="Escape"){e.currentTarget.open=false;e.currentTarget.querySelector("summary").focus();}}}><summary><Ico n="settings" s={15}/>Tools &amp; account</summary><div className="header-tools-panel">
           {overdues.length>0&&(
             <div className="overdue-pulse" style={{display:"flex",alignItems:"center",gap:6,background:"var(--red-d)",border:"1px solid #ff4d6a44",borderRadius:20,padding:"5px 12px",fontSize:12,color:"var(--red)"}}>
               <Ico n="clock" s={13} col="var(--red)"/>{overdues.length} overdue
@@ -2304,13 +2343,13 @@ function LabInventory(){
           {/* Help */}
           <button onClick={()=>setModal("help")} title="Help & Guide" className="ibtn"
             style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:"var(--sub)"}}>
-            <Ico n="help" s={14}/>
+            <Ico n="help" s={14}/>Help &amp; guide
           </button>
           {/* Theme toggle */}
           <button onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Switch to Light Mode":"Switch to Dark Mode"}
             style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:"var(--sub)",transition:"all .15s"}}
             className="ibtn">
-            <Ico n={darkMode?"sun":"moon"} s={14}/>
+            <Ico n={darkMode?"sun":"moon"} s={14}/>{darkMode?"Light appearance":"Dark appearance"}
           </button>
           {/* Edit lock */}
           <button onClick={()=>{
@@ -2321,14 +2360,14 @@ function LabInventory(){
           }} title={editLocked?"Unlock editing":"Lock editing to prevent accidental changes"}
             style={{background:editLocked?"var(--red-d)":"var(--bg2)",border:`1px solid ${editLocked?"#ff4d6a50":"var(--border)"}`,borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:editLocked?"var(--red)":"var(--sub)",transition:"all .15s"}}
             className="ibtn">
-            <Ico n={editLocked?"lock":"unlock"} s={14}/>
+            <Ico n={editLocked?"lock":"unlock"} s={14}/>{editLocked?"Unlock editing":"Lock editing"}
           </button>
           {/* Admin: preview as user */}
           {userRole==="admin"&&(
             <button onClick={()=>setPreviewMode(m=>!m)} title={previewMode?"Exit preview mode (admin)":"Preview as regular user"}
               style={{background:previewMode?"var(--blue-d)":"var(--bg2)",border:`1px solid ${previewMode?"var(--blue)":"var(--border)"}`,borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:previewMode?"var(--blue)":"var(--sub)",transition:"all .15s"}}
               className="ibtn">
-              <Ico n="eye" s={14}/>
+              <Ico n="eye" s={14}/>{previewMode?"Exit member preview":"Preview as member"}
             </button>
           )}
           {/* Admin: Send Digest Now */}
@@ -2357,7 +2396,7 @@ function LabInventory(){
             {effectiveRole==="admin"&&<span style={{background:"var(--amber-d)",color:"var(--amber)",border:"1px solid #f5a62340",borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:"0.05em"}}>ADMIN</span>}
             <button onClick={handleSignOut} title="Sign out" style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center"}}><Ico n="logout" s={14}/></button>
           </div>
-        </div>
+        </div></details>
       </header>
 
       {/* NAV */}
@@ -2392,12 +2431,12 @@ function LabInventory(){
       )}
       {/* Edit lock banner */}
       {editLocked&&(
-        <div style={{background:"var(--red-d)",borderBottom:"1px solid #ff4d6a30",padding:"7px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"7px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Ico n="lock" s={13} col="var(--red)"/>
-            <span style={{color:"var(--red)",fontSize:12,fontWeight:600}}>Editing locked — inventory is in read-only mode</span>
+            <Ico n="lock" s={13} col="var(--sub)"/>
+            <span style={{color:"var(--sub)",fontSize:12,fontWeight:500}}>Browsing mode · inventory edits are locked</span>
           </div>
-          <button onClick={()=>{if(userRole!=="admin")postAction("logEditUnlock",{user:user?.name||"",email:user?.email||""});setEditLocked(false);}} style={{background:"none",border:"1px solid #ff4d6a40",color:"var(--red)",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>Unlock</button>
+          <button onClick={()=>{if(userRole!=="admin")postAction("logEditUnlock",{user:user?.name||"",email:user?.email||""});setEditLocked(false);}} style={{background:"none",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>Unlock</button>
         </div>
       )}
 
@@ -2412,9 +2451,9 @@ function LabInventory(){
       {!fetchingData && (
       <main style={{padding:"24px",maxWidth:1360,margin:"0 auto"}}>
 
-        {tab==="inventory"&&<div className="inventory-intro"><div><h1>Your lab, in view.</h1><p>Find equipment, plan experiments, and keep stock moving.</p></div>{capabilities.scheduling&&<Btn onClick={()=>setShowEquipmentPicker(true)}><Ico n="calendar" s={16}/>Reserve equipment</Btn>}</div>}
+        {tab==="inventory"&&<div className="inventory-intro"><div><h1>Lab inventory</h1><p>Find equipment and reserve time for your next experiment.</p></div>{capabilities.scheduling&&<Btn onClick={()=>setShowEquipmentPicker(true)}><Ico n="calendar" s={16}/>Reserve equipment</Btn>}</div>}
         {/* Stats */}
-        <div style={{display:"flex",gap:12,marginBottom:overdues.length||lowStock.length?16:24,flexWrap:"wrap"}}>
+        <div className="lab-stats" aria-label="Lab overview">
           <Stat label="Total Items" val={items.length} icon="box" ac="var(--cyan)" sub="in inventory"/>
           <Stat label="Categories" val={[...new Set(items.map(i=>i.cat))].length} icon="layers" ac="var(--purple)" sub="active types"/>
           <Stat label="Orders" val={activeOrders.length} icon="cart" ac="var(--amber)" sub="in pipeline"/>
@@ -2453,11 +2492,11 @@ function LabInventory(){
         {effectiveRole==="admin"&&capabilities.version>=2&&(migration.blockedItemIds.length>0||activeOut.length>0)&&<LegacyReconciliation migration={migration} items={rawItems} checkouts={checkouts} onSave={async payload=>{await saveAction("reconcileLegacy",payload);await refreshNow();}}/>}
         {tab==="inventory"&&(
           <div style={{animation:"fadeUp .3s ease"}}>
-            <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-              <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
+            <div className="inventory-toolbar">
+              <div className="inventory-search">
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Ico n="search" s={14} col="var(--dim)"/></span>
-                <Inp placeholder="Search name, location, serial or label ID…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
-                {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
+                <Inp aria-label="Search inventory" placeholder="Search name, location, serial or label ID…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/>
+                {search&&<button aria-label="Clear search" onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--dim)",cursor:"pointer",padding:0,display:"flex"}}><Ico n="x" s={13}/></button>}
               </div>
 
               <div className="category-filters" aria-label="Inventory filters">
@@ -2470,7 +2509,7 @@ function LabInventory(){
               </div>
 
               {/* Sort */}
-              <Sel value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:"auto",padding:"6px 10px",fontSize:12,borderRadius:8}}>
+              <Sel aria-label="Sort inventory" value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:"auto",padding:"6px 10px",fontSize:12,borderRadius:8}}>
                 <option value="name-az">Name A-Z</option>
                 <option value="name-za">Name Z-A</option>
                 <option value="newest">Newest</option>
@@ -2480,7 +2519,7 @@ function LabInventory(){
 
               <div style={{display:"flex",gap:2,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:3,marginLeft:"auto"}}>
                 {["grid","list"].map(v=>(
-                  <button key={v} onClick={()=>setView(v)} style={{background:view===v?"var(--bg4)":"transparent",border:view===v?"1px solid var(--border-hi)":"1px solid transparent",borderRadius:6,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
+                  <button key={v} aria-label={v==="grid"?"Grid view":"List view"} aria-pressed={view===v} onClick={()=>setView(v)} style={{background:view===v?"var(--bg4)":"transparent",border:view===v?"1px solid var(--border-hi)":"1px solid transparent",borderRadius:6,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}>
                     <Ico n={v} s={15} col={view===v?"var(--cyan)":"var(--dim)"}/>
                   </button>
                 ))}

@@ -28,6 +28,8 @@ const {harness}=require('./backend-harness.cjs');
  await page.goto('http://localhost:4173');await page.getByRole('heading',{name:'Equipment schedule'}).waitFor();
  assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);
  const schedule=page.getByRole('region',{name:'Equipment schedule'});
+ assert.equal(await schedule.getByRole('button',{name:'My reservations',exact:true}).getAttribute('aria-pressed'),'true');assert.equal(await schedule.locator('iframe').count(),0);assert.doesNotMatch(await schedule.innerText(),/Lab Teammate|On loan to Shafagh/);
+ await schedule.getByRole('button',{name:'All lab',exact:true}).click();
  await schedule.getByText('Checkout history · 1 records',{exact:true}).click();await schedule.getByLabel('Search earlier checkouts').fill('Former lab user');assert.match(await schedule.innerText(),/Earlier robot/);await schedule.getByText('Checkout history · 1 records',{exact:true}).click();assert.match(await schedule.innerText(),/On loan to Shafagh/);assert.match(await schedule.innerText(),/Lab Teammate/);assert.match(await schedule.innerText(),/sync delayed/);
  await schedule.getByRole('button',{name:'My reservations',exact:true}).click();assert.doesNotMatch(await schedule.innerText(),/Lab Teammate/);
  await schedule.getByRole('button',{name:'All lab',exact:true}).click();
@@ -55,7 +57,8 @@ const {harness}=require('./backend-harness.cjs');
  await receive.getByRole('button',{name:'Confirm receipt'}).click();await receive.waitFor({state:'hidden'});assert.equal(h.rows('Receipts').length,1);assert.equal(h.rows('Items').find(i=>i.name==='New Robot').img,'https://example.com/robot.jpg');
  await page.reload();await page.getByRole('heading',{name:'Equipment schedule'}).waitFor();await search.fill('New Robot');await page.locator('.card-item').filter({hasText:'New Robot'}).click();assert.equal(await page.getByRole('link',{name:'Purchase / reorder link ↗'}).count(),1);await page.getByRole('dialog').press('Escape');
  // Desktop and narrow-screen screenshot/overflow checks use no real account or network writes.
- await search.fill('');fs.mkdirSync('test-results',{recursive:true});await page.waitForFunction(()=>[...document.querySelectorAll('.card-item')].every(n=>Number(getComputedStyle(n).opacity)>.95));await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'test-results/inventory-desktop.png',fullPage:true});
+ await page.emulateMedia({reducedMotion:'reduce'});await search.fill('');fs.mkdirSync('test-results',{recursive:true});await page.waitForFunction(()=>[...document.querySelectorAll('.card-item')].every(n=>Number(getComputedStyle(n).opacity)>.95));await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'test-results/inventory-desktop.png',fullPage:true});
+ await page.locator('.header-tools > summary').click();await page.getByRole('button',{name:'Light appearance',exact:true}).click();await page.locator('.header-tools > summary').press('Escape');await page.screenshot({path:'test-results/inventory-light.png',fullPage:true});await page.locator('.header-tools > summary').click();await page.getByRole('button',{name:'Dark appearance',exact:true}).click();await page.locator('.header-tools > summary').press('Escape');
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'test-results/inventory-mobile.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Mobile page overflows horizontally');
  assert.deepEqual(errors,[]);console.log('Browser workflows passed: label/numeric search, full group counts, weekly booking, purchase links, cancel receipt, failed-save retention, receive/reload, mobile layout.');

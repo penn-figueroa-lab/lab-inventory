@@ -1316,6 +1316,15 @@ function recordConfirmedIndefiniteLoan(options) {
     return {ok:true,item:findId_("Items",item.id)};
   });
 }
+// Read-only integration check. Never prints the webhook or sends Slack messages.
+function verifyLabTrackIntegrations() {
+  transactionalData_={}; apiModifiedSheets_={};
+  const settings=readSettings_(),webhook=PropertiesService.getScriptProperties().getProperty("SLACK_WEBHOOK_URL")||"";
+  const triggers=ScriptApp.getProjectTriggers().map(t=>t.getHandlerFunction());
+  const report={spreadsheetId:SpreadsheetApp.getActiveSpreadsheet().getId(),slackWebhookInProperties:/^https:\/\/hooks\.slack\.com\/services\//.test(webhook),slackMode:getSlackMode(),digestTrigger:triggers.includes("sendDailyDigest"),overdueTrigger:triggers.includes("checkOverduesAndAlert"),calendarRetryTrigger:triggers.includes("syncReservationsToCalendar"),calendarAccessible:false,calendarSyncPending:rows_("Reservations").filter(r=>r.syncState!=="Synced").length,checkoutRecords:rows_("Checkouts").length,blockedItems:migrationReport_().blockedItemIds};
+  try {report.calendarAccessible=!!Calendar.Calendars.get(settings.calendar_id).id;} catch(e){report.calendarError=String(e.message);}
+  Logger.log(JSON.stringify(report));return report;
+}
 function handleV2_(action,body,user,admin) {
   const actions=["addIndividualItems","splitItem","receiveOrder","useConsumable","createReservation","updateReservation","cancelReservation","finishReservation","reconcileLegacy"];
   if(!actions.includes(action)) return null;
