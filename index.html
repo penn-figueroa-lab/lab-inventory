@@ -173,6 +173,7 @@ html.light{--amber:#8b5909;--red:#b72e43;--purple:#7550a0;--orange:#9b4e20;}
 <body>
 <div id="root"></div>
 <script src="image-catalog.js"></script>
+<script src="auth-session.js"></script>
 <script type="text/babel" data-presets="react">
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
@@ -287,7 +288,9 @@ const Ico = ({n,s=16,col="currentColor"}) => (
 );
 
 // ─── BACKEND API ──────────────────────────────────────────────────────────────
-const API = {
+const AuthContext=React.createContext({state:"ready",error:""});
+const session = new LabTrackSession({clientId:APP_CONFIG.oauth_client_id});
+const RawAPI = {
   async fetchAll(token) {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
@@ -301,6 +304,7 @@ const API = {
     const query=new URLSearchParams({token,action:"listReservations",itemId,from,to});
     const response=await fetch(APP_CONFIG.apps_script_url+"?"+query,{redirect:"follow"});
     const data=await response.json();
+    if(data.error==="Unauthorized")return data;
     if(!response.ok||data.ok!==true||!Array.isArray(data.reservations))throw Error(data.detail||"Could not load reservation history");
     return data.reservations;
   },
@@ -314,6 +318,16 @@ const API = {
       const text = await r.text();
       try { const data=JSON.parse(text); return data.ok===true||data.error?data:{error:"Invalid response",detail:"The server did not confirm this save. Retry safely."}; } catch { return {error:"Invalid response",detail:"The server did not confirm this save. Please sign in again or retry."}; }
     } catch(e) { console.error("[API] post error:", e); return null; }
+  }
+};
+
+const API = {
+  fetchAll: () => session.request(token=>RawAPI.fetchAll(token)),
+  post: (_token,action,payload) => session.request(token=>RawAPI.post(token,action,payload)),
+  async listReservations(_token,itemId,from,to) {
+    const result=await session.request(token=>RawAPI.listReservations(token,itemId,from,to));
+    if(!Array.isArray(result))throw Error(result?.detail||"Could not load reservation history");
+    return result;
   }
 };
 
@@ -357,6 +371,7 @@ const Btn = ({children,onClick,v="primary",style,disabled,sm,...rest}) => {
 
 // ─── MODAL SHELL ─────────────────────────────────────────────────────────────
 const Modal = ({onClose,title,mw=560,children,noPad,dirty=false,saving=false}) => {
+  const auth=React.useContext(AuthContext);
   const dialogRef=useRef(null),restoreFocus=useRef(document.activeElement);
   useEffect(()=>{const root=dialogRef.current;root?.querySelector("input,select,button,textarea,a[href]")?.focus();return()=>restoreFocus.current?.focus?.();},[]);
   const keyDown=e=>{
@@ -395,7 +410,7 @@ const Modal = ({onClose,title,mw=560,children,noPad,dirty=false,saving=false}) =
               : <button onClick={onClose} className="ibtn" style={{background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--sub)",borderRadius:8,padding:"5px 9px",cursor:"pointer",display:"flex",alignItems:"center",transition:"all .15s"}}><Ico n="x" s={14}/></button>}
           </div>
         )}
-        <div style={{overflow:"auto",flex:1,padding:noPad?"0":"24px"}}>{children}</div>
+        <div style={{overflow:"auto",flex:1,padding:noPad?"0":"24px"}}>{(auth.state==="required"||auth.error)&&<div role="status" className="form-intro"><p>{auth.error||"Reconnect to save. Your entered values are preserved."}</p><GoogleSignInButton/></div>}{children}</div>
       </div>
     </div>
   );
@@ -1685,32 +1700,12 @@ const CalView=({checkouts,deliveries})=>{
 };
 
 // ─── LOGIN PAGE ──────────────────────────────────────────────────────────────
-const LoginPage = ({onSignIn}) => {
-  const btnRef = useRef(null);
-  const [error, setError] = useState("");
-  const [gsiReady, setGsiReady] = useState(false);
-  useEffect(()=>{
-    const init = () => {
-      if (typeof google === 'undefined' || !google.accounts) { setTimeout(init, 200); return; }
-      try {
-        google.accounts.id.initialize({
-          client_id: APP_CONFIG.oauth_client_id,
-          callback: (response) => {
-            try {
-              const payload = JSON.parse(atob(response.credential.split('.')[1]));
-              if (payload.hd !== "engineering.upenn.edu") { setError("Access restricted to @engineering.upenn.edu accounts only."); return; }
-              onSignIn({ token: response.credential, name: payload.name, email: payload.email, picture: payload.picture });
-            } catch(e) { setError("Failed to verify account. Please try again."); }
-          },
-          hd: "engineering.upenn.edu",
-          auto_select: true,
-        });
-        google.accounts.id.renderButton(btnRef.current, { type: "standard", theme: "filled_black", size: "large", text: "signin_with", shape: "pill", width: 300 });
-        setGsiReady(true);
-      } catch(e) { console.error("GSI init error:", e); }
-    };
-    init();
-  }, []);
+const GoogleSignInButton = () => {
+  const ref=useRef(null),[error,setError]=useState(""),[attempt,setAttempt]=useState(0);
+  useEffect(()=>{let cancelled=false;setError("");session.initialize().then(g=>{if(!cancelled&&ref.current)g.renderButton(ref.current,{type:"standard",theme:"outline",size:"large",text:"signin_with",shape:"pill",width:280});}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[attempt]);
+  return <div><div ref={ref}/>{error&&<div role="alert" className="form-intro">{error} <Btn sm v="ghost" onClick={()=>setAttempt(n=>n+1)}>Retry sign-in</Btn></div>}</div>;
+};
+const LoginPage = ({error}) => {
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)"}}>
       <div style={{textAlign:"center",animation:"fadeUp .5s ease",maxWidth:420,padding:"0 24px"}}>
@@ -1721,8 +1716,7 @@ const LoginPage = ({onSignIn}) => {
         <p style={{color:"var(--sub)",fontSize:15,margin:"0 0 8px",lineHeight:1.5}}>Figueroa Lab Inventory</p>
         <p style={{color:"var(--dim)",fontSize:13,margin:"0 0 32px"}}>Penn Engineering</p>
         <div>
-          <div ref={btnRef} style={{display:"flex",justifyContent:"center",marginBottom:16}}/>
-          {!gsiReady && <p style={{color:"var(--dim)",fontSize:12}}>Loading sign-in...</p>}
+          <div style={{display:"flex",justifyContent:"center",marginBottom:16}}><GoogleSignInButton/></div>
           <p style={{color:"var(--dim)",fontSize:12}}>Sign in with your @engineering.upenn.edu account</p>
           {error && <p style={{color:"var(--red)",fontSize:13,marginTop:12,background:"var(--red-d)",padding:"8px 14px",borderRadius:8,border:"1px solid #ff4d6a30"}}>{error}</p>}
         </div>
@@ -1899,7 +1893,7 @@ function LabInventory(){
   const [previewMode, setPreviewMode] = useState(false);
   const [editLocked, setEditLocked] = useState(true);
   const tid = useRef(0);
-  const refreshTimer = useRef(null);
+  const authCallback = useRef(null),authLogout=useRef(null);
   const deletedItemIds = useRef(new Set());
   const lastModified = useRef({items:0, orders:0, checkouts:0, deliveries:0});
   const apiQueue = useRef([]);
@@ -1908,6 +1902,8 @@ function LabInventory(){
   const [editOrder, setEditOrder] = useState(null);
   const [emailText, setEmailText] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [authState,setAuthState]=useState("ready");
+  const [authError,setAuthError]=useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("All");
   const [ordersPage, setOrdersPage] = useState(0);
@@ -1918,7 +1914,7 @@ function LabInventory(){
   useEffect(()=>{
     try {
       const saved = localStorage.getItem("labtrack_user");
-      if (saved) setUser(JSON.parse(saved));
+      if (saved) { const restored=JSON.parse(saved);session.setUser(restored);setUser(restored); }
       localStorage.removeItem("labtrack_categories"); // no longer cached; server is source of truth
       const dark = localStorage.getItem("labtrack_dark");
       if (dark !== null) {
@@ -1928,6 +1924,21 @@ function LabInventory(){
       }
     } catch {}
     setLoading(false);
+  },[]);
+
+  useEffect(()=>{
+    session.onUser=u=>authCallback.current?.(u);
+    session.onState=state=>{setAuthState(state);setSessionExpired(state==="required");};
+    session.onError=setAuthError;
+    session.initialize().then(()=>session.resume()).catch(e=>setAuthError(e.message));
+    const resume=()=>{session.resume();};
+    const storage=e=>{
+      if(e.key!=="labtrack_user")return;
+      if(!e.newValue){authLogout.current?.();return;}
+      try {const next=JSON.parse(e.newValue);if(next.email===session.user?.email&&session.expires(next.token)>Date.now()){session.setUser(next);session.complete(next.token);authCallback.current?.(next);}}catch{}
+    };
+    document.addEventListener("visibilitychange",resume);window.addEventListener("focus",resume);window.addEventListener("online",resume);window.addEventListener("storage",storage);
+    return()=>{document.removeEventListener("visibilitychange",resume);window.removeEventListener("focus",resume);window.removeEventListener("online",resume);window.removeEventListener("storage",storage);session.clearTimer(session.timer);};
   },[]);
 
   // Apply dark/light mode
@@ -1954,16 +1965,18 @@ function LabInventory(){
       return;
     }
     setFetchingData(true);
+    let cancelled=false;
     (async ()=>{
       const data = await API.fetchAll(user.token);
+      if(cancelled)return;
       if (data && data.error === "NotMember") {
-        setUser(null);
+        session.setUser(null);setUser(null);
         localStorage.removeItem("labtrack_user");
-        setError("Your account (" + (user.email||"") + ") is not authorized to access this lab's system. Contact a lab admin to be added.");
+        setAuthError("Your account (" + (user.email||"") + ") is not authorized to access this lab's system. Contact a lab admin to be added.");
         setDataLoaded(true); setFetchingData(false); return;
       }
       if (data && data.error === "Unauthorized") {
-        setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){}
+        setSessionExpired(true);
       }
       if (!data || data.error) {
         setOffline(true);
@@ -1999,7 +2012,8 @@ function LabInventory(){
       setDataLoaded(true);
       setFetchingData(false);
     })();
-  },[user]);
+    return()=>{cancelled=true;};
+  },[user,dataLoaded]);
 
   // Save data locally as fallback
   useEffect(()=>{
@@ -2010,10 +2024,11 @@ function LabInventory(){
   // Ignore snapshots that started before a write or while a request was pending.
   useEffect(()=>{
     if(!user||!dataLoaded||user.token==="local")return;
+    let cancelled=false;
     const refresh=async()=>{
-      if(apiRunning.current)return;
+      if(apiRunning.current||document.visibilityState==="hidden"||!navigator.onLine)return;
       const epoch=mutationEpoch.current,data=await API.fetchAll(user.token);
-      if(epoch!==mutationEpoch.current||apiRunning.current)return;
+      if(cancelled||epoch!==mutationEpoch.current||apiRunning.current)return;
       if(!data||data.error){setOffline(true);if(data?.error==="Unauthorized")setSessionExpired(true);return;}
       applyExtras(data);setItems(data.items||[]);setDeliv(data.deliveries||[]);setCheckouts(data.checkouts||[]);setOrders(data.orders||[]);
       if(data.userRole)setUserRole(data.userRole);
@@ -2021,7 +2036,9 @@ function LabInventory(){
     };
     const interval=setInterval(refresh,30000);
     window.addEventListener("online",refresh);
-    return()=>{clearInterval(interval);window.removeEventListener("online",refresh);};
+    document.addEventListener("visibilitychange",refresh);
+    refresh();
+    return()=>{cancelled=true;clearInterval(interval);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",refresh);};
   },[user,dataLoaded]);
   useEffect(()=>{const id=new URLSearchParams(location.search).get("item");if(dataLoaded&&id){const item=items.find(i=>String(i.id)===id);if(item)setDetail(item);}},[dataLoaded]);
 
@@ -2058,20 +2075,16 @@ function LabInventory(){
     return id;
   },[]);
 
-  const handleSignIn = (u) => {
-    setUser(u); setSessionExpired(false); setDataLoaded(false);
-    localStorage.setItem("labtrack_user", JSON.stringify(u));
-    // Schedule silent token refresh 5 minutes before the JWT expires
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    try {
-      const exp = JSON.parse(atob(u.token.split('.')[1])).exp;
-      const msUntilRefresh = (exp * 1000) - Date.now() - 5 * 60 * 1000;
-      if (msUntilRefresh > 0) {
-        refreshTimer.current = setTimeout(()=>{ try { google.accounts.id.prompt(); } catch(e){} }, msUntilRefresh);
-      }
-    } catch(e) {}
+  const handleSignIn = u => {
+    const sameAccount=user?.email===u.email;
+    setUser(u);setSessionExpired(false);setAuthState("ready");setAuthError("");
+    // Refresh identity in place. Open forms and their entered values stay mounted.
+    if(!sameAccount||!lastSynced)setDataLoaded(false);
+    try{localStorage.setItem("labtrack_user",JSON.stringify(u));}catch{}
   };
-  const handleSignOut = () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); setUser(null); setDataLoaded(false); setItems([]); setDeliv([]); setCheckouts([]); setOrders([]); localStorage.removeItem("labtrack_user"); try { google.accounts.id.disableAutoSelect(); } catch {} };
+  authCallback.current=handleSignIn;
+  const handleSignOut = () => { session.signOut();setUser(null);setDataLoaded(false);setItems([]);setDeliv([]);setCheckouts([]);setOrders([]);setModal(null);setBooking(null);setEditItem(null);setEditOrder(null);setPendingItem(null);setLastSynced(null);setDetail(null);setGroupDetail(null);setConfirm(null);setShowEquipmentPicker(false);localStorage.removeItem("labtrack_user"); };
+  authLogout.current=handleSignOut;
 
   const handleSaveCategories = async newCats => {await saveAction("saveSettings",{key:"categories",value:JSON.stringify(newCats)});setCategories(newCats);addToast("success","Categories saved");};
 
@@ -2107,16 +2120,16 @@ function LabInventory(){
     // Queue requests so rapid edits don't race in GAS
     const token = user.token;
     return new Promise(resolve => {
-      apiQueue.current.push({action, payload, resolve, token});
+      apiQueue.current.push({action, payload, resolve, token, email:user.email});
       if (!apiRunning.current) {
         (async () => {
           apiRunning.current = true;
           while (apiQueue.current.length > 0) {
             const req = apiQueue.current.shift();
             try {
-              const result = await API.post(req.token, req.action, req.payload);
-              if (result?.error === "Unauthorized") { setSessionExpired(true); try{google.accounts.id.prompt();}catch(e){} }
-              if (result?.error === "NotMember") { setUser(null); localStorage.removeItem("labtrack_user"); setError("Your account is not authorized to access this lab's system."); }
+              const result = req.email!==session.user?.email?{error:"Unauthorized",detail:"The signed-in account changed. Please retry."}:await API.post(req.token, req.action, req.payload);
+              if (result?.error === "Unauthorized") { setSessionExpired(true); }
+              if (result?.error === "NotMember") { session.setUser(null);setUser(null); localStorage.removeItem("labtrack_user"); setAuthError("Your account is not authorized to access this lab's system."); }
               if (result?.error && result.error !== "Unauthorized" && result.error !== "NotMember") addToast("error", `Error: ${result.error} — ${result.detail||""}`);
               if(!result||result.error)setOffline(true);else{setOffline(false);setLastSynced(Date.now());}
               req.resolve(result);
@@ -2314,10 +2327,10 @@ function LabInventory(){
     </div>;
   }
 
-  if (!user) return <LoginPage onSignIn={handleSignIn}/>;
+  if (!user) return <LoginPage error={authError}/>;
 
   return(
-    <div style={{background:"var(--bg0)",minHeight:"100vh",color:"var(--text)"}}>
+    <AuthContext.Provider value={{state:authState,error:authError}}><div style={{background:"var(--bg0)",minHeight:"100vh",color:"var(--text)"}}>
       {/* HEADER */}
       <header style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,position:"sticky",top:0,zIndex:200}}>
         <div style={{display:"flex",alignItems:"center",gap:13}}>
@@ -2409,16 +2422,11 @@ function LabInventory(){
         ))}
       </nav>
 
-      {/* Session expired banner */}
-      {sessionExpired&&(
-        <div style={{background:"#7c2d12",borderBottom:"1px solid #dc262660",padding:"10px 24px",display:"flex",alignItems:"center",gap:10,justifyContent:"space-between",flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Ico n="alert" s={16} col="#fca5a5"/>
-            <span style={{color:"#fca5a5",fontSize:13,fontWeight:600}}>Session expired — your data is saved. Sign in again to continue syncing.</span>
-          </div>
-          <button onClick={handleSignOut} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Sign In Again →</button>
-        </div>
-      )}
+      {/* Reconnection never signs out or discards an open form. */}
+      {(sessionExpired||authState==="renewing"||authError)&&<div role="status" style={{background:"var(--bg2)",borderBottom:"1px solid var(--border)",padding:"10px 24px",display:"flex",gap:12,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",fontSize:13}}>
+        <span>{authError||(authState==="renewing"?"Reconnecting to Google…":"Reconnect to continue syncing and saving. Unsaved form entries are still here.")}</span>
+        {(sessionExpired||authError)&&<GoogleSignInButton/>}
+      </div>}
       {/* Admin preview mode banner */}
       {previewMode&&(
         <div style={{background:"var(--blue-d)",borderBottom:"1px solid #4da6ff30",padding:"8px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -2955,7 +2963,7 @@ function LabInventory(){
             {icon:"box",title:"Inventory Tab",color:"var(--cyan)",items:["Add items with the + button. Fill in name, category, location, and quantity.","Set Min Stock to get a red Low Stock badge when qty drops to or below that number.","Shared equipment uses quantity-based reservation limits like all other equipment.","Consumable items (e.g. stickers, reagents) show a Use button on the card — enter quantity used to deduct without a formal checkout.","Each item gets a Label ID (e.g. RM-000001). Print it on a sticker and attach it to the physical item. Configure prefixes in Settings → Manage Categories.","When adding multiple cameras, laptops, or robots, check 'Track each unit individually' to create separate items with sub-IDs (e.g. CE-000042-001, CE-000042-002), each with its own serial number.","Click any item card to see full details, checkout history, and quick actions."]},
             {icon:"tag",title:"Equipment reservations",color:"var(--blue)",items:["Open an inventory item or a specific labeled unit, then choose Reserve this item.","Choose start/end times in America/New_York and a quantity. Weekly repeats require an end date; all occurrences are checked for conflicts.","Use My reservations or item details to edit, extend, cancel, or Finish early. Availability updates automatically at the end time.","Add the lab calendar to Google Calendar to see everyone's reservations. Manage bookings through LabTrack so capacity checks stay reliable.","Shared equipment follows the same quantity limits. Consumables use the Use button and are never reserved."]},
             {icon:"cart",title:"Order requests and receiving",color:"var(--amber)",items:["Request items with optional purchase links and photos. Requesters and admins can edit requests.","Admins approve and order purchases. Receive opens a form for new items, individually labeled units, or restocking.","Confirm receipt saves stock, delivery history, and order status together. Cancel leaves everything unchanged.","Images and purchase links carry into inventory. A failed save keeps the form open for retry."]},
-            {icon:"settings",title:"Settings (Admin only)",color:"var(--orange)",items:["Manage Categories — add, remove, or rename categories; set label ID prefix per category (e.g. RM for Robots & Motors).","Admins list — edit in the Settings tab of the Google Sheet (JSON array of emails).","Slack notifications — set slack_mode in Settings tab: all | important | digest | off.","Session expires after ~1 hour and auto-renews silently. If you see a red banner at the top, click Sign In Again."]},
+            {icon:"settings",title:"Settings (Admin only)",color:"var(--orange)",items:["Manage Categories — add, remove, or rename categories; set label ID prefix per category (e.g. RM for Robots & Motors).","Admins list — edit in the Settings tab of the Google Sheet (JSON array of emails).","Slack notifications — set slack_mode in Settings tab: all | important | digest | off.","Google sign-in renews when you return to LabTrack. If Google needs confirmation, reconnect using the sign-in button; your open forms stay intact. Use Tools & account to sign out explicitly."]},
           ].map(s=>(
             <div key={s.title}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><Ico n={s.icon} s={16} col={s.color}/><strong style={{color:s.color,fontFamily:"'Roboto',sans-serif"}}>{s.title}</strong></div>
@@ -2969,7 +2977,7 @@ function LabInventory(){
       {confirm && <ConfirmModal msg={confirm.msg} onConfirm={confirm.onConfirm} onClose={()=>setConfirm(null)}/>}
 
       <ToastStack toasts={toasts} rm={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
-    </div>
+    </div></AuthContext.Provider>
   );
 }
 

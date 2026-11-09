@@ -132,6 +132,14 @@ Already-Received legacy orders are not automatically received again: they may al
 - New reservations never produce legacy overdue alerts. The digest includes upcoming/active reservations for the next 24 hours.
 - Item history initially loads the recent window; **Load older history** retrieves preceding years through bounded requests.
 
+## Sign-in renewal — November 9, 2026
+
+`auth-session.js` initializes Google Identity Services once per page, including when restoring a saved login. It schedules renewal five minutes before token expiry and rechecks on tab visibility, focus, and reconnection. Hidden/offline tabs stop polling. API requests obtain the current credential when they execute; simultaneous requests share one renewal attempt. An explicit Unauthorized response may be retried once with a new credential; network failures are never blindly retried.
+
+If Google declines automatic renewal, LabTrack stops automatic prompts for that credential and offers its Google sign-in button in the page and open forms. Reconnecting with the same account preserves drafts. Only explicit sign-out disables automatic account selection. Renewed credentials propagate between tabs. Token decoding in the browser only schedules renewal; the unchanged backend still verifies Google tokens, the OAuth audience, domain, membership, and administrator permissions on every request. Google/browser policy may still require occasional confirmation.
+
+This is a frontend-only release: publish `index.html` and `auth-session.js` together. No Apps Script deployment, scope change, data migration, or Slack configuration change is required. Tests cover restored expired sessions, wake-up, concurrent renewal, Google dismissal/timeout, account mismatches, and form preservation during reconnection.
+
 ## API compatibility
 
 `doGet` retains inventory, orders, deliveries, checkouts, settings, and role. It adds capabilities, the recent/upcoming reservation window, and the migration report. `action=listReservations` accepts optional `itemId` and required ISO `from`/`to` with a maximum 367-day interval.

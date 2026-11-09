@@ -7,3 +7,5 @@ console.log('Frontend JSX compiles');
 
 const manifest=JSON.parse(fs.readFileSync("appsscript.json","utf8"));
 if(!manifest.oauthScopes.includes("https://www.googleapis.com/auth/userinfo.email")) throw new Error("Administrator migrations require the userinfo.email scope");
+
+new (require("node:vm").Script)(fs.readFileSync("auth-session.js","utf8"), {filename:"auth-session.js"});
