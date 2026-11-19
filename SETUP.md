@@ -21,6 +21,13 @@ These tests do not substitute for Google authorization, actual Sheets API behavi
 
 For real-service staging checks, append `tests/staging-smoke.gs` only to the copied Apps Script project and define `STAGING_SPREADSHEET_ID` with that copy's ID. Run `runLabTrackStagingSmoke()` and then `runLabTrackStagingRecovery()`. Both guard the spreadsheet ID/name; they create synthetic records and deliberately interrupt Calendar synchronization. Never install this test file in production.
 
+## Calendar access repair — November 19, 2026
+
+- Deployed backend **version 40** on the existing web-app URL. Version 39 is retained for rollback. No manifest or inventory migration was required.
+- Ran `syncLabCalendarAccess` against the production calendar: **28** distinct listed accounts, **1** missing reader grant added, **0** failures. The existing five-minute trigger now maintains grants after direct membership edits in Sheets.
+- Live integration check: Slack webhook remains in Script Properties, mode is `digest`, digest/overdue/Calendar retry triggers are present, Calendar access is `Synced`, zero pending event updates, **53** checkout records, and no blocked assets. No Slack test messages were sent.
+- Validation: **46** automated tests plus desktop/mobile browser workflows. Covers ACL pagination, member additions, weak permission upgrades, preservation of owner/manual shares, failures/retries, event-sync isolation, and account-specific links. Another member's Google session was not impersonated; their subscription remains a one-time **Add lab calendar** action. See [Google's Calendar sharing model](https://developers.google.com/workspace/calendar/api/concepts/sharing).
+
 ## Production rollout — November 5, 2026
 
 - Existing Apps Script deployment upgraded from version **37** to **38**, retaining its URL. Prior frontend commit: `d404013`.
@@ -66,6 +73,16 @@ The temporary staging calendar and triggers were deleted on November 5, 2026 at 
 12. Reload the site and verify one real receipt/booking only when it corresponds to actual lab activity. Check the execution log, sheet records, Calendar visibility from a member account, and Slack digest configuration.
 
 Do not run `createTriggers()` just to enable Calendar. It replaces the existing digest/overdue/backup trigger schedule. `setupLabEquipmentCalendar()` adds only its own retry trigger.
+
+### Keeping Calendar access in sync
+
+The existing `syncReservationsToCalendar` trigger now checks the effective `members` and `admins` lists every five minutes, including edits made directly in the sheet. New addresses receive Calendar `reader` access. Existing free/busy-only grants are upgraded; owner/writer and manually managed shares are preserved. Website membership edits also attempt this immediately. Failed grants retry independently of reservation event updates, and `calendar_access_sync` records the result. No sharing emails are sent.
+
+For an existing installation, replace the backend source, run `syncLabCalendarAccess()` once as the deployment owner, and verify the logged `state` is `Synced` with `failed: 0`. Publish a new version of the existing web-app deployment to expose sharing status to the website; keep its URL and Script Properties unchanged. No manifest changes or data migration are needed. The existing five-minute trigger maintains sharing afterward. `setupLabEquipmentCalendar()` also installs the trigger if it is missing.
+
+Calendar permission and subscription are separate: each member selects **View calendar → Add lab calendar** once, using the same lab email as LabTrack. Links and the embedded view include that account as an `authuser` hint instead of assuming Google account slot 0. If browser privacy settings prevent the private embedded calendar from signing in, **Open Google Calendar** opens it directly; **All lab** still displays the authoritative reservations inside LabTrack. Workspace sharing restrictions may require a domain administrator even when ACL grants succeed.
+
+This synchronization grants access to listed users; it does not delete existing manually managed grants. When removing a member, also remove their access in **Google Calendar → Lab Equipment → Settings and sharing**. Rollback to the previous backend/frontend does not remove any existing Calendar permissions or reservation data.
 
 ## Data and migration
 

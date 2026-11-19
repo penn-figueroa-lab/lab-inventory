@@ -6,7 +6,7 @@ Deliveries:'id item qty unit from receivedBy date tracking status',
 Checkouts:'id itemId item user out ret status checkedOutByEmail groupEmails',
 Settings:'key value',AuditLog:'date user email action details',SlackQueue:'time emoji title details fields'};
 function harness(options={}){
- const db={},events=new Map(),calls=[],fault={batch:false,calendar:false,locked:false};
+ const db={},events=new Map(),acl=new Map(),calls=[],fault={batch:false,calendar:false,locked:false};
  let seq=1;
  class Range{
   constructor(sheet,row,col,n=1,m=1){Object.assign(this,{sheet,row,col,n,m});}
@@ -35,7 +35,11 @@ function harness(options={}){
   Utilities:{getUuid:()=>crypto.randomUUID(),formatDate(d,tz,pattern){const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(p=>[p.type,p.value]));const date=`${p.year}-${p.month}-${p.day}`;return pattern==='yyyy-MM-dd'?date:`${date}T${p.hour}:${p.minute}`;}},
   ContentService:{MimeType:{JSON:'json'},createTextOutput:s=>({setMimeType(){return JSON.parse(s);}})},
   UrlFetchApp:{fetch(url,args){calls.push({url,args});return {getContentText:()=> '{}',getResponseCode:()=>options.slackStatus||200};}},
-  Calendar:{Events:{get(c,id){if(fault.calendar)throw Error('503 unavailable');if(!events.has(id))throw Error('404 not found');return events.get(id);},insert(e,c){if(fault.calendar)throw Error('503 unavailable');if(events.has(e.id))throw Error('409 conflict');events.set(e.id,e);return e;},patch(e,c,id){if(fault.calendar)throw Error('503 unavailable');events.set(id,{...events.get(id),...e});},remove(c,id){if(fault.calendar)throw Error('503 unavailable');events.delete(id);}},Calendars:{get:()=>({id:'lab-calendar'}),insert:()=>({id:'lab-calendar'})}},
+  Calendar:{Acl:{
+   list(c,args={}){if(fault.acl)throw Error('503 ACL unavailable');const rules=[...acl.values()],offset=Number(args.pageToken||0),size=options.aclPageSize||250;return {items:rules.slice(offset,offset+size),nextPageToken:offset+size<rules.length?String(offset+size):undefined};},
+   insert(rule,c,args){if(fault.aclEmail===rule.scope.value)throw Error('403 sharing restricted');const id='user:'+rule.scope.value;if(acl.has(id))throw Error('409 duplicate rule');acl.set(id,{...rule,id});calls.push({acl:'insert',rule,args});return acl.get(id);},
+   update(rule,c,id,args){if(fault.aclEmail===rule.scope.value)throw Error('403 sharing restricted');acl.set(id,{...rule,id});calls.push({acl:'update',rule,args});return acl.get(id);}
+  },Events:{get(c,id){if(fault.calendar)throw Error('503 unavailable');if(!events.has(id))throw Error('404 not found');return events.get(id);},insert(e,c){if(fault.calendar)throw Error('503 unavailable');if(events.has(e.id))throw Error('409 conflict');events.set(e.id,e);return e;},patch(e,c,id){if(fault.calendar)throw Error('503 unavailable');events.set(id,{...events.get(id),...e});},remove(c,id){if(fault.calendar)throw Error('503 unavailable');events.delete(id);}},Calendars:{get:()=>({id:'lab-calendar'}),insert:()=>({id:'lab-calendar'})}},
   Sheets:{Spreadsheets:{Values:{get(id,range){const name=range.slice(1,-1).replace(/''/g,"'");return {values:structuredClone(db[name].data)};}},batchUpdate({requests}){
     if(fault.batch)throw Error('Simulated batch failure');
     const copy=Object.fromEntries(Object.values(db).map(s=>[s.id,structuredClone(s.data)]));
@@ -51,6 +55,6 @@ function harness(options={}){
  function order(overrides={}){return add('Orders',{id:'order1',item:'Robot',store:'Supplier',qty:2,unit:'units',cat:'Robots',link:'https://example.com/robot',img:'https://example.com/robot.jpg',status:'Ordered',requestedByEmail:'member@engineering.upenn.edu',...overrides});}
  function post(action,body={},email='admin@engineering.upenn.edu'){Object.values(db).forEach(s=>delete s.snapshot);return context.doPost({postData:{contents:JSON.stringify({action,token:email,...body})}});}
  const rows=name=>context.rows_(name);
- return {context,db,events,fault,calls,add,item,order,post,rows};
+ return {context,db,events,acl,fault,calls,add,item,order,post,rows};
 }
 module.exports={harness};

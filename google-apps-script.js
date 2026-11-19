@@ -822,7 +822,7 @@ function doPost(e) {
       return jsonResponse({ error: "Forbidden", detail: "Only admins can change settings" });
     }
     const key = body.key;
-    if (["scheduling_enabled", "calendar_id", "schema_version"].includes(key)) throw new Error("Use the deployment setup functions to change scheduling configuration.");
+    if (["scheduling_enabled", "calendar_id", "schema_version", "calendar_access_sync"].includes(key)) throw new Error("Use the deployment setup functions to change scheduling configuration.");
     const value = body.value;
     var sheet = getOrCreateSheet("Settings", ["key", "value"]);
     var data = sheet.getDataRange().getValues();
@@ -837,6 +837,7 @@ function doPost(e) {
     if (!found) {
       sheet.appendRow([key, value]);
     }
+    if (["members", "admins"].includes(key) && readSettings_().calendar_id) syncCalendarAccess_();
     return jsonResponse({ ok: true });
   }
 
@@ -998,7 +999,8 @@ function setSetting_(key, value) {
 function capabilities_() {
   const s = readSettings_();
   return {version: Number(s.schema_version) || 1, receiving: Number(s.schema_version) >= 2,
-    scheduling: String(s.scheduling_enabled) === "true" && !!s.calendar_id, calendarId: String(s.calendar_id || ""), timeZone: LAB_TZ};
+    scheduling: String(s.scheduling_enabled) === "true" && !!s.calendar_id, calendarId: String(s.calendar_id || ""), timeZone: LAB_TZ,
+    calendarAccessState: calendarAccessState_(s)};
 }
 function requireV2_() { if (!capabilities_().receiving) throw new Error("Admin must run migrateLabTrackV2 before using this feature."); }
 function cellValue_(v) { return v == null ? "" : Array.isArray(v) ? JSON.stringify(v) : v; }
@@ -1244,7 +1246,14 @@ function syncReservationsToCalendar() {
   transactionalData_ = {};
   apiModifiedSheets_ = {};
   const lock=LockService.getScriptLock(); if(!lock.tryLock(1000)) return;
-  try { if(readSettings_().calendar_id) syncCalendarRows_(rows_("Reservations").filter(r=>r.syncState!=="Synced").slice(0,20)); } finally {lock.releaseLock();}
+  try {
+    if(readSettings_().calendar_id) {
+      // Direct edits to Settings must grant the same Calendar access as setup.
+      // Access failures are recorded separately and must not block event retries.
+      syncCalendarAccess_();
+      syncCalendarRows_(rows_("Reservations").filter(r=>r.syncState!=="Synced").slice(0,20));
+    }
+  } finally {lock.releaseLock();}
 }
 function currentReservations_() {
   const now=Date.now(), from=new Date(now-30*86400000).toISOString(), to=new Date(now+366*86400000).toISOString();
@@ -1321,7 +1330,7 @@ function verifyLabTrackIntegrations() {
   transactionalData_={}; apiModifiedSheets_={};
   const settings=readSettings_(),webhook=PropertiesService.getScriptProperties().getProperty("SLACK_WEBHOOK_URL")||"";
   const triggers=ScriptApp.getProjectTriggers().map(t=>t.getHandlerFunction());
-  const report={spreadsheetId:SpreadsheetApp.getActiveSpreadsheet().getId(),slackWebhookInProperties:/^https:\/\/hooks\.slack\.com\/services\//.test(webhook),slackMode:getSlackMode(),digestTrigger:triggers.includes("sendDailyDigest"),overdueTrigger:triggers.includes("checkOverduesAndAlert"),calendarRetryTrigger:triggers.includes("syncReservationsToCalendar"),calendarAccessible:false,calendarSyncPending:rows_("Reservations").filter(r=>r.syncState!=="Synced").length,checkoutRecords:rows_("Checkouts").length,blockedItems:migrationReport_().blockedItemIds};
+  const report={spreadsheetId:SpreadsheetApp.getActiveSpreadsheet().getId(),slackWebhookInProperties:/^https:\/\/hooks\.slack\.com\/services\//.test(webhook),slackMode:getSlackMode(),digestTrigger:triggers.includes("sendDailyDigest"),overdueTrigger:triggers.includes("checkOverduesAndAlert"),calendarRetryTrigger:triggers.includes("syncReservationsToCalendar"),calendarAccessible:false,calendarAccessState:calendarAccessState_(settings),calendarSyncPending:rows_("Reservations").filter(r=>r.syncState!=="Synced").length,checkoutRecords:rows_("Checkouts").length,blockedItems:migrationReport_().blockedItemIds};
   try {report.calendarAccessible=!!Calendar.Calendars.get(settings.calendar_id).id;} catch(e){report.calendarError=String(e.message);}
   Logger.log(JSON.stringify(report));return report;
 }
@@ -1367,18 +1376,73 @@ function migrateLabTrackV2() {
     return migrationReport_();
   } finally {lock.releaseLock();}
 }
+function calendarAccessMembers_(settings) {
+  const lists=["members","admins"].map(key=>{
+    const list=JSON.parse(settings[key] || "[]");
+    if(!Array.isArray(list) || list.some(email=>typeof email!=="string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))) throw new Error("Invalid "+key+" email list");
+    return list.map(email=>email.trim().toLowerCase());
+  });
+  const members=Array.from(new Set(lists.flat())).sort();
+  if(!members.length) throw new Error("Set an explicit members/admins list before sharing the equipment calendar");
+  return members;
+}
+function calendarAccessSignature_(settings) {
+  return JSON.stringify([String(settings.calendar_id || ""),calendarAccessMembers_(settings)]);
+}
+function calendarAccessState_(settings) {
+  if(!settings.calendar_id) return "Disabled";
+  try {
+    const saved=JSON.parse(settings.calendar_access_sync || "{}");
+    return saved.signature===calendarAccessSignature_(settings) ? saved.state || "Pending" : "Pending";
+  } catch(e) {return "Error";}
+}
+// Caller holds the script lock. Only explicit users get grants; existing owner,
+// writer and manually managed shares are preserved. No emails are sent.
+function syncCalendarAccess_() {
+  const settings=readSettings_(),report={state:"Error",checkedAt:new Date().toISOString(),added:0,upgraded:0,failed:0};
+  try {
+    if(!settings.calendar_id) throw new Error("No equipment calendar configured");
+    report.signature=calendarAccessSignature_(settings);
+    const members=calendarAccessMembers_(settings),rules=[];let pageToken;
+    do {
+      const page=Calendar.Acl.list(settings.calendar_id,{maxResults:250,...(pageToken?{pageToken}:{})});
+      rules.push(...(page.items||[]));pageToken=page.nextPageToken;
+    } while(pageToken);
+    const sufficient=["reader","writer","writerWithoutPrivateAccess","owner"];
+    members.forEach(email=>{
+      try {
+        const rule=rules.find(r=>r.scope&&r.scope.type==="user"&&String(r.scope.value).toLowerCase()===email);
+        if(rule&&sufficient.includes(rule.role)) return;
+        if(rule) {
+          Calendar.Acl.update({role:"reader",scope:rule.scope},settings.calendar_id,rule.id,{sendNotifications:false});
+          report.upgraded++;
+        } else {
+          Calendar.Acl.insert({role:"reader",scope:{type:"user",value:email}},settings.calendar_id,{sendNotifications:false});
+          report.added++;
+        }
+      } catch(e) {report.failed++;console.log("Calendar sharing failed for "+email+": "+e.message);}
+    });
+    report.members=members.length;
+    report.state=report.failed?"Error":"Synced";
+  } catch(e) {report.failed++;console.log("Calendar sharing failed: "+e.message);}
+  setSetting_("calendar_access_sync",JSON.stringify(report));
+  return report;
+}
+// Run once to repair current sharing; the existing five-minute trigger maintains it.
+function syncLabCalendarAccess() {
+  const lock=LockService.getScriptLock();lock.waitLock(30000);
+  try {requireV2_();const report=syncCalendarAccess_();Logger.log(JSON.stringify(report));return report;}
+  finally {lock.releaseLock();}
+}
 function setupLabEquipmentCalendar() {
   requireV2_();
   let id=readSettings_().calendar_id;
   if(!id) { id=Calendar.Calendars.insert({summary:"Lab Equipment",timeZone:LAB_TZ,description:"Equipment reservations managed through LabTrack. Make booking changes in LabTrack."}).id; setSetting_("calendar_id",id); }
   Calendar.Calendars.get(id);
-  const members=Array.from(new Set(settingList_("members").concat(settingList_("admins"))));
-  // Never make the calendar public or domain-wide implicitly.
-  if(!members.length) throw new Error("Set an explicit members/admins list before sharing the equipment calendar");
-  const rules=Calendar.Acl.list(id).items||[];
-  members.forEach(email=>{if(!rules.some(r=>r.scope&&r.scope.value===email)) Calendar.Acl.insert({role:"reader",scope:{type:"user",value:email}},id,{sendNotifications:false});});
   if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==="syncReservationsToCalendar")) ScriptApp.newTrigger("syncReservationsToCalendar").timeBased().everyMinutes(5).create();
-  Logger.log("Calendar prepared; scheduling is still disabled: "+id);
+  const report=syncLabCalendarAccess();
+  if(report.state!=="Synced") throw new Error("Calendar sharing is incomplete; see the execution log. The retry trigger will try again.");
+  Logger.log("Calendar prepared; scheduling setting preserved: "+id);
   return id;
 }
 function enableLabScheduling() {
