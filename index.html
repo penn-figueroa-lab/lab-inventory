@@ -172,8 +172,9 @@ html.light{--amber:#8b5909;--red:#b72e43;--purple:#7550a0;--orange:#9b4e20;}
 </head>
 <body>
 <div id="root"></div>
-<script src="image-catalog.js"></script>
-<script src="auth-session.js"></script>
+<script src="image-catalog.js?v=2026-11-24.1"></script>
+<script src="auth-session.js?v=2026-11-24.1"></script>
+<script src="client-state.js?v=2026-11-24.1"></script>
 <script type="text/babel" data-presets="react">
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
@@ -294,15 +295,15 @@ const RawAPI = {
   async fetchAll(token) {
     if (!APP_CONFIG.apps_script_url) return null;
     try {
-      const url = APP_CONFIG.apps_script_url + "?token=" + encodeURIComponent(token);
-      const r = await fetch(url, { redirect: "follow" });
+      const url = APP_CONFIG.apps_script_url + "?" + new URLSearchParams({token,read:crypto.randomUUID()});
+      const r = await fetch(url, { redirect: "follow", cache:"no-store" });
       const text = await r.text();
-      try { const data=JSON.parse(text); if(data?.error)return data; return r.ok&&["items","orders","deliveries","checkouts"].every(k=>Array.isArray(data?.[k]))?data:null; } catch { return null; }
+      try { const data=JSON.parse(text); if(data?.error)return data; if(!r.ok)return null;return LabTrackClient.validSnapshot(data)?data:{error:"Incompatible backend",detail:"The server returned an older or incomplete inventory response. Refresh to reconnect."}; } catch { return null; }
     } catch(e) { console.error("[API] fetchAll error:", e); return null; }
   },
   async listReservations(token, itemId, from, to) {
-    const query=new URLSearchParams({token,action:"listReservations",itemId,from,to});
-    const response=await fetch(APP_CONFIG.apps_script_url+"?"+query,{redirect:"follow"});
+    const query=new URLSearchParams({token,action:"listReservations",itemId,from,to,read:crypto.randomUUID()});
+    const response=await fetch(APP_CONFIG.apps_script_url+"?"+query,{redirect:"follow",cache:"no-store"});
     const data=await response.json();
     if(data.error==="Unauthorized")return data;
     if(!response.ok||data.ok!==true||!Array.isArray(data.reservations))throw Error(data.detail||"Could not load reservation history");
@@ -1076,7 +1077,7 @@ const CheckoutHistory = ({checkouts}) => {
   const [query,setQuery]=useState(""),[limit,setLimit]=useState(20);
   const active=checkouts.filter(c=>c.status==="Active");
   const rows=checkouts.filter(c=>[c.item,c.user,c.out,c.ret,c.status].some(v=>String(v||"").toLowerCase().includes(query.trim().toLowerCase())));
-  return <div>{active.length>0&&<div className="equipment-booking" style={{marginTop:14}}>Checkouts awaiting transfer: {active.map(c=>`${c.item} · ${c.user}`).join("; ")}. An admin must verify their return before releasing the equipment.</div>}<details style={{marginTop:14,fontSize:13,color:"var(--sub)"}}><summary style={{cursor:"pointer"}}>Checkout history · {checkouts.length} records</summary><p className="form-intro">Original checkout records are retained below. Records without an item ID are shown by their recorded name; they have not been assigned to a physical unit.</p><Fld label="Search earlier checkouts"><Inp value={query} onChange={e=>{setQuery(e.target.value);setLimit(20);}} placeholder="Item, person, date or status…"/></Fld>{rows.slice(0,limit).map(c=><div className="reservation-row" key={c.id}><div><strong>{c.item}</strong><div>{c.user}{c.qty?` · ${c.qty} units`:""}</div><div>Checked out: {c.out||"Not recorded"}{c.ret?` · ${c.status==="Returned"?"Returned":"Expected return"}: ${c.ret}`:""}</div><small>{c.status}{!c.itemId?" · Physical unit not linked":""}</small></div></div>)}{!rows.length&&<p className="form-intro">No matching checkout records.</p>}{rows.length>limit&&<Btn sm v="ghost" onClick={()=>setLimit(n=>n+20)}>Show more history</Btn>}</details></div>;
+  return <div>{active.length>0&&<div className="equipment-booking" style={{marginTop:14}}>Checkouts awaiting transfer: {active.map(c=>`${c.item} · ${c.user}`).join("; ")}. An admin must verify their return before releasing the equipment.</div>}<details className="checkout-history" style={{marginTop:14,fontSize:13,color:"var(--sub)"}}><summary style={{cursor:"pointer"}}>Checkout history · {checkouts.length} records</summary><p className="form-intro">Original checkout records are retained below. Records without an item ID are shown by their recorded name; they have not been assigned to a physical unit.</p><Fld label="Search earlier checkouts"><Inp value={query} onChange={e=>{setQuery(e.target.value);setLimit(20);}} placeholder="Item, person, date or status…"/></Fld>{rows.slice(0,limit).map(c=><div className="reservation-row" key={c.id}><div><strong>{c.item}</strong><div>{c.user}{c.qty?` · ${c.qty} units`:""}</div><div>Checked out: {c.out||"Not recorded"}{c.ret?` · ${c.status==="Returned"?"Returned":"Expected return"}: ${c.ret}`:""}</div><small>{c.status}{!c.itemId?" · Physical unit not linked":""}</small></div></div>)}{!rows.length&&<p className="form-intro">No matching checkout records.</p>}{rows.length>limit&&<Btn sm v="ghost" onClick={()=>setLimit(n=>n+20)}>Show more history</Btn>}</details></div>;
 };
 const EquipmentSchedule = ({reservations,checkouts,items,user,isAdmin,calendarId,calendarAccessState,onAction,onEdit}) => {
   const [scope,setScope]=useState("mine"),[calendar,setCalendar]=useState(false),[expanded,setExpanded]=useState(false),[calendarMode,setCalendarMode]=useState(()=>window.matchMedia("(max-width:640px)").matches?"AGENDA":"WEEK");
@@ -1122,7 +1123,7 @@ const ItemReservations = ({item,reservations,items,user,isAdmin,onAction,onEdit,
   const [older,setOlder]=useState([]),[cursor,setCursor]=useState(()=>Date.now()-30*86400000),history=useSave();
   const loadOlder=()=>history.run(async()=>{const from=cursor-365*86400000;const rows=await API.listReservations(user.token,String(item.id),new Date(from).toISOString(),new Date(cursor).toISOString());setOlder(p=>mergeRecords(p,rows));setCursor(from);});
   const records=mergeRecords(older,reservations.filter(r=>String(r.itemId)===String(item.id)));
-  return <section className="item-reservations"><h3>Reservations</h3>{blocked&&<p role="alert" className="save-error">Legacy checkout needs admin reconciliation before new bookings.</p>}{!enabled&&<p className="form-intro">Google Calendar scheduling has not been enabled by the lab administrator.</p>}{!item.consumable&&enabled&&<Btn disabled={blocked||["Broken","Maintenance","On loan"].includes(item.status)||item.qty<=0} onClick={()=>onEdit(item,null)}>Reserve this item</Btn>}<ReservationList reservations={records} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit} showHistory/><SaveError error={history.error}/><div className="form-actions"><span className="form-intro">History since {new Date(cursor).toLocaleDateString()}</span><Btn sm v="ghost" disabled={history.saving} onClick={loadOlder}>{history.saving?"Loading…":"Load older history"}</Btn></div></section>;
+  return <section className="item-reservations"><h3>Reservations</h3>{blocked&&<p role="alert" className="save-error">An earlier checkout needs admin review before new bookings.</p>}{!enabled&&<p className="form-intro">Scheduling is unavailable. Reconnect to check the latest reservation settings.</p>}{!item.consumable&&enabled&&<Btn disabled={blocked||["Broken","Maintenance","On loan"].includes(item.status)||item.qty<=0} onClick={()=>onEdit(item,null)}>Reserve this item</Btn>}<ReservationList reservations={records} items={items} user={user} isAdmin={isAdmin} onAction={onAction} onEdit={onEdit} showHistory/><SaveError error={history.error}/><div className="form-actions"><span className="form-intro">History since {new Date(cursor).toLocaleDateString()}</span><Btn sm v="ghost" disabled={history.saving} onClick={loadOlder}>{history.saving?"Loading…":"Load older history"}</Btn></div></section>;
 };
 
 
@@ -1833,7 +1834,7 @@ const LegacyReconciliation = ({migration,items,checkouts,onSave}) => {
   const save=useSave(),[target,setTarget]=useState(""),[itemId,setItemId]=useState(""),[note,setNote]=useState("");
   const active=checkouts.filter(c=>c.status==="Active"), blocked=items.filter(i=>migration.blockedItemIds.includes(String(i.id)));
   if(!active.length&&!blocked.length)return null;
-  return <details className="reservation-summary"><summary>Admin: legacy tracking needs review ({active.length} active checkouts, {blocked.length} blocked items)</summary><p className="form-intro">Confirm the physical equipment is back before closing an old checkout. History and original dates are retained. Items with active legacy checkouts cannot be reserved.</p><SaveError error={save.error}/><Fld label="Legacy checkout"><Sel value={target} onChange={e=>setTarget(e.target.value)}><option value="">Correct item status only</option>{active.map(c=><option key={c.id} value={c.id}>{c.item} · {c.user} · {c.out}</option>)}</Sel></Fld><Fld label="Verified physical item"><Sel value={itemId} onChange={e=>setItemId(e.target.value)}><option value="">Select exact label…</option>{items.map(i=><option key={i.id} value={i.id}>{i.displayId} · {i.name} · {i.serial||i.loc}</option>)}</Sel></Fld><Fld label="Reconciliation note"><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Checked physically; returned to shelf…"/></Fld><Btn disabled={save.saving||!itemId||!note.trim()} onClick={()=>save.run(async()=>{await onSave({checkoutId:target,itemId,note});setTarget("");setItemId("");setNote("");})}>Confirm returned / correct status</Btn><p className="form-intro">{migration.issues.filter(i=>i.checkoutId).length} historical records lack an unambiguous item reference; they remain preserved in the Checkouts sheet.</p></details>;
+  return <details className="reservation-summary"><summary>Admin: earlier checkout records need review ({active.length} active checkouts, {blocked.length} blocked items)</summary><p className="form-intro">Confirm the physical equipment is back before closing an old checkout. History and original dates are retained. Items with active legacy checkouts cannot be reserved.</p><SaveError error={save.error}/><Fld label="Earlier checkout"><Sel value={target} onChange={e=>setTarget(e.target.value)}><option value="">Correct item status only</option>{active.map(c=><option key={c.id} value={c.id}>{c.item} · {c.user} · {c.out}</option>)}</Sel></Fld><Fld label="Verified physical item"><Sel value={itemId} onChange={e=>setItemId(e.target.value)}><option value="">Select exact label…</option>{items.map(i=><option key={i.id} value={i.id}>{i.displayId} · {i.name} · {i.serial||i.loc}</option>)}</Sel></Fld><Fld label="Reconciliation note"><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Checked physically; returned to shelf…"/></Fld><Btn disabled={save.saving||!itemId||!note.trim()} onClick={()=>save.run(async()=>{await onSave({checkoutId:target,itemId,note});setTarget("");setItemId("");setNote("");})}>Confirm returned / correct status</Btn><p className="form-intro">{migration.issues.filter(i=>i.checkoutId).length} historical records lack an unambiguous item reference; they remain preserved in the Checkouts sheet.</p></details>;
 };
 
 function LabInventory(){
@@ -1844,11 +1845,12 @@ function LabInventory(){
   const [tab,setTab] = useState("inventory");
   const [rawItems,setItems] = useState([]);
   const [reservations,setReservations]=useState([]);
-  const [capabilities,setCapabilities]=useState({version:1,scheduling:false});
+  const [capabilities,setCapabilities]=useState({version:null,scheduling:false});
   const [migration,setMigration]=useState({issues:[],blockedItemIds:[]});
   const [booking,setBooking]=useState(null);
   const [showEquipmentPicker,setShowEquipmentPicker]=useState(false);
   const [offline,setOffline]=useState(false);
+  const [hasLiveSnapshot,setHasLiveSnapshot]=useState(false),[backendError,setBackendError]=useState(""),[newVersion,setNewVersion]=useState(null);
   const [pendingWrites,setPendingWrites]=useState(0);
   const [lastSynced,setLastSynced]=useState(null);
   const [clockNow,setClockNow]=useState(Date.now());
@@ -1862,7 +1864,19 @@ function LabInventory(){
     const reserved=active.reduce((n,r)=>n+Number(r.qty),0);
     return {...i,_inventoryStatus:i.status,availableQty:Math.max(0,Number(i.qty)-reserved),status:Number(i.qty)<=0?"Unavailable":reserved>=Number(i.qty)?"In Use":reserved>0?"Partially Available":"Available",usedBy:[...new Set(active.map(r=>r.user))]};
   }),[rawItems,reservations,clockNow,capabilities.scheduling,migration]);
-  const applyExtras=data=>{setCapabilities(data.capabilities||{version:1,scheduling:false});setReservations(data.reservations||[]);setMigration(data.migration||{issues:[],blockedItemIds:[]});setOffline(false);setLastSynced(Date.now());};
+  const applyExtras=data=>{setCapabilities(data.capabilities);setReservations(data.reservations);setMigration(data.migration);setOffline(false);setBackendError("");setHasLiveSnapshot(true);setLastSynced(Date.now());LabTrackClient.saveSnapshot(localStorage,session.user?.email,data);};
+  const restoreSnapshot=()=>{
+    const saved=LabTrackClient.readSnapshot(localStorage,session.user?.email);
+    if(!saved)return;
+    const d=saved.data;setItems(d.items);setDeliv(d.deliveries);setCheckouts(d.checkouts);setOrders(d.orders);setCapabilities(d.capabilities);setReservations(d.reservations);setMigration(d.migration);setLastSynced(saved.savedAt);
+    try {const cats=JSON.parse(d.settings?.categories);if(Array.isArray(cats)&&cats.length)setCategories(cats);}catch{}
+  };
+  useEffect(()=>{
+    let cancelled=false,busy=false,lastCheck=0;
+    const check=async()=>{if(busy||document.visibilityState==="hidden"||!navigator.onLine||Date.now()-lastCheck<60000)return;busy=true;lastCheck=Date.now();try{const newer=await LabTrackClient.checkRelease(fetch,location.href);if(!cancelled&&newer)setNewVersion(newer);}finally{busy=false;}};
+    check();const interval=setInterval(check,300000);window.addEventListener("focus",check);window.addEventListener("online",check);document.addEventListener("visibilitychange",check);
+    return()=>{cancelled=true;clearInterval(interval);window.removeEventListener("focus",check);window.removeEventListener("online",check);document.removeEventListener("visibilitychange",check);};
+  },[]);
 
   const [deliveries,setDeliv] = useState([]);
   const [checkouts,setCheckouts] = useState([]);
@@ -1953,16 +1967,7 @@ function LabInventory(){
   useEffect(()=>{
     if (!user || dataLoaded) return;
     if (!APP_CONFIG.apps_script_url || user.token === "local") {
-      try {
-        const saved = localStorage.getItem("labtrack_data");
-        if (saved) {
-          const d = JSON.parse(saved);
-          if (d.items) setItems(d.items);
-          if (d.deliveries) setDeliv(d.deliveries);
-          if (d.checkouts) setCheckouts(d.checkouts);
-          if (d.orders) setOrders(d.orders);
-        }
-      } catch {}
+      restoreSnapshot();setOffline(true);
       setDataLoaded(true);
       return;
     }
@@ -1983,16 +1988,7 @@ function LabInventory(){
       if (!data || data.error) {
         setOffline(true);
         console.error("[LabTrack] Backend error:", data?.error, data?.detail);
-        try {
-          const saved = localStorage.getItem("labtrack_data");
-          if (saved) {
-            const d = JSON.parse(saved);
-            if (d.items) setItems(d.items);
-            if (d.deliveries) setDeliv(d.deliveries);
-            if (d.checkouts) setCheckouts(d.checkouts);
-            if (d.orders) setOrders(d.orders);
-          }
-        } catch {}
+        setBackendError(data?.error==="Incompatible backend"?data.detail:"");restoreSnapshot();
       } else if (data && data.items) {
         applyExtras(data);
         setItems(data.items);
@@ -2017,12 +2013,6 @@ function LabInventory(){
     return()=>{cancelled=true;};
   },[user,dataLoaded]);
 
-  // Save data locally as fallback
-  useEffect(()=>{
-    if (!dataLoaded) return;
-    try{localStorage.setItem("labtrack_data", JSON.stringify({items:rawItems, deliveries, checkouts, orders}));}catch(e){/* Photos may exceed localStorage quota; the sheet remains authoritative. */}
-  },[items, deliveries, checkouts, orders, dataLoaded]);
-
   // Ignore snapshots that started before a write or while a request was pending.
   useEffect(()=>{
     if(!user||!dataLoaded||user.token==="local")return;
@@ -2031,7 +2021,7 @@ function LabInventory(){
       if(apiRunning.current||document.visibilityState==="hidden"||!navigator.onLine)return;
       const epoch=mutationEpoch.current,data=await API.fetchAll(user.token);
       if(cancelled||epoch!==mutationEpoch.current||apiRunning.current)return;
-      if(!data||data.error){setOffline(true);if(data?.error==="Unauthorized")setSessionExpired(true);return;}
+      if(!data||data.error){setOffline(true);setBackendError(data?.error==="Incompatible backend"?data.detail:"");if(data?.error==="Unauthorized")setSessionExpired(true);return;}
       applyExtras(data);setItems(data.items||[]);setDeliv(data.deliveries||[]);setCheckouts(data.checkouts||[]);setOrders(data.orders||[]);
       if(data.userRole)setUserRole(data.userRole);
       if(data.settings?.categories){try{setCategories(JSON.parse(data.settings.categories));}catch{}}
@@ -2081,11 +2071,11 @@ function LabInventory(){
     const sameAccount=user?.email===u.email;
     setUser(u);setSessionExpired(false);setAuthState("ready");setAuthError("");
     // Refresh identity in place. Open forms and their entered values stay mounted.
-    if(!sameAccount||!lastSynced)setDataLoaded(false);
+    if(!sameAccount){setHasLiveSnapshot(false);setCapabilities({version:null,scheduling:false});setUserRole("member");setLastSynced(null);setReservations([]);setMigration({issues:[],blockedItemIds:[]});}if(!sameAccount||!lastSynced)setDataLoaded(false);
     try{localStorage.setItem("labtrack_user",JSON.stringify(u));}catch{}
   };
   authCallback.current=handleSignIn;
-  const handleSignOut = () => { session.signOut();setUser(null);setDataLoaded(false);setItems([]);setDeliv([]);setCheckouts([]);setOrders([]);setModal(null);setBooking(null);setEditItem(null);setEditOrder(null);setPendingItem(null);setLastSynced(null);setDetail(null);setGroupDetail(null);setConfirm(null);setShowEquipmentPicker(false);localStorage.removeItem("labtrack_user"); };
+  const handleSignOut = () => { session.signOut();setUser(null);setDataLoaded(false);setHasLiveSnapshot(false);setCapabilities({version:null,scheduling:false});setReservations([]);setMigration({issues:[],blockedItemIds:[]});setUserRole("member");setBackendError("");setOffline(false);setItems([]);setDeliv([]);setCheckouts([]);setOrders([]);setModal(null);setBooking(null);setEditItem(null);setEditOrder(null);setPendingItem(null);setLastSynced(null);setDetail(null);setGroupDetail(null);setConfirm(null);setShowEquipmentPicker(false);localStorage.removeItem("labtrack_user"); };
   authLogout.current=handleSignOut;
 
   const handleSaveCategories = async newCats => {await saveAction("saveSettings",{key:"categories",value:JSON.stringify(newCats)});setCategories(newCats);addToast("success","Categories saved");};
@@ -2098,7 +2088,7 @@ function LabInventory(){
       if(e.target.closest?.('[role="dialog"]'))return;
       if(e.key==="Escape"){setModal(null);setDetail(null);setConfirm(null);setLabelItem(null);}
       if(e.key==="n"||e.key==="N") setModal("delivery");
-      if(e.key==="c"||e.key==="C"){if(capabilities.scheduling)setShowEquipmentPicker(true);else{setPreItem("");setModal("checkout");}}
+      if((e.key==="c"||e.key==="C")&&capabilities.scheduling)setShowEquipmentPicker(true);
     };
     document.addEventListener("keydown",h);
     return()=>document.removeEventListener("keydown",h);
@@ -2118,6 +2108,7 @@ function LabInventory(){
     if (/order/i.test(action)) lastModified.current.orders = now;
     if (/delivery/i.test(action)) lastModified.current.deliveries = now;
     if (!APP_CONFIG.apps_script_url || user?.token === "local") return Promise.resolve({error:"Offline",detail:"Connect to the lab backend to save."});
+    if(!hasLiveSnapshot)return Promise.resolve({error:"Offline",detail:"Refresh and reconnect to the lab before saving. Cached inventory is read-only."});
     mutationEpoch.current++;setPendingWrites(n=>n+1);
     // Queue requests so rapid edits don't race in GAS
     const token = user.token;
@@ -2145,7 +2136,7 @@ function LabInventory(){
   };
 
   const saveAction=async(action,payload)=>{if(document.querySelector('[data-image-processing="true"]'))throw Error("Wait for image processing to finish before saving.");const result=await postAction(action,payload);if(!result||result.ok!==true)throw Error(result?.detail||result?.error||"Save was not confirmed. Check your connection and retry.");return result;};
-  const refreshNow=async()=>{const data=await API.fetchAll(user.token);if(data&&!data.error){applyExtras(data);setItems(data.items||[]);setOrders(data.orders||[]);setDeliv(data.deliveries||[]);setCheckouts(data.checkouts||[]);}};
+  const refreshNow=async()=>{if(apiRunning.current)return;const epoch=mutationEpoch.current,data=await API.fetchAll(user.token);if(epoch!==mutationEpoch.current||apiRunning.current)return;if(data&&!data.error){applyExtras(data);setItems(data.items);setOrders(data.orders);setDeliv(data.deliveries);setCheckouts(data.checkouts);if(data.userRole)setUserRole(data.userRole);}else{setOffline(true);setBackendError(data?.error==="Incompatible backend"?data.detail:"");}};
   const handleReservationAction=async(action,payload)=>{const result=await saveAction(action,payload);setReservations(p=>mergeRecords(p,result.reservations||[]));addToast("success",(result.reservations||[]).some(r=>r.syncState!=="Synced")?"Reservation saved; Calendar sync pending":"Reservation saved and synced");return result;};
   const openBooking=(item,reservation)=>setBooking({item,reservation});
   const reservationPanel=item=><ItemReservations key={item.id} item={item} reservations={reservations} items={items} user={user} isAdmin={effectiveRole==="admin"} onAction={handleReservationAction} onEdit={openBooking} enabled={capabilities.scheduling} blocked={migration.blockedItemIds.includes(String(item.id))}/>;
@@ -2178,7 +2169,7 @@ function LabInventory(){
 
   const handleQuickCheckout=(item)=>{
     if(capabilities.scheduling){setBooking({item,reservation:null});return;}
-    setPreItem(String(item.id));setModal("checkout");
+    addToast("error","Scheduling is not available. Refresh to reconnect to the lab.");
   };
 
   const handleAddItem = async (item) => {
@@ -2316,7 +2307,6 @@ function LabInventory(){
   const TABS=[
     {id:"inventory",l:"Inventory",n:"grid",count:items.length},
     {id:"orders",l:"Order Requests",n:"cart",count:activeOrders.length},
-    ...(!capabilities.scheduling?[{id:"usage",l:"Legacy Usage",n:"users",count:activeOut.length},{id:"calendar",l:"Legacy Calendar",n:"calendar",count:0}]:[]),
   ];
 
   // Loading
@@ -2355,6 +2345,7 @@ function LabInventory(){
               <Ico n="alert" s={13} col="var(--amber)"/>{lowStock.length} low stock
             </div>
           )}
+          <span style={{fontSize:11,color:"var(--sub)"}}>Version {LabTrackClient.version}</span>
           {/* Help */}
           <button onClick={()=>setModal("help")} title="Help & Guide" className="ibtn"
             style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",color:"var(--sub)"}}>
@@ -2439,6 +2430,7 @@ function LabInventory(){
           <button onClick={()=>setPreviewMode(false)} style={{background:"none",border:"1px solid #4da6ff40",color:"var(--blue)",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>Exit Preview</button>
         </div>
       )}
+      {newVersion&&<div className="sync-status" role="status" style={{padding:"12px 24px",background:"var(--blue-d)",flexWrap:"wrap"}}><span>A LabTrack update is available. {pendingWrites||modal||booking||editItem||editOrder||pendingItem||confirm||showEquipmentPicker||detail||groupDetail||labelItem?"Finish or close your current form before updating.":"Reload when ready to get the latest version."}</span><Btn sm disabled={!!(pendingWrites||modal||booking||editItem||editOrder||pendingItem||confirm||showEquipmentPicker||detail||groupDetail||labelItem)} onClick={()=>location.replace(LabTrackClient.reloadUrl(location.href))}>Reload latest version</Btn></div>}
       {/* Edit lock banner */}
       {editLocked&&(
         <div style={{background:"var(--bg1)",borderBottom:"1px solid var(--border)",padding:"7px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -2463,13 +2455,13 @@ function LabInventory(){
 
         {tab==="inventory"&&<div className="inventory-intro"><div><h1>Lab inventory</h1><p>Find equipment and reserve time for your next experiment.</p></div>{capabilities.scheduling&&<Btn onClick={()=>setShowEquipmentPicker(true)}><Ico n="calendar" s={16}/>Reserve equipment</Btn>}</div>}
         {/* Stats */}
-        <div className="lab-stats" aria-label="Lab overview">
+        {(hasLiveSnapshot||lastSynced)&&<div className="lab-stats" aria-label="Lab overview">
           <Stat label="Total Items" val={items.length} icon="box" ac="var(--cyan)" sub="in inventory"/>
           <Stat label="Categories" val={[...new Set(items.map(i=>i.cat))].length} icon="layers" ac="var(--purple)" sub="active types"/>
           <Stat label="Orders" val={activeOrders.length} icon="cart" ac="var(--amber)" sub="in pipeline"/>
           <Stat label={capabilities.scheduling?"In Use":"Checked Out"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)<=clockNow&&Date.parse(r.end)>clockNow).length+items.filter(i=>i.status==="On loan").length:activeOut.length} icon="users" ac="var(--blue)" sub="active"/>
           <Stat label={capabilities.scheduling?"Upcoming":"Overdue"} val={capabilities.scheduling?reservations.filter(r=>r.status==="Booked"&&Date.parse(r.start)>clockNow).length:overdues.length} icon="clock" ac={overdues.length?"var(--red)":"var(--green)"} sub={capabilities.scheduling?"scheduled occurrences":"past return date"} warn={!capabilities.scheduling&&overdues.length>0}/>
-        </div>
+        </div>}
 
         {/* Alert banners */}
         {overdues.length>0&&(
@@ -2477,7 +2469,7 @@ function LabInventory(){
             <Ico n="clock" s={15} col="var(--red)"/>
             <span style={{color:"var(--red)",fontSize:13,fontWeight:600}}>Overdue returns:</span>
             <span style={{color:"var(--sub)",fontSize:13}}>{overdues.map(c=>`${c.item} (${c.user})`).join(" · ")}</span>
-            <Btn v="ghost" sm style={{marginLeft:"auto"}} onClick={()=>setTab("usage")}>View in Usage →</Btn>
+            <Btn v="ghost" sm style={{marginLeft:"auto"}} onClick={()=>{setTab("inventory");setTimeout(()=>{const history=document.querySelector(".checkout-history");if(history){history.open=true;history.scrollIntoView({behavior:"smooth",block:"center"});}},0);}}>View checkout history →</Btn>
           </div>
         )}
         {lowStock.length>0&&(
@@ -2495,8 +2487,10 @@ function LabInventory(){
         )}
 
         {/* ════════ INVENTORY TAB ════════ */}
-        <div className="sync-status" role="status">{pendingWrites?`Saving ${pendingWrites} change(s)…`:offline?"Connection interrupted. Displayed data may be stale; unconfirmed changes are not saved.":lastSynced?`Synced ${new Date(lastSynced).toLocaleTimeString()}`:"Connecting…"}{offline&&<Btn sm v="ghost" onClick={refreshNow}>Refresh</Btn>}</div>
-        {capabilities.version<2&&<p className="save-error">Backend upgrade required for receiving with photos and purchase links. Existing inventory remains readable.</p>}
+        <div className="sync-status" role="status">{pendingWrites?`Saving ${pendingWrites} change(s)…`:offline?`Connection interrupted. ${lastSynced?"Showing a snapshot from "+new Date(lastSynced).toLocaleString()+". ":""}Availability may be out of date.${!hasLiveSnapshot?" Reconnect before saving.":""}`:lastSynced?`Synced ${new Date(lastSynced).toLocaleTimeString()}`:"Connecting…"}{offline&&<Btn sm v="ghost" onClick={refreshNow}>Refresh</Btn>}</div>
+        {backendError&&<p className="save-error" role="alert">{backendError}</p>}
+        {!capabilities.scheduling&&<p className="form-intro">{capabilities.version===null?"Reservation settings are unavailable until LabTrack reconnects.":"Equipment scheduling is currently disabled by the lab administrator."}</p>}
+        {!capabilities.scheduling&&tab==="inventory"&&checkouts.length>0&&<CheckoutHistory checkouts={checkouts}/>}
         {capabilities.scheduling&&tab==="inventory"&&<EquipmentSchedule reservations={upcomingReservations} checkouts={checkouts} items={items} user={user} isAdmin={effectiveRole==="admin"} calendarId={capabilities.calendarId} calendarAccessState={capabilities.calendarAccessState} onAction={handleReservationAction} onEdit={openBooking}/>}
 
         {effectiveRole==="admin"&&capabilities.version>=2&&(migration.blockedItemIds.length>0||activeOut.length>0)&&<LegacyReconciliation migration={migration} items={rawItems} checkouts={checkouts} onSave={async payload=>{await saveAction("reconcileLegacy",payload);await refreshNow();}}/>}
@@ -2535,8 +2529,8 @@ function LabInventory(){
                 ))}
               </div>
 
-              {!capabilities.scheduling&&<Btn v="ghost" onClick={()=>{setPreItem("");setModal("checkout");}}><Ico n="tag" s={14}/>Check Out</Btn>}
-              <Btn onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("addItem");}}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
+
+              <Btn disabled={!hasLiveSnapshot} onClick={()=>{if(editLocked){addToast("error","Editing is locked — click 🔒 in the header to unlock");return;}setModal("addItem");}}><Ico n="plus" s={14} col="#000"/>Add Item</Btn>
             </div>
 
             {search&&<div style={{color:"var(--dim)",fontSize:12,marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} for "{search}"</div>}
@@ -2544,9 +2538,9 @@ function LabInventory(){
             {filtered.length===0?(
               <div style={{textAlign:"center",padding:"60px 20px",color:"var(--dim)"}}>
                 <Ico n={items.length===0?"box":"search"} s={48} col="var(--bg4)"/>
-                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>{items.length===0?"No items in inventory yet":"No items found"}</div>
-                <div style={{fontSize:13,marginTop:4}}>{items.length===0?"Add your first item to get started":"Try a different search or category"}</div>
-                {items.length===0 ? (
+                <div style={{marginTop:16,fontSize:16,color:"var(--sub)"}}>{!hasLiveSnapshot&&!lastSynced?"Inventory couldn’t be loaded":items.length===0?"No items in inventory yet":"No items found"}</div>
+                <div style={{fontSize:13,marginTop:4}}>{!hasLiveSnapshot&&!lastSynced?"Reconnect to see the lab’s inventory.":items.length===0?"Add your first item to get started":"Try a different search or category"}</div>
+                {items.length===0 ? (hasLiveSnapshot&&
                   <Btn style={{marginTop:16}} onClick={()=>setModal("addItem")}><Ico n="plus" s={14} col="#000"/>Add First Item</Btn>
                 ) : (
                   <button onClick={()=>{setSearch("");setCatF("All");}} style={{marginTop:16,background:"none",border:"1px solid var(--border)",color:"var(--cyan)",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:13}}>Clear filters</button>

@@ -200,3 +200,14 @@ Run `disableLabScheduling()` to stop new bookings/edits without deleting reserva
 Do not restore an old spreadsheet over newer receipts or reservations. Full backend rollback to pre-V2 code requires pausing writes and reconciling all new records first; it is not safe while users continue booking. Retain the new tabs/columns and backup snapshots.
 
 After rollout, inspect failed Apps Script executions, pending/error Calendar rows, receipt/order consistency, and Slack digest delivery. The UI surfaces unconfirmed saves and delayed Calendar synchronization.
+
+
+## Website updates and offline views
+
+The November 24 frontend fixes a fallback that showed Legacy Usage / Legacy Calendar while the first inventory read was pending or failed. These tabs were unrelated to administrator permissions. The current interface keeps checkout history available without switching to the old navigation.
+
+Successful reads now cache an account-scoped snapshot including reservations, capabilities, and the snapshot timestamp. Failed reads show an explicit stale/offline state. A cold start from cache is read-only until a successful server read; cached data never grants admin authority. Incomplete or pre-V2 responses are rejected rather than silently changing the interface. Inventory requests bypass browser caching.
+
+GitHub Pages may cache HTML for ten minutes, and an already open tab otherwise retains its loaded code. The website checks `release.json` on return to the tab and periodically, then offers an explicit reload. Reload is disabled while a form or item dialog is open so entered data is preserved. A tab loaded before this fix needs one manual refresh using a fresh query string, such as `?refresh=20261124`.
+
+For each frontend release, update the version in `client-state.js`, `release.json`, and the local JavaScript asset query strings in `index.html` together. Run `npm run check`, `npm test`, and `npm run test:browser` before publishing; version agreement is tested. This frontend fix requires no spreadsheet migration or Apps Script deployment. Keep the existing backend endpoint and Slack Script Properties.

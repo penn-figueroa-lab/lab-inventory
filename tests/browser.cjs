@@ -8,17 +8,20 @@ const {harness}=require('./backend-harness.cjs');
  const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox']});
  const context=await browser.newContext({viewport:{width:1440,height:1050}}),page=await context.newPage();page.setDefaultTimeout(7000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- let invalidResponse=false,expiredRequests=0;
+ let invalidResponse=false,expiredRequests=0,backendUnavailable=false,incompatibleBackend=false,serverRelease=require('../client-state.js').version;
+ let releaseInitial;const initialRead=new Promise(resolve=>releaseInitial=resolve);
  const expireSession=()=>page.evaluate(()=>{const u=JSON.parse(localStorage.getItem('labtrack_user'));const p=JSON.parse(atob(u.token.split('.')[1]));p.exp=Math.floor(Date.now()/1000)-1;u.token='test.'+btoa(JSON.stringify(p))+'.expired';session.setUser(u);});
  await page.route('**/*',async route=>{
   const url=route.request().url();
   if(url.startsWith('https://script.google.com/')) {
     const credential=route.request().method()==='POST'?JSON.parse(route.request().postData()).token:new URL(url).searchParams.get('token');if(JSON.parse(Buffer.from(credential.split('.')[1],'base64url')).exp*1000<=Date.now()){expiredRequests++;return route.fulfill({json:{error:'Unauthorized'}});}
     if(route.request().method()==='POST') {if(invalidResponse){invalidResponse=false;return route.fulfill({status:200,contentType:'text/html',body:'sign in required'});}const b=JSON.parse(route.request().postData());return route.fulfill({json:h.post(b.action,{...b,token:JSON.parse(Buffer.from(b.token.split('.')[1],'base64url')).email}),headers:{'access-control-allow-origin':'*'}});}
+    await initialRead;if(backendUnavailable)return route.abort();if(incompatibleBackend)return route.fulfill({json:{items:[],orders:[],deliveries:[],checkouts:[]}});
     return route.fulfill({json:h.context.doGet({parameter:{...Object.fromEntries(new URL(url).searchParams),token:'admin@engineering.upenn.edu'}}),headers:{'access-control-allow-origin':'*'}});
   }
-  const files={'/react.js':'node_modules/react/umd/react.development.js','/react-dom.js':'node_modules/react-dom/umd/react-dom.development.js','/image-catalog.js':'image-catalog.js','/auth-session.js':'auth-session.js'};
+  const files={'/react.js':'node_modules/react/umd/react.development.js','/react-dom.js':'node_modules/react-dom/umd/react-dom.development.js','/image-catalog.js':'image-catalog.js','/auth-session.js':'auth-session.js','/client-state.js':'client-state.js'};
   const u=new URL(url);if(u.hostname==='localhost'){
+   if(u.pathname==='/release.json')return route.fulfill({json:{version:serverRelease}});
    if(files[u.pathname])return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(files[u.pathname],'utf8')});
    if(u.pathname==='/app.js')return route.fulfill({contentType:'application/javascript',body:compiled});
    return route.fulfill({contentType:'text/html',body:html});
@@ -27,7 +30,7 @@ const {harness}=require('./backend-harness.cjs');
  });
  await page.addInitScript(()=>window.top===window&&localStorage.setItem('labtrack_user',JSON.stringify({name:'Admin',email:'admin@engineering.upenn.edu',token:'test.'+btoa(JSON.stringify({email:'admin@engineering.upenn.edu',hd:'engineering.upenn.edu',name:'Admin',exp:Math.floor(Date.now()/1000)-1}))+'.signature'})));
  try {
- await page.goto('http://localhost:4173');await page.getByRole('heading',{name:'Equipment schedule'}).waitFor();
+ await page.goto('http://localhost:4173');await page.getByText('Fetching inventory data...', {exact:true}).waitFor();assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);assert.equal(await page.getByText('Legacy Calendar',{exact:true}).count(),0);releaseInitial();await page.getByRole('heading',{name:'Equipment schedule'}).waitFor();
  assert.equal(await page.evaluate(()=>window.__auth.initializations),1);assert.equal(await page.evaluate(()=>window.__auth.prompts),1);
  // Returning to an idle tab renews without logging out or rebuilding the inventory.
  await expireSession();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.waitForFunction(()=>window.__auth.prompts===2&&session.expires()>Date.now());
@@ -79,6 +82,20 @@ const {harness}=require('./backend-harness.cjs');
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'test-results/inventory-mobile.png',fullPage:true});
  await schedule.getByRole('button',{name:'View calendar',exact:true}).click();await page.screenshot({path:'test-results/calendar-access-mobile.png',fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await schedule.getByRole('button',{name:'Hide calendar',exact:true}).click();
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Mobile page overflows horizontally');
+ // A failed cold load restores modern scheduling, without restoring admin authority.
+ backendUnavailable=true;serverRelease='2026-11-25.1';await page.reload();
+ await page.getByText(/Connection interrupted/).waitFor();await page.getByRole('heading',{name:'Equipment schedule'}).waitFor();
+ assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);assert.equal(await page.getByText('Legacy Calendar',{exact:true}).count(),0);
+ assert.equal(await page.getByText('ADMIN',{exact:true}).count(),0);assert.equal(await page.locator('.card-item').count(),5);
+ await page.getByRole('button',{name:'Reload latest version',exact:true}).waitFor();assert.equal(page.url(),'http://localhost:4173/');
+ await page.getByRole('button',{name:'Reserve equipment',exact:true}).click();await page.getByLabel('Find equipment').fill('RM-000001');await page.locator('.equipment-choice').click();
+ const draft=page.getByRole('dialog',{name:'Reserve equipment'});await draft.getByLabel('Purpose / notes').fill('Keep this draft');
+ assert.equal(await page.getByRole('button',{name:'Reload latest version',exact:true}).isDisabled(),true);
+ const bookingsBefore=h.rows('Reservations').length;await draft.getByRole('button',{name:'Reserve',exact:true}).click();await draft.getByRole('alert').waitFor();assert.match(await draft.getByRole('alert').innerText(),/Cached inventory is read-only/);assert.equal(h.rows('Reservations').length,bookingsBefore);assert.equal(await draft.getByLabel('Purpose / notes').inputValue(),'Keep this draft');
+ await page.screenshot({path:'test-results/offline-update-draft.png',fullPage:true});await draft.getByRole('button',{name:'Cancel',exact:true}).click();
+ backendUnavailable=false;incompatibleBackend=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByText(/server returned an older or incomplete/).waitFor();assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);assert.equal(await page.locator('.card-item').count(),5);
+ incompatibleBackend=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByText('ADMIN',{exact:true}).waitFor({state:'attached'});await page.getByText(/Connection interrupted/).waitFor({state:'hidden'});
+ backendUnavailable=true;await page.evaluate(()=>localStorage.removeItem('labtrack_snapshot_v2'));await page.reload();await page.getByText('Reservation settings are unavailable until LabTrack reconnects.',{exact:true}).waitFor();assert.equal(await page.getByText('Legacy Usage',{exact:true}).count(),0);assert.equal(await page.getByText('Legacy Calendar',{exact:true}).count(),0);assert.equal(await page.getByText(/Backend upgrade required/).count(),0);assert.equal(await page.getByText('Inventory couldn’t be loaded',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'Add First Item'}).count(),0);assert.equal(await page.getByLabel('Lab overview').count(),0);await page.screenshot({path:'test-results/offline-no-cache.png',fullPage:true});
  assert.equal(expiredRequests,0);assert.deepEqual(errors,[]);console.log('Browser workflows passed: label/numeric search, full group counts, weekly booking, purchase links, cancel receipt, failed-save retention, receive/reload, mobile layout.');
  } catch(e){fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/failure.png',fullPage:true});console.error('Browser errors:',errors);console.error((await page.locator('body').innerText()).slice(-3500));throw e;}
  finally{await browser.close();}
