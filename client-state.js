@@ -1,13 +1,24 @@
 // Account-scoped, read-only fallback. Only authoritative complete reads are cached.
 (function(root){
-  const version="2026-11-24.1",key="labtrack_snapshot_v2";
+  const version="2026-11-24.2",key="labtrack_snapshot_v2";
   const validSnapshot=d=>!!d&&["items","orders","deliveries","checkouts","reservations"].every(k=>Array.isArray(d[k]))
     &&Number(d.capabilities?.version)>=2&&typeof d.capabilities.scheduling==="boolean"
     &&Array.isArray(d.migration?.issues)&&Array.isArray(d.migration?.blockedItemIds);
   function saveSnapshot(storage,email,data,now=Date.now()) {
     if(!email||!validSnapshot(data))return;
     const {items,orders,deliveries,checkouts,reservations,capabilities,migration}=data;
-    try {storage.setItem(key,JSON.stringify({email,savedAt:now,data:{items,orders,deliveries,checkouts,reservations,capabilities,migration,settings:{categories:data.settings?.categories}}}));storage.removeItem("labtrack_data");}catch{/* Storage quota/privacy restrictions must not break live reads. */}
+    const snapshot={email,savedAt:now,data:{items,orders,deliveries,checkouts,reservations,capabilities,migration,settings:{categories:data.settings?.categories}}};
+    try {
+      // The old image-heavy cache can occupy nearly the entire browser quota.
+      storage.removeItem("labtrack_data");
+      try {storage.setItem(key,JSON.stringify(snapshot));}
+      catch {
+        // Preserve tracking information even when inline photos exceed storage limits.
+        const compact=rows=>rows.map(row=>typeof row.img==="string"&&row.img.startsWith("data:")?{...row,img:""}:row);
+        snapshot.data.items=compact(items);snapshot.data.orders=compact(orders);
+        storage.setItem(key,JSON.stringify(snapshot));
+      }
+    }catch{/* Storage quota/privacy restrictions must not break live reads. */}
   }
   function readSnapshot(storage,email) {
     try {const saved=JSON.parse(storage.getItem(key));return saved?.email===email&&Number.isFinite(saved.savedAt)&&validSnapshot(saved.data)?saved:null;}catch{return null;}
